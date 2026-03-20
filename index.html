@@ -4849,8 +4849,8 @@ async function handleApprove() {
     // ✅ อนุญาตให้เปิด Orders (เฉพาะ flow นี้)
     allowOpenOrders = true;
 
-    // ✅ กลับไปหน้า Orders (รอดำเนินการ)
-    await openAdminDashboard("PENDING", true);
+    // ✅ กลับไปหน้า Dashboard Summary (เฉพาะ APPROVED)
+    await openAdminDashboard("SUMMARY", true);
 
   } catch (err) {
     // ❌ ไม่ต้อง alert ซ้ำ
