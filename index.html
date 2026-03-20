@@ -2008,7 +2008,9 @@ const state = {
     selectedOrder: null,
     logs: [],
     filters: {
-      status: "all"
+      status: "all",
+      dashboardFrom: "",
+      dashboardTo: ""
     },
     ui: {
       activeSheet: null
@@ -4161,11 +4163,109 @@ async function handleAdminLogin(btn){
   }
 }
 
-async function openAdminDashboard(mode = "PENDING", force = false) {
-  // ❌ ต้องมี intent จริง
+function toYmdLocal(value) {
+  const d = value ? new Date(value) : new Date();
+  if (Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getOrderDateValue(order) {
+  return (
+    order?.createdAt ||
+    order?.created_at ||
+    order?.timestamp ||
+    order?.date ||
+    ""
+  );
+}
+
+function isOrderInRange(order, fromYmd, toYmd) {
+  const raw = getOrderDateValue(order);
+  if (!raw) return false;
+
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return false;
+
+  const orderYmd = toYmdLocal(d);
+  if (fromYmd && orderYmd < fromYmd) return false;
+  if (toYmd && orderYmd > toYmd) return false;
+  return true;
+}
+
+function getDashboardProductCostMap() {
+  return new Map(
+    (Array.isArray(state.products) ? state.products : []).map(p => [
+      String(p.productId || "").trim(),
+      Number(p.costPrice || 0)
+    ])
+  );
+}
+
+function calculateDashboardSummary(orders) {
+  const safeOrders = Array.isArray(orders) ? orders : [];
+  const productCostMap = getDashboardProductCostMap();
+
+  let totalSales = 0;
+  let totalCost = 0;
+  let totalProfit = 0;
+  let totalQty = 0;
+
+  safeOrders.forEach(order => {
+    const items = Array.isArray(order.items) ? order.items : [];
+
+    items.forEach(item => {
+      const qty = Number(item.qty || 0);
+      const sellPrice = Number(item.price || 0);
+      const fallbackCost = productCostMap.get(String(item.productId || "").trim()) || 0;
+      const costPrice = Number(
+        item.costPrice ?? item.unitCost ?? fallbackCost
+      );
+
+      const lineSales = sellPrice * qty;
+      const lineCost = costPrice * qty;
+
+      totalSales += lineSales;
+      totalCost += lineCost;
+      totalProfit += (lineSales - lineCost);
+      totalQty += qty;
+    });
+  });
+
+  return {
+    orderCount: safeOrders.length,
+    totalQty,
+    totalSales,
+    totalCost,
+    totalProfit
+  };
+}
+
+function applyAdminDashboardRange() {
+  const from = document.getElementById("dashboardDateFrom")?.value || "";
+  const to = document.getElementById("dashboardDateTo")?.value || "";
+
+  state.admin.filters.dashboardFrom = from;
+  state.admin.filters.dashboardTo = to;
+
+  openAdminDashboard("SUMMARY", true);
+}
+
+function resetAdminDashboardRange() {
+  const today = toYmdLocal(new Date());
+  const firstDay = today.slice(0, 8) + "01";
+
+  state.admin.filters.dashboardFrom = firstDay;
+  state.admin.filters.dashboardTo = today;
+
+  openAdminDashboard("SUMMARY", true);
+}
+
+async function openAdminDashboard(mode = "SUMMARY", force = false) {
   if (!force && !allowOpenOrders) return;
 
-  // 🔐 session guard (ก่อนเปิด UI)
   if (
     !state.admin.loggedIn ||
     !state.admin.token ||
@@ -4176,55 +4276,107 @@ async function openAdminDashboard(mode = "PENDING", force = false) {
     return;
   }
 
-  // 🔒 ใช้แล้วปิดทันที (กันเด้งซ้ำ)
   allowOpenOrders = false;
-
-  // ✅ ปิด Stock Timeline
   closeOverlay(adminStockSheet);
-
-  // 🔍 reset search
   state.search = "";
 
-  // ✅ Loading UI
-  adminDashboardSheet.innerHTML = `
-    <h3>${mode === "PENDING"
-      ? "Orders (รอดำเนินการ)"
-      : "Order History"}</h3>
+  const today = toYmdLocal(new Date());
+  const firstDay = today.slice(0, 8) + "01";
 
-    <div class="loading">กำลังโหลดรายการ</div>
+  if (!state.admin.filters.dashboardFrom) {
+    state.admin.filters.dashboardFrom = firstDay;
+  }
+  if (!state.admin.filters.dashboardTo) {
+    state.admin.filters.dashboardTo = today;
+  }
+
+  adminDashboardSheet.innerHTML = `
+    <h3>📊 Admin Dashboard</h3>
+    <div class="loading">กำลังโหลดข้อมูล</div>
   `;
 
   openOverlay(adminDashboardSheet);
 
   try {
+    if (!Array.isArray(state.products) || state.products.length === 0) {
+      await refreshProducts();
+    }
+
     state.admin.orders = await fetchOrders();
 
-    const orders = state.admin.orders.filter(o =>
-      mode === "PENDING"
-        ? o.status === "PENDING"
-        : o.status !== "PENDING"
-    );
+    const from = state.admin.filters.dashboardFrom || "";
+    const to = state.admin.filters.dashboardTo || "";
+
+    const approvedOrders = (Array.isArray(state.admin.orders)
+      ? state.admin.orders
+      : []
+    ).filter(o => {
+      const status = String(o.status || "").toUpperCase();
+      return status === "APPROVED" && isOrderInRange(o, from, to);
+    });
+
+    const pendingCount = (Array.isArray(state.admin.orders)
+      ? state.admin.orders
+      : []
+    ).filter(o => String(o.status || "").toUpperCase() === "PENDING").length;
+
+    const summary = calculateDashboardSummary(approvedOrders);
 
     adminDashboardSheet.innerHTML = `
-      <h3>${mode === "PENDING"
-        ? "Orders (รอดำเนินการ)"
-        : "Order History"}</h3>
+      <h3>📊 Admin Dashboard (เฉพาะ APPROVED)</h3>
+
+      <div class="form-group">
+        <label>ตั้งแต่วันที่</label>
+        <input id="dashboardDateFrom" type="date" value="${escAttr(from)}">
+      </div>
+
+      <div class="form-group">
+        <label>ถึงวันที่</label>
+        <input id="dashboardDateTo" type="date" value="${escAttr(to)}">
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="btn btn-primary" onclick="applyAdminDashboardRange()">
+          ดูสรุป
+        </button>
+        <button class="btn btn-outline" onclick="resetAdminDashboardRange()">
+          รีเซ็ต
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="name">ยอดขายรวม</div>
+        <div class="price">฿${Number(summary.totalSales).toLocaleString("th-TH")}</div>
+        <div class="stock">จำนวนออเดอร์: ${summary.orderCount}</div>
+      </div>
+
+      <div class="card">
+        <div class="name">ต้นทุนรวม</div>
+        <div class="price">฿${Number(summary.totalCost).toLocaleString("th-TH")}</div>
+        <div class="stock">จำนวนสินค้าที่ขาย: ${summary.totalQty}</div>
+      </div>
+
+      <div class="card">
+        <div class="name">กำไรรวม</div>
+        <div class="price">฿${Number(summary.totalProfit).toLocaleString("th-TH")}</div>
+        <div class="stock">Orders รอดำเนินการ: ${pendingCount}</div>
+      </div>
+
+      <h3 style="margin-top:18px">รายการออเดอร์ APPROVED ที่นำมาคิด</h3>
 
       ${
-        orders.length
-          ? orders.map(o => `
-              <div class="card"
-                onclick="openAdminOrder('${o.orderId}')">
-                <div class="name">${o.orderId}</div>
-                <div>Status: ${o.status}</div>
-                <div>Total: ฿${Number(o.total).toLocaleString()}</div>
+        approvedOrders.length
+          ? approvedOrders.map(o => `
+              <div class="card" onclick="openAdminOrder('${escAttr(o.orderId)}')">
+                <div class="name">${esc(o.orderId)}</div>
+                <div>Status: ${esc(o.status)}</div>
+                <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
+                <div class="stock">วันที่: ${esc(getOrderDateValue(o) || "-")}</div>
               </div>
             `).join("")
           : `
             <div style="color:#888;text-align:center;margin-top:24px">
-              ${mode === "PENDING"
-                ? "ไม่มีรายการรอดำเนินการ"
-                : "ไม่มีประวัติออเดอร์"}
+              ไม่มีออเดอร์สถานะ APPROVED ในช่วงวันที่ที่เลือก
             </div>
           `
       }
@@ -4232,7 +4384,6 @@ async function openAdminDashboard(mode = "PENDING", force = false) {
   } catch (err) {
     console.error(err);
 
-    // 🔴 ถ้าเป็น session error → ออกทันที
     if (
       err.message?.includes("Session") ||
       err.message?.includes("token")
@@ -4243,15 +4394,15 @@ async function openAdminDashboard(mode = "PENDING", force = false) {
     }
 
     adminDashboardSheet.innerHTML = `
-      <h3>Orders</h3>
+      <h3>📊 Admin Dashboard</h3>
 
       <div style="text-align:center;color:#d93025;margin-top:32px">
-        ไม่สามารถโหลดรายการออเดอร์ได้
+        ไม่สามารถโหลดข้อมูลแดชบอร์ดได้
       </div>
 
       <button class="btn btn-secondary"
         style="width:100%;margin-top:16px"
-        onclick="allowOpenOrders = true; openAdminDashboard('${mode}', true)">
+        onclick="allowOpenOrders = true; openAdminDashboard('SUMMARY', true)">
         🔄 ลองใหม่
       </button>
 
@@ -4264,10 +4415,9 @@ async function openAdminDashboard(mode = "PENDING", force = false) {
   }
 }
 
-
 function handleOpenOrders() {
   allowOpenOrders = true;
-  openAdminDashboard("PENDING");
+  openAdminDashboard("SUMMARY");
 }
 
 
