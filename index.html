@@ -4331,7 +4331,14 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
 
     if (mode === "PENDING") {
       adminDashboardSheet.innerHTML = `
-        <h3>📦 Pending Orders</h3>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+          <button class="btn btn-outline"
+            style="width:auto;padding:10px 14px"
+            onclick="backToAdminMainMenu()">
+            ← กลับเมนู
+          </button>
+          <h3 style="margin:0">📦 Pending Orders</h3>
+        </div>
 
         ${
           pendingOrders.length
@@ -4354,7 +4361,14 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
     }   
 
     adminDashboardSheet.innerHTML = `
-      <h3>📊 Admin Dashboard (เฉพาะ APPROVED)</h3>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <button class="btn btn-outline"
+          style="width:auto;padding:10px 14px"
+          onclick="backToAdminMainMenu()">
+          ← กลับเมนู
+        </button>
+        <h3 style="margin:0">📊 Admin Dashboard (เฉพาะ APPROVED)</h3>
+      </div>
 
       <div class="form-group">
         <label>ตั้งแต่วันที่</label>
@@ -4451,6 +4465,11 @@ function getPendingOrdersCount() {
     .filter(o => String(o.status || "").toUpperCase() === "PENDING")
     .length;
 }
+
+function backToAdminMainMenu() {
+  closeOverlay(adminDashboardSheet);
+  openMainMenu(document.querySelector(".menu-btn"));
+} 
  
 function handleOpenDashboard() {
   allowOpenOrders = true;
