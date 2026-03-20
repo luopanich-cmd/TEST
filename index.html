@@ -484,8 +484,8 @@ button:disabled {
   flex:1;
   min-width:0;
   line-height:1.2;
-  overflow-wrap:anywhere;
-  word-break:break-word;
+  overflow-wrap:normal;
+  word-break:normal;
 }
 
 .dashboard-title-main,
@@ -502,7 +502,7 @@ button:disabled {
 
 .dashboard-filter-wrap{
   width:100%;
-  max-width:420px;
+  max-width:380px;
   margin:0 auto 14px;
 }
 
@@ -512,7 +512,9 @@ button:disabled {
 
 @media (max-width: 480px){
   .admin-sheet-topbar{
-    align-items:stretch;
+    display:grid;
+    grid-template-columns:auto 1fr;
+    align-items:start;
     gap:12px;
   }
 
@@ -526,13 +528,14 @@ button:disabled {
   }
 
   .dashboard-filter-wrap{
-    max-width:360px;
+    max-width:320px;
     margin-left:auto;
     margin-right:auto;
   }
 
   .dashboard-title-sub{
     font-size:15px;
+   
   } 
 }
  
