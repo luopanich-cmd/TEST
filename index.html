@@ -502,11 +502,20 @@ button:disabled {
 
 .dashboard-filter-wrap{
   width:100%;
-  margin:0 0 14px;
+  max-width:100%;
+  margin:0 auto 14px;
+  box-sizing:border-box;
 }
 
+.dashboard-filter-wrap .form-group{
+  margin-left:0;
+  margin-right:0;
+}
+ 
 .dashboard-filter-wrap .form-group input{
   width:100%;
+  max-width:100%;
+  box-sizing:border-box;
 } 
 
 @media (max-width: 480px){
@@ -526,8 +535,8 @@ button:disabled {
     font-size:18px;
   }
 
-   .dashboard-title-sub{
-    font-size:15px;
+  .dashboard-title-sub{
+     font-size:15px;
    
   } 
 }
