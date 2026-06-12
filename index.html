@@ -6755,7 +6755,7 @@ async function markPendingDelivered(
      state.admin.pendingDeliveries =
        list;
 
-     openPendingDeliverySheet();
+     renderPendingDeliveries(list);
 
      showToast(
        "ส่งครบเรียบร้อย",
