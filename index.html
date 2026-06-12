@@ -3220,11 +3220,11 @@ function closeImageViewer(ev){
            <div class="product-info-images">
  ${images.map((url) => {
    // ✅ embed JS arg safely + keep src attribute safe
-   const jsArg = JSON.stringify(String(url ?? ""));
+   const jsArg = toInlineJsStringLiteral(url);
    return `
 <img src="${escAttr(url)}"
      class="product-info-zoom"
-     onclick='openImageViewer(${jsArg})'>
+     onclick="openImageViewer(${jsArg})">
    `;
  }).join("")}
            </div>
@@ -3365,7 +3365,16 @@ if (
     };
  
     const statusKey = p.resolvedStatus;
-    let statusClass = statusKey;
+    const allowedStatusClasses = new Set([
+      "ready",
+      "ready_plus",
+      "shipping",
+      "warehouse",
+      "out"
+    ]);
+    const statusClass = allowedStatusClasses.has(statusKey)
+      ? statusKey
+      : "ready";
     let statusText  = statusMap[statusKey] || "พร้อมส่ง";
 
     /* ================= CARD ================= */
@@ -3382,8 +3391,8 @@ if (
 
     card.innerHTML = `
       <img class="thumb"
-        src="${p.image ? escapeHTML(p.image) : "about:blank"}"
-        alt="${escapeHTML(p.name)}"
+        src="${p.image ? escAttr(p.image) : "about:blank"}"
+        alt="${escAttr(p.name)}"
         onerror="this.style.display='none'">
 
       <div class="info">
@@ -3516,7 +3525,7 @@ function renderProductSheet(){
    src="${escAttr(p.image || '')}"
    alt="${escAttr(p.name)}"
    class="product-image product-info-zoom"
-   onclick='openImageViewer(${JSON.stringify(String(p.image || ""))})'
+   onclick="openImageViewer(${toInlineJsStringLiteral(p.image || "")})"
  >
 
     <div class="price">฿${p.price}</div>
@@ -6904,12 +6913,12 @@ function openAddProduct(force = false){
   const draft = state.smartAddDraft || {};
   // 🔴 ADDED: สร้าง SKU ถัดไปอัตโนมัติจาก state.products
   const nextProductId = getNextProductId();
-  const safeNextProductId = escapeHtml(nextProductId);
-  const safeDraftName = escapeHtml(draft.name || "");
-  const safeDraftPrice = escapeHtml(draft.price || "");
-  const safeDraftCostPrice = escapeHtml(draft.costPrice || "");
-  const safeDraftStock = escapeHtml(draft.stock || "");
-  const safeNote = escapeHtml(draft.note || "");
+  const safeNextProductId = escAttr(nextProductId);
+  const safeDraftName = escAttr(draft.name || "");
+  const safeDraftPrice = escAttr(draft.price || "");
+  const safeDraftCostPrice = escAttr(draft.costPrice || "");
+  const safeDraftStock = escAttr(draft.stock || "");
+  const safeNote = esc(draft.note || "");
  
   adminAddProductSheet.innerHTML = `
     <h3>➕ เพิ่มสินค้าใหม่</h3>
@@ -7338,13 +7347,13 @@ function openProductEdit(p){
     .map(s => s.trim())
     .filter(Boolean);
 
-  const safeEditProductId = escapeHtml(latestProduct.productId || "");
-  const safeEditName = escapeHtml(latestProduct.name || "");
-  const safeEditPrice = escapeHtml(latestProduct.price ?? "");
-  const safeEditCostPrice = escapeHtml(latestProduct.costPrice ?? "");
-  const safeEditStock = escapeHtml(latestProduct.stock ?? ""); 
-  const safeEditNote = escapeHtml(latestProduct.note || "");
-  const safeEditDetailsText = escapeHtml(latestProduct.detailsText || "");
+  const safeEditProductId = escAttr(latestProduct.productId || "");
+  const safeEditName = escAttr(latestProduct.name || "");
+  const safeEditPrice = escAttr(latestProduct.price ?? "");
+  const safeEditCostPrice = escAttr(latestProduct.costPrice ?? "");
+  const safeEditStock = escAttr(latestProduct.stock ?? "");
+  const safeEditNote = esc(latestProduct.note || "");
+  const safeEditDetailsText = esc(latestProduct.detailsText || "");
 
   adminProductEditSheet.innerHTML = `
     <h3>แก้ไขสินค้า</h3>
@@ -7432,7 +7441,7 @@ function openProductEdit(p){
   ${
     state.compareImagesDraft.map((url, idx) => `
       <div style="position:relative">
-        <img src="${escapeHtml(url)}"
+        <img src="${escAttr(url)}"
              style="
                width:80px;
                height:80px;
@@ -7473,7 +7482,7 @@ function openProductEdit(p){
     <div class="form-group">
       <label>รูปสินค้า</label>
       <img id="imagePreview"
-        src="${p.image || ""}"
+        src="${escAttr(p.image || "")}"
         style="width:100%;border-radius:12px;margin-bottom:6px">
       <input id="editImageFile" type="file"
         accept="image/*"
@@ -7537,7 +7546,7 @@ function removeCompareImage(index){
 
   wrap.innerHTML = state.compareImagesDraft.map((url, idx) => `
     <div style="position:relative">
-      <img src="${escapeHtml(url)}"
+      <img src="${escAttr(url)}"
            style="
              width:80px;
              height:80px;
@@ -7620,7 +7629,7 @@ async function handleCompareImagesUpload(input){
    if (wrap) {
      wrap.innerHTML = state.compareImagesDraft.map((url, idx) => `
        <div style="position:relative">
-         <img src="${escapeHtml(url)}"
+         <img src="${escAttr(url)}"
               style="
                 width:80px;
                 height:80px;
