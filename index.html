@@ -4129,7 +4129,11 @@ function closeTopSheet(){
   for (const sheet of sheets) {
     if (sheet && sheet.classList.contains("show")) {
       // ✅ ใช้ Overlay Manager เท่านั้น
-      closeOverlay(sheet);
+      if (sheet === adminOrderSheet) {
+        closeAdminOrderSheet();
+      } else {
+        closeOverlay(sheet);
+      }
       break;
     }
   }
