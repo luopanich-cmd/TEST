@@ -8549,13 +8549,15 @@ function exportOrderPrint() {
     : new Date().toLocaleDateString("th-TH");
 
   const total = Number(order.total || 0).toLocaleString();
+  const safeOrderId = esc(order.orderId);
+  const safePo = esc(po);
 
   const printWindow = window.open("", "_blank");
 
   printWindow.document.write(`
     <html>
     <head>
-      <title>Order ${order.orderId}</title>
+      <title>Order ${safeOrderId}</title>
       <style>
         @page {
           size: A4;
@@ -8651,7 +8653,7 @@ function exportOrderPrint() {
   timeStyle: "short"
 })}
 </div>
-    <div>Order ${order.orderId}</div>
+    <div>Order ${safeOrderId}</div>
   </div>
 
      <div class="content">
@@ -8665,8 +8667,8 @@ function exportOrderPrint() {
         </div>
 
         <div>
-          <div>เลขที่: ${order.orderId}</div>
-          <div>PO: ${po}</div>
+          <div>เลขที่: ${safeOrderId}</div>
+          <div>PO: ${safePo}</div>
           <div>วันที่: ${today}</div>
         </div>
       </div>
@@ -8686,7 +8688,7 @@ function exportOrderPrint() {
             <tr>
               <td>${index + 1}</td>
               <td>[${esc(i.productId)}] ${esc(i.name)}</td>
-              <td>${i.qty}</td>
+              <td>${Number(i.qty) || 0}</td>
               <td>฿${Number(i.price).toLocaleString()}</td>
               <td>฿${(i.price * i.qty).toLocaleString()}</td>
             </tr>
