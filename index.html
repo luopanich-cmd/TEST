@@ -4019,6 +4019,13 @@ async function enterAdmin(){
 
   // 🔴 CHANGED: ต้องโหลด admin products ให้เสร็จก่อน
   await refreshProducts();
+
+  try {
+    const orders = await fetchOrders();
+    state.admin.orders = Array.isArray(orders) ? orders : [];
+  } catch (err) {
+    console.warn("enterAdmin: preload orders failed", err);
+  }
 }
 
 // ✅ STEP 1: UI-only mode switch (ไม่ยุ่ง session/token)
