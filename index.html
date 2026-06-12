@@ -5159,7 +5159,7 @@ async function openStockTimeline(force = false) {
                     </div>
 
                     <div class="timeline-summary">
-                      ${t.totalLines} รายการ · ${t.totalQty} ชิ้น · ${money(t.totalSalesAmount)}
+                      ${Number(t.totalLines) || 0} รายการ · ${Number(t.totalQty) || 0} ชิ้น · ${money(t.totalSalesAmount)}
                     </div>                    
 
                     ${t.items.map(i => `
@@ -5168,9 +5168,10 @@ async function openStockTimeline(force = false) {
                         ${i.productName ? ` — ${esc(i.productName)}` : ""}
                         x ${Number(i.qty || 0)}
                         ${
-                          Number.isFinite(Number(i.before))
+                          Number.isFinite(Number(i.before)) &&
+                          Number.isFinite(Number(i.after))
                             ? `<span class="timeline-muted">
-                                (${i.before} → ${i.after})
+                                (${Number(i.before)} → ${Number(i.after)})
                               </span>`
                             : ""
                         }
@@ -5195,8 +5196,8 @@ async function openStockTimeline(force = false) {
 
                       <div id="${escAttr(detailId)}" class="timeline-detail-panel">
                         <div class="timeline-detail-meta">
-                          ยอดรวมสินค้า: ${t.totalLines} รายการ<br>
-                          ยอดรวมจำนวนชิ้น: ${t.totalQty}<br>
+                          ยอดรวมสินค้า: ${Number(t.totalLines) || 0} รายการ<br>
+                          ยอดรวมจำนวนชิ้น: ${Number(t.totalQty) || 0}<br>
                           ยอดขายรวม: ${money(t.totalSalesAmount)}
                           ${t.note ? `<br>หมายเหตุ: ${esc(t.note)}` : ""}
                         </div>
@@ -5207,7 +5208,12 @@ async function openStockTimeline(force = false) {
                               ${esc(i.productId)}
                               ${i.productName ? ` — ${esc(i.productName)}` : ""} |
                               ${Number(i.qty || 0)} ชิ้น
-                              ${Number.isFinite(Number(i.before)) ? ` | ${i.before} → ${i.after}` : ""}
+                              ${
+                                Number.isFinite(Number(i.before)) &&
+                                Number.isFinite(Number(i.after))
+                                  ? ` | ${Number(i.before)} → ${Number(i.after)}`
+                                  : ""
+                              }
                               | ${money(i.salePrice)}/ชิ้น
                               | รวม ${money(i.lineTotal)}
                             </div>
@@ -5235,7 +5241,7 @@ async function openStockTimeline(force = false) {
 
               return `
                 <div class="card">
-                  <div class="timeline-tag ${cfg.class}">
+                  <div class="timeline-tag ${escAttr(cfg.class)}">
                     ${esc(cfg.text)}
                   </div>
 
@@ -5244,8 +5250,9 @@ async function openStockTimeline(force = false) {
                     ${t.productName ? ` — ${esc(t.productName)}` : ""}
                     ${Number.isFinite(Number(t.qty)) ? ` x ${Math.abs(Number(t.qty))}` : ""}
                     ${
-                      Number.isFinite(Number(t.before))
-                        ? ` (${t.before} → ${t.after})`
+                      Number.isFinite(Number(t.before)) &&
+                      Number.isFinite(Number(t.after))
+                        ? ` (${Number(t.before)} → ${Number(t.after)})`
                         : ""
                     }
                   </div>
