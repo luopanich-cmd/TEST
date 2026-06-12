@@ -7239,13 +7239,36 @@ async function submitOrder(){
     }
 
     // ================= SUCCESS =================
+    const localItems = JSON.parse(JSON.stringify(state.cart));
+    const localTotal = state.cart.reduce(
+      (sum, item) => sum + Number(item.price) * Number(item.qty),
+      0
+    );
+    const backendItems = res.data.items;
+    const hasValidBackendItems =
+      Array.isArray(backendItems) &&
+      backendItems.length > 0 &&
+      backendItems.every(item =>
+        item &&
+        typeof item === "object" &&
+        String(item.productId || "").trim() &&
+        Number.isInteger(Number(item.qty)) &&
+        Number(item.qty) > 0 &&
+        Number.isFinite(Number(item.price))
+      );
+    const backendTotal = Number(res.data.total);
+    const hasValidBackendTotal =
+      res.data.total !== null &&
+      res.data.total !== "" &&
+      Number.isFinite(backendTotal) &&
+      backendTotal >= 0;
+
     state.lastOrder = {
       orderId: res.data.orderId,
-      items: JSON.parse(JSON.stringify(state.cart)),
-      total: state.cart.reduce(
-        (s,i)=> s + Number(i.price) * Number(i.qty),
-        0
-      ),
+      items: JSON.parse(JSON.stringify(
+        hasValidBackendItems ? backendItems : localItems
+      )),
+      total: hasValidBackendTotal ? backendTotal : localTotal,
  createdAt: new Date(),
  poNumber: state.poNumber || ""
     };
