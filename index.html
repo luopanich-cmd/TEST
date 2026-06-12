@@ -5333,7 +5333,7 @@ adminOrderSheet.innerHTML = `
     ×
   </button>
 
-  <h3>${order.orderId}</h3>
+  <h3>${esc(order.orderId)}</h3>
 
  ${
    order.status !== "PENDING" &&
@@ -5352,7 +5352,7 @@ adminOrderSheet.innerHTML = `
     ${items.map(i => `
       <div class="cart-item">
    <div>
-     <div>${i.name} x ${i.qty}</div>
+     <div>${esc(i.name)} x ${Number(i.qty) || 0}</div>
 
      ${
        order.status !== "PENDING" &&
@@ -5387,9 +5387,9 @@ adminOrderSheet.innerHTML = `
       </div>
     `).join("")}
 
-    <div class="total">Total: ฿${order.total}</div>
+    <div class="total">Total: ฿${Number(order.total) || 0}</div>
     <div style="margin-top:8px;color:rgba(235,235,245,.72);font-size:14px">
-      สถานะ: ${order.status}
+      สถานะ: ${esc(order.status)}
     </div>
 
     ${
