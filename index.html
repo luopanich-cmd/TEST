@@ -5466,8 +5466,31 @@ function closeAdminOrderSheet() {
        ? order.items
        : [];
 
+   const pendingDeliveries =
+     Array.isArray(state.admin.pendingDeliveries)
+       ? state.admin.pendingDeliveries
+       : [];
+
    state.admin.bulkPendingItems =
-     items.map(item => ({
+     items.map(item => {
+       const orderedQty = Number(item.qty) || 0;
+       const existingOpenQty = pendingDeliveries
+         .filter(pending =>
+           String(pending.status || "").toUpperCase() === "OPEN" &&
+           String(pending.orderId || "") === String(order.orderId || "") &&
+           String(pending.productId || "") === String(item.productId || "")
+         )
+         .reduce(
+           (sum, pending) =>
+             sum + Math.max(0, Number(pending.qty) || 0),
+           0
+         );
+       const remainingQty = Math.max(
+         0,
+         orderedQty - existingOpenQty
+       );
+
+       return {
    productId:
      item.productId ||
      "",
@@ -5475,12 +5498,13 @@ function closeAdminOrderSheet() {
      item.name || "",
 
    orderedQty:
-     Number(item.qty) || 0,
+     orderedQty,
 
    qty:
-     Number(item.qty) || 0,
+     remainingQty,
        selected: true
-     }));
+       };
+     });
 
    bulkPendingDeliverySheet.innerHTML = `
 
@@ -5582,7 +5606,7 @@ function closeAdminOrderSheet() {
            type="number"
            min="1"
            step="1"
-           max="${item.orderedQty}"
+           max="${item.qty}"
            value="${item.qty}"
            class="input"
 style="
@@ -5642,18 +5666,67 @@ style="
 
    const invalidItem = items.find(item => {
      const qty = Number(item.qty);
-     const orderedQty = Number(item.orderedQty);
 
      return (
        !Number.isInteger(qty) ||
-       qty <= 0 ||
-       qty > orderedQty
+       qty <= 0
      );
    });
 
    if (invalidItem) {
      showToast(
        `จำนวนค้างส่งของ "${invalidItem.name || invalidItem.productId}" ต้องเป็นจำนวนเต็ม 1-${invalidItem.orderedQty}`,
+       "warning"
+     );
+     return;
+   }
+
+   let pendingDeliveries =
+     state.admin.pendingDeliveries;
+
+   if (!Array.isArray(pendingDeliveries)) {
+     try {
+       pendingDeliveries =
+         await fetchPendingDeliveries();
+       state.admin.pendingDeliveries =
+         pendingDeliveries;
+     } catch (err) {
+       console.error(err);
+       showToast(
+         err.message ||
+         "ไม่สามารถตรวจสอบรายการค้างส่งได้",
+         "error"
+       );
+       return;
+     }
+   }
+   const batchQtyByProduct = new Map();
+   const cumulativeInvalidItem = items.find(item => {
+     const productId = String(item.productId || "");
+     const qty = Number(item.qty);
+     const orderedQty = Number(item.orderedQty);
+     const existingOpenQty = pendingDeliveries
+       .filter(pending =>
+         String(pending.status || "").toUpperCase() === "OPEN" &&
+         String(pending.orderId || "") === String(order.orderId || "") &&
+         String(pending.productId || "") === productId
+       )
+       .reduce(
+         (sum, pending) =>
+           sum + Math.max(0, Number(pending.qty) || 0),
+         0
+       );
+     const batchQty =
+       (batchQtyByProduct.get(productId) || 0) + qty;
+
+     batchQtyByProduct.set(productId, batchQty);
+
+     return existingOpenQty + batchQty > orderedQty;
+   });
+
+   if (cumulativeInvalidItem) {
+     showToast(
+       `จำนวนค้างส่งของ "${cumulativeInvalidItem.name || cumulativeInvalidItem.productId}" เกินจำนวนใน PO`,
        "warning"
      );
      return;
@@ -5754,6 +5827,27 @@ function openCreatePendingDelivery(
   maxQty
 ) {
 
+const orderedQty = Number(maxQty) || 0;
+const existingOpenQty = (
+  Array.isArray(state.admin.pendingDeliveries)
+    ? state.admin.pendingDeliveries
+    : []
+)
+  .filter(item =>
+    String(item.status || "").toUpperCase() === "OPEN" &&
+    String(item.orderId || "") === String(orderId || "") &&
+    String(item.productId || "") === String(productId || "")
+  )
+  .reduce(
+    (sum, item) =>
+      sum + Math.max(0, Number(item.qty) || 0),
+    0
+  );
+const remainingQty = Math.max(
+  0,
+  orderedQty - existingOpenQty
+);
+
 createPendingDeliverySheet.dataset.orderId =
   orderId;
 
@@ -5764,7 +5858,7 @@ createPendingDeliverySheet.dataset.productId =
   productId;
 
 createPendingDeliverySheet.dataset.orderedQty =
-   Number(maxQty) || 0; 
+   orderedQty;
 
 createPendingDeliverySheet.innerHTML = `
   
@@ -5800,7 +5894,7 @@ createPendingDeliverySheet.innerHTML = `
 
       <div style="margin-top:8px;">
         <b>จำนวนใน PO:</b>
-        ${Number(maxQty) || 0}
+        ${orderedQty}
       </div>
 
       <div style="margin-top:16px;">
@@ -5814,8 +5908,8 @@ createPendingDeliverySheet.innerHTML = `
           type="number"
           min="1"
           step="1"
-          max="${Number(maxQty) || 0}"
-          value="1"
+          max="${remainingQty}"
+          value="${remainingQty > 0 ? 1 : 0}"
           class="input"
         />
 
@@ -5910,7 +6004,29 @@ async function createPendingDelivery() {
       );
     }
 
- if (qty > orderedQty) {
+ let pendingDeliveries =
+   state.admin.pendingDeliveries;
+
+ if (!Array.isArray(pendingDeliveries)) {
+   pendingDeliveries =
+     await fetchPendingDeliveries();
+   state.admin.pendingDeliveries =
+     pendingDeliveries;
+ }
+
+ const existingOpenQty = pendingDeliveries
+   .filter(item =>
+     String(item.status || "").toUpperCase() === "OPEN" &&
+     String(item.orderId || "") === String(orderId || "") &&
+     String(item.productId || "") === String(productId || "")
+   )
+   .reduce(
+     (sum, item) =>
+       sum + Math.max(0, Number(item.qty) || 0),
+     0
+   );
+
+ if (existingOpenQty + qty > orderedQty) {
    throw new Error(
      "จำนวนค้างส่งเกินจำนวนใน PO"
    );
