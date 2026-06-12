@@ -4783,7 +4783,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
         ${
           pendingOrders.length
             ? pendingOrders.map(o => `
-                <div class="card" onclick="openAdminOrder('${escAttr(o.orderId)}')">
+                <div class="card" onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})">
                   <div class="name">${esc(o.orderId)}</div>
                   <div>Status: ${esc(o.status)}</div>
                   <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
@@ -4874,7 +4874,7 @@ ${
             )
         )
         .map(o => `
-            <div class="card" onclick="openAdminOrder('${escAttr(o.orderId)}')">
+            <div class="card" onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})">
               <div class="name">${esc(o.orderId)}</div>
               <div>Status: ${esc(o.status)}</div>
               <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
@@ -5138,10 +5138,10 @@ async function openStockTimeline(force = false) {
 
       ${
         timeline.length
-          ? timeline.map(t => {
+          ? timeline.map((t, timelineIndex) => {
 
               if (t.kind === "ORDER") {
-                const detailId = `stock-detail-${esc(t.orderId)}`;
+                const detailId = `stock-detail-${timelineIndex}`;
                
                 return `
                   <div class="card">
@@ -5173,7 +5173,7 @@ async function openStockTimeline(force = false) {
                         type="button"
                         class="timeline-detail-toggle"
                         onclick="
-                          const panel = document.getElementById('${detailId}');
+                          const panel = document.getElementById(${toInlineJsStringLiteral(detailId)});
                           if (!panel) return;
                           panel.classList.toggle('show');
                           this.textContent = panel.classList.contains('show')
@@ -5184,7 +5184,7 @@ async function openStockTimeline(force = false) {
                         ดูรายละเอียดเพิ่มเติม
                       </button>
 
-                      <div id="${detailId}" class="timeline-detail-panel">
+                      <div id="${escAttr(detailId)}" class="timeline-detail-panel">
                         <div class="timeline-detail-meta">
                           ยอดรวมสินค้า: ${t.totalLines} รายการ<br>
                           ยอดรวมจำนวนชิ้น: ${t.totalQty}<br>
@@ -6664,7 +6664,7 @@ async function markPendingDelivered(
        onclick="
          closeOverlay(confirmSheet);
          confirmClosePendingDelivery(
-           '${pendingId}'
+           ${toInlineJsStringLiteral(pendingId)}
          );
        ">
        ✅ ส่งครบแล้ว
@@ -7907,7 +7907,7 @@ function confirmDeleteProduct() {
     <button class="btn btn-outline" style="margin-top:8px"
       onclick="
         closeOverlay(confirmSheet);
-        openProductEditById('${p.productId}');
+        openProductEditById(${toInlineJsStringLiteral(p.productId)});
       ">
       ยกเลิก
     </button>
@@ -8174,7 +8174,7 @@ function openAdminProductAction(p){
       style="width:100%;margin-bottom:10px"
       onclick="
         closeAdminProductAction();
-        openProductEditById('${p.productId}');
+        openProductEditById(${toInlineJsStringLiteral(p.productId)});
       ">
       ✏️ แก้ไขข้อมูลสินค้า
     </button>
