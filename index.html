@@ -5402,42 +5402,6 @@ adminOrderSheet.innerHTML = `
   openOverlay(adminOrderSheet);
 }
 
- function createAllPendingDelivery() {
-
-   const order =
-     state.admin.pendingDeliveryOrder;
-
-   if (!order) {
-     showToast(
-       "ไม่พบข้อมูลออเดอร์",
-       "warning"
-     );
-     return;
-   }
-
-   const items = Array.isArray(order.items)
-     ? order.items
-     : [];
-
-   if (!items.length) {
-     showToast(
-       "ไม่มีรายการสินค้า",
-       "warning"
-     );
-     return;
-   }
-
-   // STEP 1
-   // ยังไม่สร้างจริง
-   // แค่ส่งรายการทั้งหมดเข้า Flow เดียว
-
-   openCreatePendingDeliveryBulk(
-     order.orderId,
-     order.poNumber || "",
-     items
-   );
- }
- 
 function closeAdminOrderSheet() {
 
   closeOverlay(adminOrderSheet);
@@ -7031,22 +6995,6 @@ function openAddProduct(force = false){
   openOverlay(adminAddProductSheet);
 }
 
- const PRODUCT_IMAGE_MAX_MB = 5;
- const PRODUCT_IMAGE_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
- 
-function validateProductImageFile(file) {
-   if (!file) return;
-
-   if (!PRODUCT_IMAGE_ALLOWED_TYPES.includes(file.type)) {
-     throw new Error("รองรับเฉพาะไฟล์ JPG, PNG, WEBP");
-   }
-
-   const maxBytes = PRODUCT_IMAGE_MAX_MB * 1024 * 1024;
-   if (file.size > maxBytes) {
-     throw new Error(`รูปต้องมีขนาดไม่เกิน ${PRODUCT_IMAGE_MAX_MB} MB`);
-   }
- }
- 
 function handleAddImagePreview(input){
   const file = input.files[0];
   if(!file) return;
