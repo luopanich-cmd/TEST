@@ -2669,7 +2669,9 @@ const fetchProducts = async () => {
   // 🔒 enforce standard response
   if (!json || json.success !== true || !Array.isArray(json.data)) {
     console.error("fetchProducts invalid response:", json);
-    return []; // ✅ คืน array เสมอ
+    throw new Error(
+      json?.error || json?.message || "โหลดรายการสินค้าไม่สำเร็จ"
+    );
   }
 
   return json.data;
