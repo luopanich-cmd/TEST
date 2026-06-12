@@ -2764,7 +2764,13 @@ async function refreshProducts() {
   }
 
   try {
-    const list = state.admin?.token
+    const useAdminProducts =
+      state.mode === "admin" &&
+      state.admin?.loggedIn &&
+      state.admin?.token &&
+      !isAdminSessionExpired();
+
+    const list = useAdminProducts
       ? await fetchAdminProducts()
       : await fetchProducts();
    
