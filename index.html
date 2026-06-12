@@ -3088,6 +3088,20 @@ async function checkStockBeforeSubmit() {
  // 🔒 Attribute-safe (สำหรับ src/alt/href)
  const escAttr = (s) => esc(s);
 
+function toInlineJsStringLiteral(value) {
+  return "'" + String(value ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/"/g, "\\x22")
+    .replace(/&/g, "\\x26")
+    .replace(/</g, "\\x3C")
+    .replace(/>/g, "\\x3E")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029") + "'";
+}
+
 
 // 🔴 CHANGED: ADD renderFloatingBar() (fix: cart added but bar never appears because function was missing)
 function renderFloatingBar(){
@@ -5354,9 +5368,9 @@ adminOrderSheet.innerHTML = `
          "
          onclick="
            openCreatePendingDelivery(
-             '${order.orderId}',
-             '${String(order.poNumber || "").replace(/'/g,"\\'")}',
-             '${String(i.productId || "").replace(/'/g,"\\'")}',
+             ${toInlineJsStringLiteral(order.orderId)},
+             ${toInlineJsStringLiteral(order.poNumber || "")},
+             ${toInlineJsStringLiteral(i.productId || "")},
              ${Number(i.qty) || 0}
            )
          ">
@@ -5736,9 +5750,9 @@ createPendingDeliverySheet.innerHTML = `
   
  <div
    id="pendingDeliveryMeta"
-   data-order-id="${orderId}"
-   data-po-number="${poNumber}"
-   data-product-id="${productId}"
+   data-order-id="${escAttr(orderId)}"
+   data-po-number="${escAttr(poNumber)}"
+   data-product-id="${escAttr(productId)}"
  ></div>
 
     <div class="admin-sheet-topbar">
@@ -5761,7 +5775,7 @@ createPendingDeliverySheet.innerHTML = `
 
       <div>
         <b>สินค้า:</b>
-        ${productId}
+        ${esc(productId)}
       </div>
 
       <div style="margin-top:8px;">
