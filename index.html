@@ -4164,6 +4164,8 @@ function openQtySheet(){
     return;
   }
 
+  state.qty = 1;
+
   // 🔒 ปิด product sheet ผ่าน overlay manager
   closeOverlay(productSheet);
 
@@ -4176,9 +4178,10 @@ function openQtySheet(){
         <input
           type="number"
           min="1"
+          step="1"
           max="${state.selectedProduct.stock}"
           value="1"
-          oninput="state.qty = Number(this.value) || 1">
+          oninput="state.qty = Number(this.value)">
       </div>
     </div>
 
@@ -4210,7 +4213,15 @@ function confirmAddToCart(){
   const p = state.selectedProduct;
   if (!p) return;
 
-  const qty = Number(state.qty) || 1;
+  const qty = Number(state.qty);
+
+  if (!Number.isInteger(qty) || qty <= 0) {
+    showToast(
+      "จำนวนสินค้าต้องเป็นจำนวนเต็มมากกว่า 0",
+      "warning"
+    );
+    return;
+  }
 
   // 🔒 GUARD: ห้ามเกิน stock
   const existing = state.cart.find(i => i.productId === p.productId);
@@ -5553,6 +5564,8 @@ function closeAdminOrderSheet() {
          <input
            type="number"
            min="1"
+           step="1"
+           max="${item.orderedQty}"
            value="${item.qty}"
            class="input"
 style="
@@ -5600,14 +5613,30 @@ style="
 
    const items =
      state.admin.bulkPendingItems
-       .filter(i =>
-         i.selected &&
-         i.qty > 0
-       );
+       .filter(i => i.selected);
 
    if (!items.length) {
      showToast(
        "กรุณาเลือกสินค้า",
+       "warning"
+     );
+     return;
+   }
+
+   const invalidItem = items.find(item => {
+     const qty = Number(item.qty);
+     const orderedQty = Number(item.orderedQty);
+
+     return (
+       !Number.isInteger(qty) ||
+       qty <= 0 ||
+       qty > orderedQty
+     );
+   });
+
+   if (invalidItem) {
+     showToast(
+       `จำนวนค้างส่งของ "${invalidItem.name || invalidItem.productId}" ต้องเป็นจำนวนเต็ม 1-${invalidItem.orderedQty}`,
        "warning"
      );
      return;
@@ -5767,6 +5796,7 @@ createPendingDeliverySheet.innerHTML = `
           id="pendingQtyInput"
           type="number"
           min="1"
+          step="1"
           max="${Number(maxQty) || 0}"
           value="1"
           class="input"
@@ -5857,19 +5887,13 @@ async function createPendingDelivery() {
       throw new Error("Missing productId");
     }
 
-    if (qty <= 0) {
+    if (!Number.isInteger(qty) || qty <= 0) {
       throw new Error(
-        "จำนวนค้างส่งต้องมากกว่า 0"
+        "จำนวนค้างส่งต้องเป็นจำนวนเต็มมากกว่า 0"
       );
     }
 
- const maxQty = Number(
-   document.getElementById(
-     "pendingQtyInput"
-   )?.max || 0
- );
-
- if (qty > maxQty) {
+ if (qty > orderedQty) {
    throw new Error(
      "จำนวนค้างส่งเกินจำนวนใน PO"
    );
