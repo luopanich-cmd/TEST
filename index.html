@@ -2300,6 +2300,7 @@ const state = {
     expiredAt: null,
     orders: [],
     selectedOrder: null,
+    dashboardMode: "SUMMARY",
     logs: [],
     filters: {
       status: "all",
@@ -4680,6 +4681,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
   }
 
   allowOpenOrders = false;
+  state.admin.dashboardMode = mode === "PENDING" ? "PENDING" : "SUMMARY";
   closeOverlay(adminStockSheet);
   state.search = "";
 
@@ -5284,9 +5286,6 @@ function openAdminOrder(orderId){
   const order = orders.find(o => o.orderId === orderId);
   if (!order) return;
 
- state.admin.lastDashboardStatus =
-   state.admin.filters?.status || "all"; 
- 
   state.admin.selectedOrder = order;
 
   state.admin.pendingDeliveryOrder = order;
@@ -5431,7 +5430,7 @@ function closeAdminOrderSheet() {
   allowOpenOrders = true;
 
   openAdminDashboard(
-    state.admin.lastDashboardStatus || "all",
+    state.admin.dashboardMode || "SUMMARY",
     true
   );
 } 
