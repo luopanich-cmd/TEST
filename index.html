@@ -259,7 +259,31 @@ header.scrolled{
   overflow:hidden;
   word-break:break-word;
 }
-  .price{color:#007aff;margin-top:4px;}
+
+ .price{
+  margin-top:4px;
+
+  font-weight:700;
+  letter-spacing:.15px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #4da3ff 0%,
+      #78b8ff 45%,
+      #b9d8ff 100%
+    );
+
+  -webkit-background-clip:text;
+  background-clip:text;
+
+  -webkit-text-fill-color:transparent;
+  color:transparent;
+
+  text-shadow:
+    0 0 12px rgba(77,163,255,.18);
+}
+ 
   .stock{font-size:14px;color:rgba(235,235,245,.72);}
 
   .backdrop{
@@ -300,6 +324,10 @@ header.scrolled{
   transform: translateY(0);
 }
 
+ #confirmSheet.show{
+   z-index:9999;
+ }
+ 
 .sheet h3{
   margin:0 0 12px;
 }
@@ -848,6 +876,8 @@ button:disabled {
    border-radius: 12px;
    font-size: 14px;
    font-weight: 600;
+   line-height: 1.35;
+   text-align: center;  
    color: rgba(245,245,247,.92);
    cursor: pointer;
    user-select: none;
@@ -971,10 +1001,20 @@ textarea:focus-visible {
 
 @media (hover:hover){
   .product-card:hover{
+
     transform: translateY(-4px);
-    box-shadow: var(--shadow-float);
+
+    border: 1px solid rgba(77,163,255,.18);
+
+    box-shadow:
+      0 0 0 1px rgba(77,163,255,.08),
+      0 12px 32px rgba(0,122,255,.10),
+      var(--shadow-floating);
+
+    background:
+      rgba(32,32,36,.78);
   }
-}  
+}
 
 .product-card .thumb {
   width: 80px;
@@ -1104,12 +1144,53 @@ textarea:focus-visible {
   gap: 4px;
 }
 
-/* พร้อมส่ง */
-.status.ready {
+ .status.ready{
   background: rgba(52,199,89,.15);
-  color: #34c759;
+  color:#34c759;
+}
+/* พร้อมส่ง */
+.status.ready::before{
+  content:"";
+
+  display:inline-block;
+
+  width:6px;
+  height:6px;
+
+  margin-right:6px;
+
+  border-radius:50%;
+
+  background:#34c759;
+
+  box-shadow:
+    0 0 8px rgba(52,199,89,.45);
+
+  animation:pulse 2.5s infinite;
 }
 
+@keyframes pulse{
+  0%{
+    transform:scale(1);
+    opacity:1;
+  }
+
+  50%{
+    transform:scale(1.2);
+    opacity:.8;
+  }
+
+  100%{
+    transform:scale(1);
+    opacity:1;
+  }
+}
+ 
+ .status.ready_plus {
+   background: rgba(52,199,89,.22);
+   color: #34c759;
+ }
+ 
 /* อยู่ระหว่างจัดส่ง */
 .status.shipping {
   background: rgba(0,122,255,.15);
@@ -1675,6 +1756,62 @@ textarea {
   transform: scale(var(--tap-scale-icon));
 }
 
+ /* ================= COMPLETE ORDER CONFIRM ================= */
+
+ .confirm-complete-sheet{
+   text-align:center;
+   padding-top:8px;
+ }
+
+ .confirm-complete-icon{
+   width:64px;
+   height:64px;
+   margin:0 auto 16px;
+
+   display:flex;
+   align-items:center;
+   justify-content:center;
+
+   border-radius:50%;
+
+   background:
+     rgba(52,199,89,.16);
+
+   color:#34c759;
+
+   font-size:32px;
+
+   border:
+     1px solid
+     rgba(52,199,89,.22);
+
+   box-shadow:
+     var(--shadow-control);
+ }
+
+ .confirm-complete-title{
+   font-size:20px;
+   font-weight:700;
+   color:var(--text-primary);
+   margin-bottom:8px;
+ }
+
+ .confirm-complete-desc{
+   font-size:14px;
+   line-height:1.5;
+   color:var(--text-secondary);
+   margin-bottom:20px;
+ }
+
+ .confirm-complete-actions{
+   display:flex;
+   gap:10px;
+ }
+
+ .confirm-complete-actions .btn{
+   flex:1;
+ } 
+
 /* 🏷️ ชื่อสินค้าใน Product Sheet */
 .product-title {
   margin-top: 4px;
@@ -1759,10 +1896,11 @@ textarea {
   align-items: center;
   border-radius: 18px;
 
-  background: rgba(28,28,30,.72);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px);
-  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(22,22,24,.78);
+backdrop-filter: blur(36px) saturate(220%);
+-webkit-backdrop-filter: blur(36px);
+
+border: 1px solid rgba(255,255,255,.16);
   box-shadow:
     var(--shadow-floating),
     inset 0 1px 0 rgba(255,255,255,.10);
@@ -1927,6 +2065,45 @@ textarea {
   transform: translateX(-50%) translateY(1px) scale(.97);
 }
 
+.input{
+  width:100%;
+  padding:12px;
+  border-radius:12px;
+
+  background:rgba(255,255,255,.04);
+
+  border:1px solid rgba(255,255,255,.08);
+
+  color:#fff;
+
+  font-size:15px;
+}
+
+.input:focus{
+  outline:none;
+
+  border-color:#0A84FF;
+
+  box-shadow:
+    0 0 0 3px
+    rgba(10,132,255,.18);
+}
+
+textarea.input{
+  resize:vertical;
+  min-height:90px;
+}
+
+.btn-primary{
+  background:#0A84FF;
+  color:#fff;
+  border:none;
+}
+
+.btn-primary:hover{
+  filter:brightness(1.05);
+} 
+ 
 /* ================= CONTINUE MODE (ADMIN ADD PRODUCT) ================= */
 /* 🔴 FIX: กันข้อความ "เพิ่มต่อเนื่อง..." ชิดขอบ/ไม่ wrap ในมือถือ */
 #adminAddProductSheet .continue-row{
@@ -1989,7 +2166,24 @@ textarea {
  <div id="adminDashboardSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
  <div id="adminOrderSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
  <div id="adminStockSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
+ <div id="pendingDeliverySheet"
+      class="sheet"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"></div>
+<div
+  id="createPendingDeliverySheet"
+  class="sheet">
+</div>
 
+ <div
+   id="bulkPendingDeliverySheet"
+   class="sheet"
+   role="dialog"
+   aria-modal="true"
+   tabindex="-1">
+ </div>
+ 
 <!-- 🔹 Main Menu (Side Sheet Right) -->
 <div id="mainMenuSheet" class="side-menu" role="dialog" aria-modal="true" tabindex="-1"></div>
 
@@ -2003,7 +2197,16 @@ textarea {
 /* ================= STEP 2: ประกาศ backdrop (UPGRADED) ================= */
 const backdrop = document.getElementById("globalBackdrop");
 const cartSheet = document.getElementById("cartSheet");
-  
+const createPendingDeliverySheet =
+  document.getElementById(
+    "createPendingDeliverySheet"
+  ); 
+ 
+ const bulkPendingDeliverySheet =
+   document.getElementById(
+     "bulkPendingDeliverySheet"
+   ); 
+
 // ✅ SINGLE SOURCE OF TRUTH: sheet refs (กัน ReferenceError + กันพึ่ง global id)
 const productSheet = document.getElementById("productSheet");
 const qtySheet = document.getElementById("qtySheet");
@@ -2013,6 +2216,8 @@ const adminLoginSheet = document.getElementById("adminLoginSheet");
 const adminDashboardSheet = document.getElementById("adminDashboardSheet");
 const adminOrderSheet = document.getElementById("adminOrderSheet");
 const adminStockSheet = document.getElementById("adminStockSheet");
+const pendingDeliverySheet =
+  document.getElementById("pendingDeliverySheet"); 
 const mainMenuSheet = document.getElementById("mainMenuSheet");
 const adminProductActionSheet = document.getElementById("adminProductActionSheet");
 const adminProductEditSheet = document.getElementById("adminProductEditSheet");
@@ -2026,11 +2231,13 @@ const ADMIN_SHEETS = Object.freeze({
   dashboard: adminDashboardSheet,
   order: adminOrderSheet,
   stock: adminStockSheet,
+  pendingDelivery: pendingDeliverySheet,
   menu: mainMenuSheet,
   productAction: adminProductActionSheet,
   productEdit: adminProductEditSheet,
   stockAction: adminStockActionSheet,
-  addProduct: adminAddProductSheet
+  addProduct: adminAddProductSheet,
+  bulkPending: bulkPendingDeliverySheet
 });
 
 function getAdminSheets() {
@@ -2039,6 +2246,10 @@ function getAdminSheets() {
 
 // ✅ expose เฉพาะ public actions ที่ inline handler ยังจำเป็นต้องใช้
 Object.assign(window, {
+  openBulkPendingDeliverySheet,
+  submitBulkPendingDelivery,
+  openPendingDeliverySheet,
+  closePendingDeliverySheet,
   openChangePasswordSheet,
   submitChangePassword,
   cancelAdminLogin,
@@ -2080,6 +2291,9 @@ const state = {
   isSubmitting: false,
 
   admin: {
+    pendingDeliveryExpanded:{},
+    pendingDeliveryOrder: null,
+    bulkPendingItems: [],   
     loggedIn: false,
     user: null,
     token: null,
@@ -2487,6 +2701,30 @@ const fetchAdminProducts = async () => {
   return json.data;
 };  
 
+async function fetchPendingDeliveries() {
+
+  if (!state.admin?.token) {
+    throw new Error("Missing admin token");
+  }
+
+  const form = new URLSearchParams();
+  form.append("action", "pendingDeliveries");
+  form.append("token", state.admin.token);
+
+  const res = await postFormAction(form);
+
+  if (!res?.success) {
+    throw new Error(
+      res?.error || "Failed to load pending deliveries"
+    );
+  }
+
+  return Array.isArray(res?.data)
+    ? res.data
+    : [];
+} 
+
+ 
 function sortProducts(products) {
   if (!Array.isArray(products)) return [];
 
@@ -2790,9 +3028,6 @@ async function fetchStockLogs() {
   const json = await postFormAction(form);
   return json.data;
 }
-
-
-  
 
 async function fetchOrders(){
   if (!state.admin.token) {
@@ -3099,6 +3334,8 @@ if (
   pageItems.forEach(p => {
     const statusMap = {
       ready:     "พร้อมส่ง",
+      ready_plus:
+        "พร้อมส่ง สามารถบวกเพิ่มได้",
       shipping:  "อยู่ระหว่างจัดส่ง",
       warehouse: "อยู่โกดังไทย",
       out:       "หมด"
@@ -3188,7 +3425,34 @@ if (
       </button>
     `;
     app.appendChild(pagination);
-  } 
+  }
+
+ // Product Card Stagger Animation
+  const cards = document.querySelectorAll('.product-card');
+
+  cards.forEach((card,index)=>{
+
+    card.animate(
+      [
+        {
+          opacity:0,
+          transform:'translateY(10px)'
+        },
+        {
+          opacity:1,
+          transform:'translateY(0)'
+        }
+      ],
+      {
+        duration:300,
+        delay:index * 25,
+        easing:'ease-out',
+        fill:'both'
+      }
+    );
+
+  });
+
 }
 
 function changePage(delta){
@@ -3455,6 +3719,11 @@ function renderHeader(){
  <div id="filterDropdown" class="filter-dropdown" role="menu" aria-label="ตัวกรองสินค้า">
    <button type="button" class="filter-item" role="menuitem" onclick="selectFilter('all')">ทั้งหมด</button>
    <button type="button" class="filter-item" role="menuitem" onclick="selectFilter('ready')">พร้อมส่ง</button>
+   <button type="button" class="filter-item"
+     onclick="selectFilter('ready_plus')">
+     พร้อมส่ง<br>
+     สามารถบวกเพิ่มได้
+   </button>
    <button type="button" class="filter-item" role="menuitem" onclick="selectFilter('shipping')">ระหว่างจัดส่ง</button>
    <button type="button" class="filter-item" role="menuitem" onclick="selectFilter('warehouse')">โกดังไทย</button>
    <button type="button" class="filter-item" role="menuitem" onclick="selectFilter('out')">หมด</button>
@@ -4252,6 +4521,28 @@ function toYmdLocal(value) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function formatThaiDate(value) {
+
+  if (!value) return "-";
+
+  const d = new Date(value);
+
+  if (Number.isNaN(d.getTime())) {
+    return String(value);
+  }
+
+  return d.toLocaleString(
+    "th-TH",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }
+  );
+}
+ 
 function getOrderDateValue(order) {
   return (
     order?.createdAt ||
@@ -4261,12 +4552,28 @@ function getOrderDateValue(order) {
     ""
   );
 }
+ 
 
 function isOrderInRange(order, fromYmd, toYmd) {
   const raw = getOrderDateValue(order);
+
+ console.log(
+   "ORDER DATE:",
+   order.orderId,
+   raw
+ );
+ 
   if (!raw) return false;
 
   const d = new Date(raw);
+
+ console.log(
+   "PARSED:",
+   order.orderId,
+   d,
+   Number.isNaN(d.getTime())
+ ); 
+ 
   if (Number.isNaN(d.getTime())) return false;
 
   const orderYmd = toYmdLocal(d);
@@ -4395,6 +4702,15 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
       return status === "APPROVED" && isOrderInRange(o, from, to);
     });
 
+   console.log(
+  "APPROVED ORDERS",
+  approvedOrders.map(o => ({
+    orderId: o.orderId,
+    status: o.status,
+    createdAt: o.createdAt
+  }))
+);
+
     const pendingOrders = (Array.isArray(state.admin.orders)
       ? state.admin.orders
       : []
@@ -4424,7 +4740,14 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
                   <div class="name">${esc(o.orderId)}</div>
                   <div>Status: ${esc(o.status)}</div>
                   <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
-                  <div class="stock">วันที่: ${esc(getOrderDateValue(o) || "-")}</div>
+ <div class="stock">
+   วันที่:
+   ${esc(
+     formatThaiDate(
+       getOrderDateValue(o)
+     )
+   )}
+ </div>
                 </div>
               `).join("")
             : `
@@ -4490,16 +4813,34 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
 
       <h3 style="margin-top:18px">รายการออเดอร์ APPROVED ที่นำมาคิด</h3>
 
-      ${
-        approvedOrders.length
-          ? approvedOrders.map(o => `
-              <div class="card" onclick="openAdminOrder('${escAttr(o.orderId)}')">
-                <div class="name">${esc(o.orderId)}</div>
-                <div>Status: ${esc(o.status)}</div>
-                <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
-                <div class="stock">วันที่: ${esc(getOrderDateValue(o) || "-")}</div>
-              </div>
-            `).join("")
+${
+  approvedOrders.length
+    ? approvedOrders
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(
+              getOrderDateValue(b)
+            ) -
+            new Date(
+              getOrderDateValue(a)
+            )
+        )
+        .map(o => `
+            <div class="card" onclick="openAdminOrder('${escAttr(o.orderId)}')">
+              <div class="name">${esc(o.orderId)}</div>
+              <div>Status: ${esc(o.status)}</div>
+              <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
+<div class="stock">
+  วันที่:
+  ${esc(
+    formatThaiDate(
+      getOrderDateValue(o)
+    )
+  )}
+</div>
+            </div>
+          `).join("")
           : `
             <div style="color:#888;text-align:center;margin-top:24px">
               ไม่มีออเดอร์สถานะ APPROVED ในช่วงวันที่ที่เลือก
@@ -4909,8 +5250,6 @@ async function openStockTimeline(force = false) {
   }
 }
 
-
-
 function openAdminOrder(orderId){
   // 🔒 A6 GUARD: ห้ามเปิด Admin Order UI ถ้าไม่ได้อยู่ admin หรือ session ไม่พร้อม
   if (
@@ -4929,7 +5268,12 @@ function openAdminOrder(orderId){
   const order = orders.find(o => o.orderId === orderId);
   if (!order) return;
 
+ state.admin.lastDashboardStatus =
+   state.admin.filters?.status || "all"; 
+ 
   state.admin.selectedOrder = order;
+
+  state.admin.pendingDeliveryOrder = order;
 
   // ✅ FIX: items เป็น array อยู่แล้ว ไม่ต้อง parse
   const items = Array.isArray(order.items)
@@ -4938,13 +5282,64 @@ function openAdminOrder(orderId){
 
   const isPending = order.status === "PENDING";
 
-  adminOrderSheet.innerHTML = `
-    <h3>${order.orderId}</h3>
+adminOrderSheet.innerHTML = `
+  <button
+    class="sheet-close-btn"
+    onclick="closeAdminOrderSheet()">
+    ×
+  </button>
+
+  <h3>${order.orderId}</h3>
+
+ ${
+   order.status !== "PENDING" &&
+   order.status !== "REJECTED"
+   ? `
+<button
+  class="btn btn-primary"
+  style="margin-bottom:16px"
+  onclick="openBulkPendingDeliverySheet()">
+  📦 สร้างรายการค้างส่งทั้งหมด
+</button>
+   `
+   : ""
+ }
 
     ${items.map(i => `
       <div class="cart-item">
-        <div>${i.name} x ${i.qty}</div>
-        <div>฿${i.price * i.qty}</div>
+   <div>
+     <div>${i.name} x ${i.qty}</div>
+
+     ${
+       order.status !== "PENDING" &&
+       order.status !== "REJECTED"
+       ? `
+       <button
+         class="btn btn-outline"
+         style="
+           margin-top:8px;
+           width:auto;
+           padding:8px 12px;
+           font-size:13px;
+         "
+         onclick="
+           openCreatePendingDelivery(
+             '${order.orderId}',
+             '${String(order.poNumber || "").replace(/'/g,"\\'")}',
+             '${String(i.productId || "").replace(/'/g,"\\'")}',
+             ${Number(i.qty) || 0}
+           )
+         ">
+         📦 ค้างส่ง
+       </button>
+       `
+       : ""
+     }
+
+   </div>
+ <div>
+   ฿${(Number(i.price) || 0) * (Number(i.qty) || 0)}
+ </div>
       </div>
     `).join("")}
 
@@ -4976,6 +5371,699 @@ function openAdminOrder(orderId){
   // ✅ เปิดผ่าน Overlay Manager
   openOverlay(adminOrderSheet);
 }
+
+ function createAllPendingDelivery() {
+
+   const order =
+     state.admin.pendingDeliveryOrder;
+
+   if (!order) {
+     showToast(
+       "ไม่พบข้อมูลออเดอร์",
+       "warning"
+     );
+     return;
+   }
+
+   const items = Array.isArray(order.items)
+     ? order.items
+     : [];
+
+   if (!items.length) {
+     showToast(
+       "ไม่มีรายการสินค้า",
+       "warning"
+     );
+     return;
+   }
+
+   // STEP 1
+   // ยังไม่สร้างจริง
+   // แค่ส่งรายการทั้งหมดเข้า Flow เดียว
+
+   openCreatePendingDeliveryBulk(
+     order.orderId,
+     order.poNumber || "",
+     items
+   );
+ }
+ 
+function closeAdminOrderSheet() {
+
+  closeOverlay(adminOrderSheet);
+
+  allowOpenOrders = true;
+
+  openAdminDashboard(
+    state.admin.lastDashboardStatus || "all",
+    true
+  );
+} 
+
+ function openBulkPendingDeliverySheet() {
+
+   const order =
+     state.admin.pendingDeliveryOrder;
+
+   if (!order) {
+     showToast(
+       "ไม่พบข้อมูลออเดอร์",
+       "warning"
+     );
+     return;
+   }
+
+   const items =
+     Array.isArray(order.items)
+       ? order.items
+       : [];
+
+   state.admin.bulkPendingItems =
+     items.map(item => ({
+   productId:
+     item.productId ||
+     "",
+   name:
+     item.name || "",
+
+   orderedQty:
+     Number(item.qty) || 0,
+
+   qty:
+     Number(item.qty) || 0,
+       selected: true
+     }));
+
+   bulkPendingDeliverySheet.innerHTML = `
+
+<div
+  class="admin-sheet-topbar"
+  style="
+   display:grid;
+   grid-template-columns:48px 1fr 48px;
+   align-items:center;
+  ">
+ 
+  <button
+    class="btn btn-outline"
+    onclick="
+      closeOverlay(
+        bulkPendingDeliverySheet
+      )
+    ">
+    ✕
+  </button>
+
+<h3
+  style="
+    margin:0;
+    text-align:center;
+    grid-column:2;
+   width:100%;
+   box-sizing:border-box;
+  ">
+    📦 สร้างค้างส่งหลายรายการ
+  </h3>
+
+  <div></div>
+
+</div>
+
+   <div class="card">
+
+     ${state.admin.bulkPendingItems.map(
+       (item,index)=>`
+
+<div
+  style="
+    display:block;
+    margin-bottom:16px;
+    padding-bottom:16px;
+    border-bottom:1px solid rgba(255,255,255,.08);
+  ">
+
+<div>
+
+<div
+  style="
+    display:grid;
+    grid-template-columns:24px 1fr;
+    gap:10px;
+    align-items:start;
+  ">
+
+    <input
+      type="checkbox"
+           checked
+           onchange="
+             state.admin.bulkPendingItems[
+               ${index}
+             ].selected=this.checked
+           ">
+
+<div
+  style="
+    min-width:0;
+    white-space:normal;
+    overflow-wrap:break-word;
+    word-break:break-word;
+    line-height:1.4;
+  ">
+           ${item.name || item.productId || "-"}
+         </div>
+
+  </div>
+
+ </div>
+
+<div
+  style="
+    margin-top:8px;
+  ">
+
+ <div
+   style="
+     font-size:12px;
+     opacity:.7;
+     margin-bottom:4px;
+   ">
+   จำนวนค้างส่ง
+ </div>
+
+         <input
+           type="number"
+           min="1"
+           value="${item.qty}"
+           class="input"
+style="
+  max-width:120px;
+  width:120px;
+"
+           onchange="
+             state.admin.bulkPendingItems[
+               ${index}
+             ].qty=
+             Number(this.value)||0
+           ">
+
+ </div>
+       </div>
+
+     `).join("")}
+
+     <button
+       class="btn btn-primary"
+       style="
+         width:100%;
+         margin-top:16px;
+       "
+       onclick="
+         submitBulkPendingDelivery()
+       ">
+       สร้างรายการ
+     </button>
+
+   </div>
+   `;
+
+   openOverlay(
+     bulkPendingDeliverySheet
+   );
+ }
+
+ async function submitBulkPendingDelivery() {
+
+   const order =
+     state.admin.pendingDeliveryOrder;
+
+   if (!order) return;
+
+   const items =
+     state.admin.bulkPendingItems
+       .filter(i =>
+         i.selected &&
+         i.qty > 0
+       );
+
+   if (!items.length) {
+     showToast(
+       "กรุณาเลือกสินค้า",
+       "warning"
+     );
+     return;
+   }
+
+   try {
+
+     showLoading(
+       "กำลังสร้างรายการค้างส่ง..."
+     );
+
+     for (const item of items) {
+
+       const form =
+         new URLSearchParams();
+
+       form.append(
+         "action",
+         "createPendingDelivery"
+       );
+
+       form.append(
+         "token",
+         state.admin.token
+       );
+
+       form.append(
+         "orderId",
+         order.orderId
+       );
+
+       form.append(
+         "poNumber",
+         order.poNumber || ""
+       );
+
+       form.append(
+         "productId",
+         item.productId
+       );
+
+       form.append(
+         "qty",
+         item.qty
+       );
+
+ form.append(
+   "orderedQty",
+   item.orderedQty
+ );
+      
+       form.append(
+         "note",
+         "Bulk Pending Delivery"
+       );
+
+       const result =
+         await postFormAction(form);
+
+       if (!result?.success) {
+         throw new Error(
+           result?.error ||
+           "Create pending failed"
+         );
+       }
+     }
+
+     showToast(
+       "สร้างรายการสำเร็จ",
+       "success"
+     );
+
+     closeOverlay(
+       bulkPendingDeliverySheet
+     );
+
+     openPendingDeliverySheet();
+
+   } catch(err) {
+
+     console.error(err);
+
+     alert(
+       err.message ||
+       "สร้างรายการไม่สำเร็จ"
+     );
+
+   } finally {
+
+     safeHideLoading();
+   }
+ }
+ 
+function openCreatePendingDelivery(
+  orderId,
+  poNumber,
+  productId,
+  maxQty
+) {
+
+createPendingDeliverySheet.dataset.orderId =
+  orderId;
+
+createPendingDeliverySheet.dataset.poNumber =
+  poNumber;
+
+createPendingDeliverySheet.dataset.productId =
+  productId;
+
+createPendingDeliverySheet.dataset.orderedQty =
+   Number(maxQty) || 0; 
+
+createPendingDeliverySheet.innerHTML = `
+  
+ <div
+   id="pendingDeliveryMeta"
+   data-order-id="${orderId}"
+   data-po-number="${poNumber}"
+   data-product-id="${productId}"
+ ></div>
+
+    <div class="admin-sheet-topbar">
+
+      <button
+        class="btn btn-outline"
+        onclick="
+          closeOverlay(
+            createPendingDeliverySheet
+          )
+        ">
+        ← กลับ
+      </button>
+
+      <h3>📦 เพิ่มรายการค้างส่ง</h3>
+
+    </div>
+
+      <div class="card" style="margin-top:12px;">
+
+      <div>
+        <b>สินค้า:</b>
+        ${productId}
+      </div>
+
+      <div style="margin-top:8px;">
+        <b>จำนวนใน PO:</b>
+        ${Number(maxQty) || 0}
+      </div>
+
+      <div style="margin-top:16px;">
+
+<label class="stock">
+  จำนวนค้างส่ง
+</label>
+
+        <input
+          id="pendingQtyInput"
+          type="number"
+          min="1"
+          max="${Number(maxQty) || 0}"
+          value="1"
+          class="input"
+        />
+
+      </div>
+
+      <div style="margin-top:12px;">
+
+        <label>
+          หมายเหตุ
+        </label>
+
+        <textarea
+          id="pendingNoteInput"
+          class="input"
+          placeholder="เช่น รอของเข้า / รอรอบผลิต"
+          rows="3"></textarea>
+
+      </div>
+
+<button
+  onclick="createPendingDelivery()"
+  class="btn btn-primary"
+  style="
+    margin-top:16px;
+    width:100%;
+  ">
+  บันทึก
+</button>
+
+    </div>
+  `;
+
+  openOverlay(
+    createPendingDeliverySheet
+  );
+}
+
+async function createPendingDelivery() {
+
+  try {
+
+  if (state.admin.isSubmitting) {
+    return;
+  }
+
+  state.admin.isSubmitting = true;
+
+  showLoading(
+    "กำลังสร้างรายการค้างส่ง..."
+  );  
+
+    if (!state.admin?.token) {
+      throw new Error("Not authenticated");
+    }
+
+    const orderId =
+      createPendingDeliverySheet.dataset.orderId;
+
+    const poNumber =
+      createPendingDeliverySheet.dataset.poNumber;
+
+    const productId =
+      createPendingDeliverySheet.dataset.productId;
+
+    const orderedQty =
+      Number(
+        createPendingDeliverySheet.dataset.orderedQty
+      ) || 0;
+
+    const qty = Number(
+      document.getElementById(
+        "pendingQtyInput"
+      )?.value || 0
+    );
+
+    const note =
+      document.getElementById(
+        "pendingNoteInput"
+      )?.value?.trim() || "";
+
+    if (!orderId) {
+      throw new Error("Missing orderId");
+    }
+
+    if (!productId) {
+      throw new Error("Missing productId");
+    }
+
+    if (qty <= 0) {
+      throw new Error(
+        "จำนวนค้างส่งต้องมากกว่า 0"
+      );
+    }
+
+ const maxQty = Number(
+   document.getElementById(
+     "pendingQtyInput"
+   )?.max || 0
+ );
+
+ if (qty > maxQty) {
+   throw new Error(
+     "จำนวนค้างส่งเกินจำนวนใน PO"
+   );
+ }
+   
+    const form = new URLSearchParams();
+
+    form.append(
+      "action",
+      "createPendingDelivery"
+    );
+
+    form.append(
+      "token",
+      state.admin.token
+    );
+
+    form.append(
+      "orderId",
+      orderId
+    );
+
+    form.append(
+      "poNumber",
+      poNumber || ""
+    );
+
+    form.append(
+      "productId",
+      productId
+    );
+
+ form.append(
+   "orderedQty",
+   orderedQty
+ );
+   
+    form.append(
+      "qty",
+      qty
+    );
+
+    form.append(
+      "note",
+      note
+    );
+
+    const result =
+      await postFormAction(form);
+
+    if (!result?.success) {
+      throw new Error(
+        result?.error ||
+        "Create pending delivery failed"
+      );
+    }
+
+ showToast(
+   "สร้างรายการค้างส่งเรียบร้อย",
+   "success"
+ );
+
+ closeOverlay(
+   createPendingDeliverySheet
+ );
+
+ openPendingDeliverySheet();
+
+  } catch (err) {
+
+    console.error(err);
+
+    alert(
+      err.message ||
+      "ไม่สามารถสร้างรายการค้างส่งได้"
+    );
+} finally {
+
+  state.admin.isSubmitting = false;
+
+  safeHideLoading();
+
+  }
+}
+
+ async function createAllPendingDelivery() {
+
+   const order =
+     state.admin.pendingDeliveryOrder;
+
+   if (!order) {
+     showToast(
+       "ไม่พบข้อมูลออเดอร์",
+       "warning"
+     );
+     return;
+   }
+
+   const items =
+     Array.isArray(order.items)
+       ? order.items
+       : [];
+
+   if (!items.length) {
+     showToast(
+       "ไม่มีรายการสินค้า",
+       "warning"
+     );
+     return;
+   }
+
+   try {
+
+     showLoading(
+       "กำลังสร้างรายการค้างส่ง..."
+     );
+
+     for (const item of items) {
+
+       const form =
+         new URLSearchParams();
+
+       form.append(
+         "action",
+         "createPendingDelivery"
+       );
+
+       form.append(
+         "token",
+         state.admin.token
+       );
+
+       form.append(
+         "orderId",
+         order.orderId
+       );
+
+       form.append(
+         "poNumber",
+         order.poNumber || ""
+       );
+
+       form.append(
+         "productId",
+         item.productId
+       );
+
+       form.append(
+         "orderedQty",
+         Number(item.qty) || 0
+       );
+
+       form.append(
+         "qty",
+         Number(item.qty) || 0
+       );
+
+       form.append(
+         "note",
+         "Bulk Pending Delivery"
+       );
+
+       const result =
+         await postFormAction(form);
+
+       if (!result?.success) {
+         throw new Error(
+           result?.error ||
+           "Create pending delivery failed"
+         );
+       }
+     }
+
+     showToast(
+       "สร้างรายการค้างส่งทั้งหมดสำเร็จ",
+       "success"
+     );
+
+     openPendingDeliverySheet();
+
+   } catch (err) {
+
+     console.error(err);
+
+     alert(
+       err.message ||
+       "ไม่สามารถสร้างรายการค้างส่งได้"
+     );
+
+   } finally {
+
+     safeHideLoading();
+   }
+ } 
 
 async function handleApprove() {
   // 🔒 GUARD: ต้องอยู่ใน admin mode และมี order
@@ -5255,6 +6343,403 @@ async function refreshProductsWithFeedback({
     }
   }
 }
+
+function openPendingDeliverySheet() {
+  pendingDeliverySheet.innerHTML = `
+    <div class="admin-sheet-topbar">
+      <button
+        class="btn btn-outline back-btn"
+        onclick="closePendingDeliverySheet()">
+        ← กลับ
+      </button>
+
+      <h3>
+        <span class="dashboard-title-main">
+          📦 ค้างส่ง
+        </span>
+      </h3>
+    </div>
+
+    <div id="pendingDeliveryList">
+      <div class="card">
+        <div style="font-weight:600;">
+          กำลังโหลด...
+        </div>
+      </div>
+    </div>
+  `;
+
+  openOverlay(pendingDeliverySheet);
+
+ fetchPendingDeliveries()
+   .then(list => {
+
+     state.admin.pendingDeliveries =
+       list;
+
+     renderPendingDeliveries(
+       list
+     );
+
+   })
+   .catch(err => {
+     console.error(err);
+
+     const container =
+       document.getElementById(
+         "pendingDeliveryList"
+       );
+
+     if (container) {
+       container.innerHTML = `
+         <div class="card">
+           โหลดข้อมูลไม่สำเร็จ
+         </div>
+       `;
+     }
+   }); 
+} 
+
+function renderPendingDeliveries(list) {
+
+  const container =
+    document.getElementById(
+      "pendingDeliveryList"
+    );
+
+  if (!container) return;
+
+  if (!Array.isArray(list) || !list.length) {
+    container.innerHTML = `
+      <div class="card">
+        <div class="name">
+          ไม่มีรายการค้างส่ง
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+const grouped = {};
+
+list.forEach(item => {
+
+  const po =
+    item.poNumber || "-";
+
+  if (!grouped[po]) {
+    grouped[po] = [];
+  }
+
+  grouped[po].push(item);
+
+});
+
+ const poStatus = {};
+
+ Object.entries(grouped)
+   .forEach(([po, items]) => {
+
+     const openCount =
+       items.filter(
+         item =>
+           item.status === "OPEN"
+       ).length;
+
+     poStatus[po] = openCount;
+   });
+
+container.innerHTML =
+  Object.entries(grouped)
+    .map(([po, items]) => `
+
+<div class="card">
+
+<div
+  class="name"
+ onclick="
+   state.admin.pendingDeliveryExpanded[
+     '${po}'
+   ] =
+   !state.admin.pendingDeliveryExpanded[
+     '${po}'
+   ];
+
+   renderPendingDeliveries(
+     state.admin.pendingDeliveries
+   );
+ "
+  style="
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    cursor:pointer;
+  ">
+    
+ <div>
+
+   <div>
+     📦 PO: ${po}
+     (${items.length} รายการ)
+   </div>
+
+   <div
+     style="
+       font-size:13px;
+       margin-top:4px;
+       color:
+       ${
+         poStatus[po] > 0
+           ? "#ffcc00"
+           : "#34c759"
+       };
+     ">
+
+     ${
+       poStatus[po] > 0
+       ? `⏳ ค้างส่ง ${poStatus[po]} รายการ`
+       : `✅ ส่งครบแล้ว`
+     }
+
+   </div>
+
+ </div>
+
+ <span>
+   ${
+     state.admin
+       .pendingDeliveryExpanded[
+         po
+       ]
+       ? "▲"
+       : "▼"
+   }
+ </span>
+
+  </div>
+${
+  state.admin
+    .pendingDeliveryExpanded[
+      po
+    ]
+    ? `
+
+    <div
+      style="
+        margin-top:12px;
+      ">
+
+      ${items.map(item => `
+
+      <div
+        style="
+          padding:12px 0;
+          border-top:
+            1px solid
+            rgba(255,255,255,.08);
+        ">
+
+        <div class="stock">
+          สินค้า:
+          ${item.productId || "-"}
+        </div>
+
+        <div class="stock">
+          จำนวนใน PO :
+          ${Number(
+            item.orderedQty || 0
+          )}
+        </div>
+
+<div class="stock">
+  ค้างส่ง :
+  ${Number(
+    item.qty || 0
+  )}
+</div>
+
+ ${
+   item.status === "OPEN"
+     ? `
+     <button
+       class="btn btn-secondary"
+       style="
+         margin-top:12px;
+         width:100%;
+       "
+       onclick="
+         markPendingDelivered(
+           '${item.pendingId}'
+         )
+       ">
+       ✅ ส่งครบแล้ว
+     </button>
+     `
+     : `
+     <div class="stock">
+       ✅ CLOSED
+     </div>
+     `
+ }
+
+      </div>
+
+      `).join("")}
+
+    </div>
+
+    `
+    : ""
+}
+</div>
+
+`).join("");
+}
+
+async function markPendingDelivered(
+  pendingId
+) {
+
+ console.log(
+   "markPendingDelivered",
+   pendingId
+ );
+ 
+  if (!state.admin?.token) {
+    throw new Error("Not authenticated");
+  }
+ 
+  if (!pendingId) return;
+
+ confirmSheet.innerHTML = `
+
+ <div class="confirm-complete-sheet">
+
+   <div class="confirm-complete-icon">
+     ✅
+   </div>
+
+   <div class="confirm-complete-title">
+     ยืนยันการส่งครบ
+   </div>
+
+   <div class="confirm-complete-desc">
+     ยืนยันว่ารายการค้างส่งนี้
+     ส่งครบเรียบร้อยแล้ว ?
+   </div>
+
+   <div class="confirm-complete-actions">
+
+     <button
+       class="btn btn-outline"
+       onclick="
+         closeOverlay(confirmSheet)
+       ">
+       ยกเลิก
+     </button>
+
+     <button
+       class="btn btn-secondary"
+       onclick="
+         closeOverlay(confirmSheet);
+         confirmClosePendingDelivery(
+           '${pendingId}'
+         );
+       ">
+       ✅ ส่งครบแล้ว
+     </button>
+
+   </div>
+
+ </div>
+ `;
+
+ console.log(
+   "opening confirmSheet"
+ );
+
+ console.log(
+   confirmSheet.innerHTML
+ );
+ 
+ openOverlay(confirmSheet);
+
+ console.log(
+   "confirmSheet class",
+   confirmSheet.className
+ );
+
+ console.log(
+   "overlayCount",
+   state.ui.overlayCount
+ );
+
+ return;
+
+}
+
+ async function confirmClosePendingDelivery(
+   pendingId
+ ) {
+
+   try {
+
+     const form =
+       new URLSearchParams();
+
+     form.append(
+       "action",
+       "closePendingDelivery"
+     );
+
+     form.append(
+       "pendingId",
+       pendingId
+     );
+
+     form.append(
+       "token",
+       state.admin.token
+     );
+
+     const result =
+       await postFormAction(form);
+
+     if (!result?.success) {
+       throw new Error(
+         result?.error ||
+         "Close pending failed"
+       );
+     }
+
+     const list =
+       await fetchPendingDeliveries();
+
+     state.admin.pendingDeliveries =
+       list;
+
+     openPendingDeliverySheet();
+
+     showToast(
+       "ส่งครบเรียบร้อย",
+       "success"
+     );
+
+   } catch(err) {
+
+     console.error(err);
+
+     showToast(
+       err.message ||
+       "เกิดข้อผิดพลาด",
+       "error"
+     );
+   }
+ }
+ 
+function closePendingDeliverySheet() {
+  closeOverlay(pendingDeliverySheet);
+} 
  
 function openMainMenu(triggerEl){
   const adminValid =
@@ -5314,6 +6799,11 @@ function openMainMenu(triggerEl){
                   onclick="closeMainMenu(); handleOpenStockTimeline();">
                   📦 Stock Timeline
                 </button>
+
+                 <button class="btn btn-secondary"
+                   onclick="closeMainMenu(); openPendingDeliverySheet();">
+                   📦 ค้างส่ง
+                 </button>
 
                 <button class="btn btn-secondary"
                   onclick="closeMainMenu(); handleOpenAddProduct();">
@@ -5437,6 +6927,10 @@ function openAddProduct(force = false){
       <label>สถานะสินค้า</label>
       <select id="addStatus">
         <option value="ready" ${draft.status==="ready"?"selected":""}>พร้อมส่ง</option>
+ <option value="ready_plus"
+   ${draft.status==="ready_plus"?"selected":""}>
+   พร้อมส่ง สามารถบวกเพิ่มได้
+ </option>
         <option value="shipping" ${draft.status==="shipping"?"selected":""}>อยู่ระหว่างจัดส่ง</option>
         <option value="warehouse" ${draft.status==="warehouse"?"selected":""}>อยู่โกดังไทย</option>
         <option value="out" ${draft.status==="out"?"selected":""}>หมด</option>
@@ -5858,6 +7352,10 @@ function openProductEdit(p){
         <option value="ready" ${latestProduct.status === "ready" ? "selected" : ""}>
           พร้อมส่ง
         </option>
+     <option value="ready_plus"
+       ${latestProduct.status === "ready_plus" ? "selected" : ""}>
+       พร้อมส่ง สามารถบวกเพิ่มได้
+     </option>    
         <option value="shipping" ${latestProduct.status === "shipping" ? "selected" : ""}>
           อยู่ระหว่างจัดส่ง
         </option>
@@ -6434,7 +7932,7 @@ function normalizeProductId(value = "") {
    return String(value || "").trim().toUpperCase();
  }
 
-const ALLOWED_PRODUCT_STATUS = ["ready", "shipping", "warehouse", "out"];
+const ALLOWED_PRODUCT_STATUS = ["ready", "ready_plus", "shipping", "warehouse", "out"];
 
 function normalizeProductStatus(value = "") {
   const normalized = String(value || "").trim().toLowerCase();
