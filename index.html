@@ -6480,10 +6480,10 @@ container.innerHTML =
   class="name"
  onclick="
    state.admin.pendingDeliveryExpanded[
-     '${po}'
+     ${toInlineJsStringLiteral(po)}
    ] =
    !state.admin.pendingDeliveryExpanded[
-     '${po}'
+     ${toInlineJsStringLiteral(po)}
    ];
 
    renderPendingDeliveries(
@@ -6500,7 +6500,7 @@ container.innerHTML =
  <div>
 
    <div>
-     📦 PO: ${po}
+     📦 PO: ${esc(po)}
      (${items.length} รายการ)
    </div>
 
@@ -6562,7 +6562,7 @@ ${
 
         <div class="stock">
           สินค้า:
-          ${item.productId || "-"}
+          ${esc(item.productId || "-")}
         </div>
 
         <div class="stock">
@@ -6590,7 +6590,7 @@ ${
        "
        onclick="
          markPendingDelivered(
-           '${item.pendingId}'
+           ${toInlineJsStringLiteral(item.pendingId)}
          )
        ">
        ✅ ส่งครบแล้ว
