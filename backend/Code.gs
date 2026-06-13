@@ -1505,6 +1505,44 @@ function adminLogin(username, password) {
   };
 }
 
+function adminLogout(token) {
+  token = String(token || "").trim();
+
+  if (!token) {
+    throw new Error("Missing token");
+  }
+
+  const sessionSheet = getSS().getSheetByName("sessions");
+
+  if (!sessionSheet) {
+    throw new Error("Session system not ready");
+  }
+
+  const lastRow = sessionSheet.getLastRow();
+
+  if (lastRow < 2) {
+    throw new Error("Invalid token");
+  }
+
+  const tokens = sessionSheet
+    .getRange(2, 1, lastRow - 1, 1)
+    .getValues();
+
+  const sessionIndex = tokens.findIndex(
+    row => String(row[0]).trim() === token
+  );
+
+  if (sessionIndex === -1) {
+    throw new Error("Invalid token");
+  }
+
+  sessionSheet.deleteRow(sessionIndex + 2);
+
+  return {
+    success: true
+  };
+}
+
 function changePassword(token, currentPassword, newPassword) {
   const auth = requireAuth(token);
   const username = auth.username;
