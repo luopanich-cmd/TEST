@@ -133,13 +133,39 @@ function createPendingDelivery(data, by) {
   const statusIdx =
     headers.indexOf("status");
 
+  const qtyIdx =
+    headers.indexOf("qty");
+
   if (
     orderIdx === -1 ||
     productIdx === -1 ||
-    statusIdx === -1
+    statusIdx === -1 ||
+    qtyIdx === -1
   ) {
     throw new Error(
       "pending_delivery schema mismatch"
+    );
+  }
+
+  const cumulativeExistingQty = rows.reduce((sum, row) => {
+    if (
+      String(row[orderIdx]).trim() !== orderId ||
+      String(row[productIdx]).trim() !== productId
+    ) {
+      return sum;
+    }
+
+    const existingQty = Number(row[qtyIdx]);
+    if (!Number.isInteger(existingQty) || existingQty <= 0) {
+      throw new Error("Invalid existing pending delivery quantity");
+    }
+
+    return sum + existingQty;
+  }, 0);
+
+  if (cumulativeExistingQty + qty > orderedQty) {
+    throw new Error(
+      "Cumulative pending quantity exceeds ordered quantity"
     );
   }
 
