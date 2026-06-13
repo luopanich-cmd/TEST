@@ -1985,13 +1985,6 @@ function adminLogin(username, password) {
     };
   }
 
-  if (isLoginRateLimited(username)) {
-    return {
-      success: false,
-      message: "พยายามเข้าสู่ระบบมากเกินไป กรุณารอสักครู่"
-    };
-  }
-
   const lastRow = adminSheet.getLastRow();
   if (lastRow < 2) {
     return {
@@ -2014,6 +2007,13 @@ function adminLogin(username, password) {
   );
 
   if (!found) {
+    if (isLoginRateLimited(username)) {
+      return {
+        success: false,
+        message: "พยายามเข้าสู่ระบบมากเกินไป กรุณารอสักครู่"
+      };
+    }
+
     recordFailedLoginAttempt(username);
 
     return {
