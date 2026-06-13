@@ -495,13 +495,16 @@ function doPost(e) {
     }
 
     if (action === "createOrder") {
-      enforceCreateOrderRateLimit();
       enforceCreateOrderBodySize(e);
 
-      const result = createOrder({
+      const orderData = {
         items: JSON.parse(params.items || "[]"),
         poNumber: String(params.poNumber || "").trim()
-      });
+      };
+
+      enforceCreateOrderRateLimit(orderData);
+
+      const result = createOrder(orderData);
 
       return json({
         success: true,
@@ -874,7 +877,8 @@ function stockAdjust(token, data) {
 const CREATE_ORDER_MAX_ITEMS = 50;
 const CREATE_ORDER_MAX_QTY_PER_PRODUCT = 999;
 const CREATE_ORDER_MAX_BODY_BYTES = 100 * 1024;
-const CREATE_ORDER_RATE_LIMIT_MAX_REQUESTS = 30;
+const CREATE_ORDER_RATE_LIMIT_MAX_REQUESTS_PER_BUCKET = 5;
+const CREATE_ORDER_RATE_LIMIT_GLOBAL_MAX_REQUESTS = 100;
 const CREATE_ORDER_RATE_LIMIT_WINDOW_MS = 2 * 60 * 1000;
 const CREATE_ORDER_RATE_LIMIT_KEY = "CREATE_ORDER_RATE_LIMIT";
 
@@ -897,7 +901,44 @@ function enforceCreateOrderBodySize(e) {
   }
 }
 
-function enforceCreateOrderRateLimit() {
+function getCreateOrderRateLimitBucketKey(data) {
+  const poNumber = String(data && data.poNumber || "")
+    .trim()
+    .toLowerCase();
+  const itemTotals = new Map();
+  const items = data && Array.isArray(data.items) ? data.items : [];
+
+  items.forEach(item => {
+    const productId = String(item && item.productId || "")
+      .trim()
+      .toLowerCase();
+    const qty = Number(item && item.qty);
+    const itemKey = productId || "[missing-product]";
+    const normalizedQty = Number.isFinite(qty) ? qty : "[invalid-qty]";
+    itemTotals.set(
+      itemKey,
+      Number(itemTotals.get(itemKey) || 0) + normalizedQty
+    );
+  });
+
+  const itemSignature = Array.from(itemTotals.keys())
+    .sort()
+    .map(productId => productId + ":" + itemTotals.get(productId))
+    .join("|");
+  const signature = poNumber + "|" + itemSignature;
+  const digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    signature,
+    Utilities.Charset.UTF_8
+  );
+
+  return digest
+    .slice(0, 12)
+    .map(byte => (byte + 256).toString(16).slice(-2))
+    .join("");
+}
+
+function enforceCreateOrderRateLimit(data) {
   const lock = LockService.getScriptLock();
   lock.waitLock(5000);
 
@@ -905,34 +946,82 @@ function enforceCreateOrderRateLimit() {
     const properties = PropertiesService.getScriptProperties();
     const rawState = properties.getProperty(CREATE_ORDER_RATE_LIMIT_KEY);
     const now = Date.now();
-    let state = null;
+    const bucketKey = getCreateOrderRateLimitBucketKey(data);
+    let state = {};
 
     if (rawState) {
       try {
         state = JSON.parse(rawState);
       } catch (err) {
-        state = null;
+        state = {};
       }
     }
 
-    if (
-      !state ||
-      !Number.isFinite(Number(state.windowStartedAt)) ||
-      !Number.isInteger(Number(state.count)) ||
-      Number(state.count) < 0 ||
-      now - Number(state.windowStartedAt) >= CREATE_ORDER_RATE_LIMIT_WINDOW_MS
-    ) {
-      state = {
-        count: 0,
-        windowStartedAt: now
-      };
+    if (!state || typeof state !== "object") {
+      state = {};
     }
 
-    if (Number(state.count) >= CREATE_ORDER_RATE_LIMIT_MAX_REQUESTS) {
+    if (!state.buckets || typeof state.buckets !== "object") {
+      state.buckets = {};
+    }
+
+    Object.keys(state.buckets).forEach(key => {
+      const bucket = state.buckets[key];
+      const bucketStartedAt =
+        Array.isArray(bucket) ? Number(bucket[1]) : NaN;
+
+      if (
+        !Number.isFinite(bucketStartedAt) ||
+        now - bucketStartedAt >= CREATE_ORDER_RATE_LIMIT_WINDOW_MS
+      ) {
+        delete state.buckets[key];
+      }
+    });
+
+    let globalState = Array.isArray(state.global)
+      ? state.global
+      : [0, now];
+
+    if (
+      !Number.isInteger(Number(globalState[0])) ||
+      Number(globalState[0]) < 0 ||
+      !Number.isFinite(Number(globalState[1])) ||
+      now - Number(globalState[1]) >= CREATE_ORDER_RATE_LIMIT_WINDOW_MS
+    ) {
+      globalState = [0, now];
+    }
+
+    let bucketState = Array.isArray(state.buckets[bucketKey])
+      ? state.buckets[bucketKey]
+      : [0, now];
+
+    if (
+      !Number.isInteger(Number(bucketState[0])) ||
+      Number(bucketState[0]) < 0 ||
+      !Number.isFinite(Number(bucketState[1]))
+    ) {
+      bucketState = [0, now];
+    }
+
+    if (
+      Number(bucketState[0]) >=
+      CREATE_ORDER_RATE_LIMIT_MAX_REQUESTS_PER_BUCKET
+    ) {
       throw new Error("Too many order requests. Please try again later");
     }
 
-    state.count = Number(state.count) + 1;
+    if (
+      Number(globalState[0]) >=
+      CREATE_ORDER_RATE_LIMIT_GLOBAL_MAX_REQUESTS
+    ) {
+      throw new Error("Too many order requests. Please try again later");
+    }
+
+    bucketState[0] = Number(bucketState[0]) + 1;
+    globalState[0] = Number(globalState[0]) + 1;
+    state.buckets[bucketKey] = bucketState;
+    state.global = globalState;
+
     properties.setProperty(
       CREATE_ORDER_RATE_LIMIT_KEY,
       JSON.stringify(state)
