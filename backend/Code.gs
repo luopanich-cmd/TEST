@@ -917,7 +917,8 @@ function createOrder(data) {
   return {
     success: true,
     orderId,
-    total
+    total,
+    items: cleanItems
   };
 }
 
