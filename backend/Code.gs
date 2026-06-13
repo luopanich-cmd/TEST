@@ -1429,6 +1429,13 @@ function adminLogin(username, password) {
     };
   }
 
+  if (isLoginRateLimited(username)) {
+    return {
+      success: false,
+      message: "พยายามเข้าสู่ระบบมากเกินไป กรุณารอสักครู่"
+    };
+  }
+
   const lastRow = adminSheet.getLastRow();
   if (lastRow < 2) {
     return {
@@ -1459,18 +1466,15 @@ function adminLogin(username, password) {
   );
 
   if (!found) {
+    recordFailedLoginAttempt(username);
+
     return {
       success: false,
       message: "Username หรือ Password ไม่ถูกต้อง"
     };
   }
 
-  if (isLoginRateLimited(username)) {
-    return {
-      success: false,
-      message: "พยายามเข้าสู่ระบบมากเกินไป กรุณารอสักครู่"
-    };
-  }
+  clearLoginAttempts(username);
 
   // ===== remove old session of this user =====
   const sessionRows = sessionSheet.getDataRange().getValues();
@@ -1715,10 +1719,100 @@ function cleanupExpiredSessions() {
   );
 }
 
-// ================= LOGIN RATE LIMIT (STUB) =================
-// 🔒 ตอนนี้ยังไม่จำกัดจริง เพื่อไม่ให้ login พัง
+// ================= LOGIN RATE LIMIT =================
+const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5;
+const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+
+function getLoginAttemptKey(username) {
+  const normalizedUsername =
+    String(username || "").trim().toLowerCase();
+
+  const hash = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    normalizedUsername
+  )
+    .map(b => ('0' + (b & 0xff).toString(16)).slice(-2))
+    .join('');
+
+  return "LOGIN_ATTEMPTS_" + hash;
+}
+
 function isLoginRateLimited(username) {
-  return false;
+  const key = getLoginAttemptKey(username);
+  const properties = PropertiesService.getScriptProperties();
+  const rawState = properties.getProperty(key);
+
+  if (!rawState) {
+    return false;
+  }
+
+  let state;
+
+  try {
+    state = JSON.parse(rawState);
+  } catch (err) {
+    properties.deleteProperty(key);
+    return false;
+  }
+
+  const firstFailedAt = Number(state.firstFailedAt);
+  const count = Number(state.count);
+
+  if (
+    !Number.isFinite(firstFailedAt) ||
+    !Number.isInteger(count) ||
+    Date.now() - firstFailedAt >= LOGIN_RATE_LIMIT_WINDOW_MS
+  ) {
+    properties.deleteProperty(key);
+    return false;
+  }
+
+  return count >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS;
+}
+
+function recordFailedLoginAttempt(username) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+
+  try {
+    const key = getLoginAttemptKey(username);
+    const properties = PropertiesService.getScriptProperties();
+    const rawState = properties.getProperty(key);
+    const now = Date.now();
+    let state = null;
+
+    if (rawState) {
+      try {
+        state = JSON.parse(rawState);
+      } catch (err) {
+        state = null;
+      }
+    }
+
+    if (
+      !state ||
+      !Number.isFinite(Number(state.firstFailedAt)) ||
+      !Number.isInteger(Number(state.count)) ||
+      Number(state.count) < 0 ||
+      now - Number(state.firstFailedAt) >= LOGIN_RATE_LIMIT_WINDOW_MS
+    ) {
+      state = {
+        count: 0,
+        firstFailedAt: now
+      };
+    }
+
+    state.count = Number(state.count) + 1;
+    properties.setProperty(key, JSON.stringify(state));
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function clearLoginAttempts(username) {
+  PropertiesService
+    .getScriptProperties()
+    .deleteProperty(getLoginAttemptKey(username));
 }
 
 
