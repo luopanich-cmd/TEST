@@ -1453,6 +1453,7 @@ function updateProduct(e, auth) {
         if (String(data[i][0]).trim() === oldProductId) {
 
           // 🔒 อ่าน active และ stock ล่าสุดภายใน lock
+          const originalRow = data[i].slice();
           const currentActive = data[i][5]; // column F
           const oldStock = Number(data[i][3]);
           const stockChanged = oldStock !== stock;
@@ -1464,35 +1465,35 @@ function updateProduct(e, auth) {
             throw new Error("Sheet stock_logs not found");
           }
 
-          // ===== HANDLE SKU CHANGE =====
-          if (oldProductId !== newProductId) {
+          try {
+            // ===== HANDLE SKU CHANGE =====
+            if (oldProductId !== newProductId) {
 
-            // 🔍 Duplicate guard
-            const exists = data.slice(1).some(
-              r => String(r[0]).trim() === newProductId
-            );
-            if (exists) {
-              throw new Error("SKU already exists");
+              // 🔍 Duplicate guard
+              const exists = data.slice(1).some(
+                r => String(r[0]).trim() === newProductId
+              );
+              if (exists) {
+                throw new Error("SKU already exists");
+              }
+
+              // 🔄 Update SKU column A
+              sh.getRange(i + 1, 1).setValue(newProductId);
             }
 
-            // 🔄 Update SKU column A
-            sh.getRange(i + 1, 1).setValue(newProductId);
-          }
+            /* ================= UPDATE ================= */
+            sh.getRange(i + 1, 2).setValue(name);          // B: name
+            sh.getRange(i + 1, 3).setValue(price);         // C: price
+            sh.getRange(i + 1, 4).setValue(stock);         // D: stock
+            sh.getRange(i + 1, 5).setValue(image);         // E: image
+            sh.getRange(i + 1, 6).setValue(currentActive); // F: active (คงเดิม)
+            sh.getRange(i + 1, 7).setValue(status);        // G: status
+            sh.getRange(i + 1, 10).setValue(note);         // J: note
+            sh.getRange(i + 1, 11).setValue(detailsText);   // K: detailsText
+            sh.getRange(i + 1, 12).setValue(compareImages); // L: compareImages
+            sh.getRange(i + 1, 13).setValue(costPrice);     // M: costPrice
 
-          /* ================= UPDATE ================= */
-          sh.getRange(i + 1, 2).setValue(name);          // B: name
-          sh.getRange(i + 1, 3).setValue(price);         // C: price
-          sh.getRange(i + 1, 4).setValue(stock);         // D: stock
-          sh.getRange(i + 1, 5).setValue(image);         // E: image
-          sh.getRange(i + 1, 6).setValue(currentActive); // F: active (คงเดิม)
-          sh.getRange(i + 1, 7).setValue(status);        // G: status
-          sh.getRange(i + 1, 10).setValue(note);        // J: note
-          sh.getRange(i + 1, 11).setValue(detailsText);   // K: detailsText
-          sh.getRange(i + 1, 12).setValue(compareImages); // L: compareImages
-          sh.getRange(i + 1, 13).setValue(costPrice);     // M: costPrice
-
-          if (stockChanged) {
-            try {
+            if (stockChanged) {
               logSheet.appendRow([
                 "LOG-" + Date.now(),
                 newProductId,
@@ -1505,19 +1506,21 @@ function updateProduct(e, auth) {
                 "",
                 new Date()
               ]);
-            } catch (err) {
-              try {
-                sh.getRange(i + 1, 4).setValue(oldStock);
-              } catch (rollbackErr) {
-                throw new Error(
-                  String(err.message || err) +
-                  " | Stock rollback failed: " +
-                  String(rollbackErr.message || rollbackErr)
-                );
-              }
-
-              throw err;
             }
+          } catch (err) {
+            try {
+              sh
+                .getRange(i + 1, 1, 1, originalRow.length)
+                .setValues([originalRow]);
+            } catch (rollbackErr) {
+              throw new Error(
+                String(err.message || err) +
+                " | Product rollback failed: " +
+                String(rollbackErr.message || rollbackErr)
+              );
+            }
+
+            throw err;
           }
 
           Logger.log(`Product ${newProductId} updated by ${by}`);
