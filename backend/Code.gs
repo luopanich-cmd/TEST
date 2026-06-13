@@ -1023,6 +1023,7 @@ function createOrder(data) {
     const productRow = productRows[pIndex];
     const name = String(productRow[1] || "").trim();
     const price = Number(productRow[2]);
+    const costPrice = Number(productRow[12]);
     const currentStock = Number(productRow[3]);
     const rawActive = productRow[5];
     const active =
@@ -1031,7 +1032,13 @@ function createOrder(data) {
       rawActive === 1 ||
       rawActive === "1";
 
-    if (!name || !Number.isFinite(price) || price < 0) {
+    if (
+      !name ||
+      !Number.isFinite(price) ||
+      price < 0 ||
+      !Number.isFinite(costPrice) ||
+      costPrice < 0
+    ) {
       throw new Error("Invalid product data: " + productId);
     }
 
@@ -1049,7 +1056,8 @@ function createOrder(data) {
       productId,
       name,
       qty,
-      price
+      price,
+      costPrice
     });
 
     total += qty * price;
