@@ -526,7 +526,9 @@ function doPost(e) {
         poNumber: String(params.poNumber || "").trim()
       };
 
-      validateCreateOrderRequestStructure(orderData);
+      const requestedQtyByProduct =
+        validateCreateOrderRequestStructure(orderData);
+      preflightCreateOrderCanonical(requestedQtyByProduct);
       enforceCreateOrderRateLimit(orderData);
 
       const result = createOrder(orderData);
@@ -985,6 +987,47 @@ function validateCreateOrderRequestStructure(data) {
     }
 
     requestedQtyByProduct.set(productId, mergedQty);
+  });
+
+  return requestedQtyByProduct;
+}
+
+function preflightCreateOrderCanonical(requestedQtyByProduct) {
+  const productSheet = getSS().getSheetByName("Products");
+
+  if (!productSheet) {
+    throw new Error("Products sheet not found");
+  }
+
+  const productRows = productSheet.getDataRange().getValues();
+  productRows.shift();
+
+  requestedQtyByProduct.forEach((qty, productId) => {
+    const productRow = productRows.find(
+      row => String(row[0] || "").trim() === productId
+    );
+
+    if (!productRow) {
+      throw new Error("Product not found: " + productId);
+    }
+
+    const currentStock = Number(productRow[3]);
+    const rawActive = productRow[5];
+    const active =
+      rawActive === true ||
+      rawActive === "TRUE" ||
+      rawActive === 1 ||
+      rawActive === "1";
+
+    if (!active) {
+      throw new Error("Product is not active: " + productId);
+    }
+
+    if (!Number.isFinite(currentStock) || currentStock < qty) {
+      throw new Error(
+        `Stock not enough for ${productId} (remain ${currentStock})`
+      );
+    }
   });
 }
 
