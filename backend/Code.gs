@@ -875,6 +875,7 @@ function stockAdjust(token, data) {
 const CREATE_ORDER_MAX_ITEMS = 50;
 const CREATE_ORDER_MAX_QTY_PER_PRODUCT = 999;
 const CREATE_ORDER_MAX_BODY_BYTES = 100 * 1024;
+const CREATE_ORDER_MAX_PO_LENGTH = 80;
 const CREATE_ORDER_RATE_LIMIT_MAX_REQUESTS_PER_BUCKET = 5;
 const CREATE_ORDER_RATE_LIMIT_GLOBAL_MAX_REQUESTS = 100;
 const CREATE_ORDER_RATE_LIMIT_WINDOW_MS = 2 * 60 * 1000;
@@ -1055,6 +1056,20 @@ function createOrder(data) {
   }
 
   const poNumber = String(data.poNumber || "").trim();
+
+  if (!poNumber) {
+    throw new Error("PO number is required");
+  }
+
+  if (poNumber.length > CREATE_ORDER_MAX_PO_LENGTH) {
+    throw new Error(
+      `PO number cannot exceed ${CREATE_ORDER_MAX_PO_LENGTH} characters`
+    );
+  }
+
+  if (/^[=+\-@]/.test(poNumber)) {
+    throw new Error("PO number contains an unsafe leading character");
+  }
 
   /* ================= MERGE CLIENT ITEMS ================= */
   const requestedQtyByProduct = new Map();
