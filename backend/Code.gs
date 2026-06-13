@@ -1857,6 +1857,111 @@ function stockIn(token, data) {
 
 
 
+const PASSWORD_HASH_VERSION = "SHA256I";
+const PASSWORD_HASH_ITERATIONS = 5000;
+const PASSWORD_MAX_LENGTH = 128;
+
+function bytesToHex(bytes) {
+  return bytes
+    .map(byte => ("0" + ((byte + 256) % 256).toString(16)).slice(-2))
+    .join("");
+}
+
+function sha256Hex(value) {
+  return bytesToHex(
+    Utilities.computeDigest(
+      Utilities.DigestAlgorithm.SHA_256,
+      String(value),
+      Utilities.Charset.UTF_8
+    )
+  );
+}
+
+function constantTimeEqual(left, right) {
+  left = String(left || "");
+  right = String(right || "");
+
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  let difference = 0;
+
+  for (let i = 0; i < left.length; i++) {
+    difference |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  }
+
+  return difference === 0;
+}
+
+function deriveIterativePasswordHash(password, salt, iterations) {
+  let hash = sha256Hex(salt + ":" + password);
+
+  for (let i = 1; i < iterations; i++) {
+    hash = sha256Hex(hash + ":" + salt + ":" + password);
+  }
+
+  return hash;
+}
+
+function createPasswordHash(password) {
+  const salt = Utilities.getUuid().replace(/-/g, "");
+  const hash = deriveIterativePasswordHash(
+    String(password),
+    salt,
+    PASSWORD_HASH_ITERATIONS
+  );
+
+  return [
+    PASSWORD_HASH_VERSION,
+    PASSWORD_HASH_ITERATIONS,
+    salt,
+    hash
+  ].join("$");
+}
+
+function isLegacyPasswordHash(storedHash) {
+  return /^[a-f0-9]{64}$/i.test(String(storedHash || "").trim());
+}
+
+function verifyPassword(password, storedHash) {
+  const normalizedHash = String(storedHash || "").trim();
+
+  if (isLegacyPasswordHash(normalizedHash)) {
+    return constantTimeEqual(
+      sha256Hex(String(password)),
+      normalizedHash.toLowerCase()
+    );
+  }
+
+  const parts = normalizedHash.split("$");
+  if (
+    parts.length !== 4 ||
+    parts[0] !== PASSWORD_HASH_VERSION
+  ) {
+    return false;
+  }
+
+  const iterations = Number(parts[1]);
+  const salt = parts[2];
+  const expectedHash = String(parts[3] || "").toLowerCase();
+
+  if (
+    !Number.isInteger(iterations) ||
+    iterations < 1 ||
+    iterations > PASSWORD_HASH_ITERATIONS ||
+    !/^[a-f0-9]{16,128}$/i.test(salt) ||
+    !/^[a-f0-9]{64}$/.test(expectedHash)
+  ) {
+    return false;
+  }
+
+  return constantTimeEqual(
+    deriveIterativePasswordHash(String(password), salt, iterations),
+    expectedHash
+  );
+}
+
 function adminLogin(username, password) {
   const ss = getSS();
   const adminSheet   = ss.getSheetByName("admins");
@@ -1873,7 +1978,7 @@ function adminLogin(username, password) {
   username = String(username || "").trim();
   password = String(password || "").trim();
 
-  if (!username || !password) {
+  if (!username || !password || password.length > PASSWORD_MAX_LENGTH) {
     return {
       success: false,
       message: "Username หรือ Password ไม่ถูกต้อง"
@@ -1895,14 +2000,6 @@ function adminLogin(username, password) {
     };
   }
 
-  // ===== HASH PASSWORD (UPGRADE) =====
-  const passwordHash = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    password
-  )
-    .map(b => ('0' + (b & 0xff).toString(16)).slice(-2))
-    .join('');
-
   // load admins (username, password_hash)
   const admins = adminSheet
     .getRange(2, 1, lastRow - 1, 2)
@@ -1913,7 +2010,7 @@ function adminLogin(username, password) {
     ]);
 
   const found = admins.find(
-    r => r[0] === username && r[1] === passwordHash
+    r => r[0] === username && verifyPassword(password, r[1])
   );
 
   if (!found) {
@@ -1942,17 +2039,27 @@ function adminLogin(username, password) {
     const currentAdmins = adminSheet
       .getRange(2, 1, currentAdminLastRow - 1, 2)
       .getValues();
-    const stillValid = currentAdmins.some(
+    const currentAdminIndex = currentAdmins.findIndex(
       row =>
         String(row[0]).trim() === username &&
-        String(row[1]).trim() === passwordHash
+        constantTimeEqual(
+          String(row[1] || "").trim(),
+          String(found[1] || "").trim()
+        )
     );
 
-    if (!stillValid) {
+    if (currentAdminIndex === -1) {
       return {
         success: false,
         message: "Username หรือ Password ไม่ถูกต้อง"
       };
+    }
+
+    const storedHash = String(currentAdmins[currentAdminIndex][1] || "").trim();
+    if (isLegacyPasswordHash(storedHash)) {
+      adminSheet
+        .getRange(currentAdminIndex + 2, 2)
+        .setValue(createPasswordHash(password));
     }
 
     const now = new Date();
@@ -2047,23 +2154,18 @@ function changePassword(token, currentPassword, newPassword) {
     throw new Error("Missing password data");
   }
 
-  if (newPassword.length < 4) {
-    throw new Error("New password too short");
+  if (
+    currentPassword.length > PASSWORD_MAX_LENGTH ||
+    newPassword.length > PASSWORD_MAX_LENGTH
+  ) {
+    throw new Error("Password is too long");
   }
 
-  const currentHash = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    currentPassword
-  )
-    .map(b => ('0' + (b & 0xff).toString(16)).slice(-2))
-    .join('');
+  if (newPassword.length < 8) {
+    throw new Error("New password must be at least 8 characters");
+  }
 
-  const newHash = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    newPassword
-  )
-    .map(b => ('0' + (b & 0xff).toString(16)).slice(-2))
-    .join('');
+  const newHash = createPasswordHash(newPassword);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -2090,7 +2192,7 @@ function changePassword(token, currentPassword, newPassword) {
     const rows = adminSheet.getRange(2, 1, lastRow - 1, 2).getValues();
     const rowIndex = rows.findIndex(r =>
       String(r[0]).trim() === username &&
-      String(r[1]).trim() === currentHash
+      verifyPassword(currentPassword, r[1])
     );
 
     if (rowIndex === -1) {
