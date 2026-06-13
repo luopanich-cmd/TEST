@@ -1858,8 +1858,6 @@ function stockIn(token, data) {
 
 
 function adminLogin(username, password) {
-  cleanupExpiredSessions();
-
   const ss = getSS();
   const adminSheet   = ss.getSheetByName("admins");
   const sessionSheet = ss.getSheetByName("sessions");
@@ -1929,37 +1927,68 @@ function adminLogin(username, password) {
 
   clearLoginAttempts(username);
 
-  // ===== remove old session of this user =====
-  const sessionRows = sessionSheet.getDataRange().getValues();
-  const keep = [sessionRows[0]]; // header
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
 
-  for (let i = 1; i < sessionRows.length; i++) {
-    if (sessionRows[i][1] !== username) {
-      keep.push(sessionRows[i]);
+  try {
+    const currentAdminLastRow = adminSheet.getLastRow();
+    if (currentAdminLastRow < 2) {
+      return {
+        success: false,
+        message: "No admin configured"
+      };
     }
+
+    const currentAdmins = adminSheet
+      .getRange(2, 1, currentAdminLastRow - 1, 2)
+      .getValues();
+    const stillValid = currentAdmins.some(
+      row =>
+        String(row[0]).trim() === username &&
+        String(row[1]).trim() === passwordHash
+    );
+
+    if (!stillValid) {
+      return {
+        success: false,
+        message: "Username หรือ Password ไม่ถูกต้อง"
+      };
+    }
+
+    const now = new Date();
+    const sessionRows = sessionSheet.getDataRange().getValues();
+
+    for (let i = sessionRows.length - 1; i >= 1; i--) {
+      const sessionUsername = String(sessionRows[i][1] || "").trim();
+      const expiredAt = sessionRows[i][2];
+
+      if (
+        sessionUsername === username ||
+        !expiredAt ||
+        new Date(expiredAt) <= now
+      ) {
+        sessionSheet.deleteRow(i + 1);
+      }
+    }
+
+    const token = Utilities.getUuid();
+    const expiredAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
+
+    sessionSheet.appendRow([
+      token,
+      username,
+      expiredAt
+    ]);
+
+    return {
+      success: true,
+      token,
+      username,
+      expiredAt
+    };
+  } finally {
+    lock.releaseLock();
   }
-
-  sessionSheet.clearContents();
-  sessionSheet
-    .getRange(1, 1, keep.length, keep[0].length)
-    .setValues(keep);
-
-  // ===== create new session =====
-  const token = Utilities.getUuid();
-  const expiredAt = new Date(Date.now() + 12 * 60 * 60 * 1000); // 12 ชม.
-
-  sessionSheet.appendRow([
-    token,
-    username,
-    expiredAt
-  ]);
-
-  return {
-    success: true,
-    token,
-    username,
-    expiredAt
-  };
 }
 
 function adminLogout(token) {
@@ -1969,35 +1998,42 @@ function adminLogout(token) {
     throw new Error("Missing token");
   }
 
-  const sessionSheet = getSS().getSheetByName("sessions");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
 
-  if (!sessionSheet) {
-    throw new Error("Session system not ready");
+  try {
+    const sessionSheet = getSS().getSheetByName("sessions");
+
+    if (!sessionSheet) {
+      throw new Error("Session system not ready");
+    }
+
+    const lastRow = sessionSheet.getLastRow();
+
+    if (lastRow < 2) {
+      throw new Error("Invalid token");
+    }
+
+    const tokens = sessionSheet
+      .getRange(2, 1, lastRow - 1, 1)
+      .getValues();
+
+    const sessionIndex = tokens.findIndex(
+      row => String(row[0]).trim() === token
+    );
+
+    if (sessionIndex === -1) {
+      throw new Error("Invalid token");
+    }
+
+    sessionSheet.deleteRow(sessionIndex + 2);
+
+    return {
+      success: true
+    };
+  } finally {
+    lock.releaseLock();
   }
-
-  const lastRow = sessionSheet.getLastRow();
-
-  if (lastRow < 2) {
-    throw new Error("Invalid token");
-  }
-
-  const tokens = sessionSheet
-    .getRange(2, 1, lastRow - 1, 1)
-    .getValues();
-
-  const sessionIndex = tokens.findIndex(
-    row => String(row[0]).trim() === token
-  );
-
-  if (sessionIndex === -1) {
-    throw new Error("Invalid token");
-  }
-
-  sessionSheet.deleteRow(sessionIndex + 2);
-
-  return {
-    success: true
-  };
 }
 
 function changePassword(token, currentPassword, newPassword) {
@@ -2015,14 +2051,6 @@ function changePassword(token, currentPassword, newPassword) {
     throw new Error("New password too short");
   }
 
-  const ss = getSS();
-  const adminSheet = ss.getSheetByName("admins");
-  const sessionSheet = ss.getSheetByName("sessions");
-
-  if (!adminSheet || !sessionSheet) {
-    throw new Error("System not ready");
-  }
-
   const currentHash = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
     currentPassword
@@ -2037,41 +2065,55 @@ function changePassword(token, currentPassword, newPassword) {
     .map(b => ('0' + (b & 0xff).toString(16)).slice(-2))
     .join('');
 
-  const lastRow = adminSheet.getLastRow();
-  if (lastRow < 2) {
-    throw new Error("No admin configured");
-  }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
 
-  const rows = adminSheet.getRange(2, 1, lastRow - 1, 2).getValues();
-  const rowIndex = rows.findIndex(r =>
-    String(r[0]).trim() === username &&
-    String(r[1]).trim() === currentHash
-  );
-
-  if (rowIndex === -1) {
-    throw new Error("Current password is incorrect");
-  }
-
-  adminSheet.getRange(rowIndex + 2, 2).setValue(newHash);
-
-  const sessionRows = sessionSheet.getDataRange().getValues();
-  const keep = [sessionRows[0]];
-
-  for (let i = 1; i < sessionRows.length; i++) {
-    if (String(sessionRows[i][1]).trim() !== username) {
-      keep.push(sessionRows[i]);
+  try {
+    const lockedAuth = requireAuth(token);
+    if (String(lockedAuth.username) !== String(username)) {
+      throw new Error("Invalid token");
     }
+
+    const ss = getSS();
+    const adminSheet = ss.getSheetByName("admins");
+    const sessionSheet = ss.getSheetByName("sessions");
+
+    if (!adminSheet || !sessionSheet) {
+      throw new Error("System not ready");
+    }
+
+    const lastRow = adminSheet.getLastRow();
+    if (lastRow < 2) {
+      throw new Error("No admin configured");
+    }
+
+    const rows = adminSheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    const rowIndex = rows.findIndex(r =>
+      String(r[0]).trim() === username &&
+      String(r[1]).trim() === currentHash
+    );
+
+    if (rowIndex === -1) {
+      throw new Error("Current password is incorrect");
+    }
+
+    adminSheet.getRange(rowIndex + 2, 2).setValue(newHash);
+
+    const sessionRows = sessionSheet.getDataRange().getValues();
+
+    for (let i = sessionRows.length - 1; i >= 1; i--) {
+      if (String(sessionRows[i][1]).trim() === username) {
+        sessionSheet.deleteRow(i + 1);
+      }
+    }
+
+    return {
+      success: true,
+      username
+    };
+  } finally {
+    lock.releaseLock();
   }
-
-  sessionSheet.clearContents();
-  sessionSheet
-    .getRange(1, 1, keep.length, keep[0].length)
-    .setValues(keep);
-
-  return {
-    success: true,
-    username
-  };
 }
 
 function requireAuth(token) {
@@ -2122,54 +2164,42 @@ function requireAuth(token) {
 
 
 function cleanupExpiredSessions() {
-  // 🔒 FIX: ใช้ Spreadsheet เดียวทั้งระบบ
-  const ss = getSS();
-  const sheet = ss.getSheetByName("sessions");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
 
-  // ===== GUARD =====
-  if (!sheet) {
-    Logger.log("cleanupExpiredSessions: sessions sheet not found");
-    return;
-  }
+  try {
+    const sheet = getSS().getSheetByName("sessions");
 
-  const rows = sheet.getDataRange().getValues();
-
-  // ถ้าไม่มีข้อมูล หรือมีแค่ header
-  if (rows.length <= 1) {
-    Logger.log("cleanupExpiredSessions: no session rows to clean");
-    return;
-  }
-
-  const now = new Date();
-  const keep = [rows[0]]; // header
-
-  let removed = 0;
-
-  for (let i = 1; i < rows.length; i++) {
-    const expiredAt = rows[i][2];
-
-    // guard ค่า expiredAt
-    if (!expiredAt) {
-      removed++;
-      continue;
+    if (!sheet) {
+      Logger.log("cleanupExpiredSessions: sessions sheet not found");
+      return;
     }
 
-    if (new Date(expiredAt) > now) {
-      keep.push(rows[i]);
-    } else {
-      removed++;
+    const rows = sheet.getDataRange().getValues();
+
+    if (rows.length <= 1) {
+      Logger.log("cleanupExpiredSessions: no session rows to clean");
+      return;
     }
+
+    const now = new Date();
+    let removed = 0;
+
+    for (let i = rows.length - 1; i >= 1; i--) {
+      const expiredAt = rows[i][2];
+
+      if (!expiredAt || new Date(expiredAt) <= now) {
+        sheet.deleteRow(i + 1);
+        removed++;
+      }
+    }
+
+    Logger.log(
+      `cleanupExpiredSessions: removed ${removed} expired session(s)`
+    );
+  } finally {
+    lock.releaseLock();
   }
-
-  // ===== WRITE BACK =====
-  sheet.clearContents();
-  sheet
-    .getRange(1, 1, keep.length, keep[0].length)
-    .setValues(keep);
-
-  Logger.log(
-    `cleanupExpiredSessions: removed ${removed} expired session(s)`
-  );
 }
 
 // ================= LOGIN RATE LIMIT =================
