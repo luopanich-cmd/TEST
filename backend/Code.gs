@@ -526,6 +526,7 @@ function doPost(e) {
         poNumber: String(params.poNumber || "").trim()
       };
 
+      validateCreateOrderRequestStructure(orderData);
       enforceCreateOrderRateLimit(orderData);
 
       const result = createOrder(orderData);
@@ -924,6 +925,67 @@ function enforceCreateOrderBodySize(e) {
   if (bodySize > CREATE_ORDER_MAX_BODY_BYTES) {
     throw new Error("Order request is too large");
   }
+}
+
+function validateCreateOrderRequestStructure(data) {
+  if (!data || !Array.isArray(data.items)) {
+    throw new Error("Invalid order items");
+  }
+
+  if (data.items.length === 0) {
+    throw new Error("Order must contain at least 1 item");
+  }
+
+  if (data.items.length > CREATE_ORDER_MAX_ITEMS) {
+    throw new Error(
+      `Order cannot contain more than ${CREATE_ORDER_MAX_ITEMS} items`
+    );
+  }
+
+  const poNumber = String(data.poNumber || "").trim();
+
+  if (!poNumber) {
+    throw new Error("PO number is required");
+  }
+
+  if (poNumber.length > CREATE_ORDER_MAX_PO_LENGTH) {
+    throw new Error(
+      `PO number cannot exceed ${CREATE_ORDER_MAX_PO_LENGTH} characters`
+    );
+  }
+
+  if (/^[=+\-@]/.test(poNumber)) {
+    throw new Error("PO number contains an unsafe leading character");
+  }
+
+  const requestedQtyByProduct = new Map();
+
+  data.items.forEach((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`Invalid item at index ${index}`);
+    }
+
+    const productId = String(item.productId || "").trim();
+    const qty = Number(item.qty);
+
+    if (
+      !productId ||
+      !Number.isInteger(qty) ||
+      qty <= 0 ||
+      qty > CREATE_ORDER_MAX_QTY_PER_PRODUCT
+    ) {
+      throw new Error(`Invalid item at index ${index}`);
+    }
+
+    const mergedQty =
+      (requestedQtyByProduct.get(productId) || 0) + qty;
+
+    if (mergedQty > CREATE_ORDER_MAX_QTY_PER_PRODUCT) {
+      throw new Error(`Quantity exceeds limit for ${productId}`);
+    }
+
+    requestedQtyByProduct.set(productId, mergedQty);
+  });
 }
 
 function getCreateOrderRateLimitBucketKey(data) {
