@@ -1306,12 +1306,6 @@ function updateProduct(e, auth) {
 
     const by = auth.username;
 
-    const ss = getSS();
-    const sh = ss.getSheetByName("Products");
-    if (!sh) {
-      throw new Error("Sheet Products not found");
-    }
-
     /* ================= READ PARAM ================= */
     const oldProductId = String(e.parameter.oldProductId || "").trim();
     const newProductId = String(e.parameter.newProductId || "").trim();
@@ -1340,74 +1334,87 @@ function updateProduct(e, auth) {
       throw new Error("Price, cost price and stock must be >= 0");
     }
 
-    const data = sh.getDataRange().getValues();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
 
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim() === oldProductId) {
+    try {
+      const ss = getSS();
+      const sh = ss.getSheetByName("Products");
+      if (!sh) {
+        throw new Error("Sheet Products not found");
+      }
 
-        // 🔒 อ่าน active เดิมจาก sheet (ห้ามแตะ)
-        const currentActive = data[i][5]; // column F
-        const oldStock = Number(data[i][3]);
-        const stockChanged = oldStock !== stock;
-        const logSheet = stockChanged
-          ? ss.getSheetByName("stock_logs")
-          : null;
+      const data = sh.getDataRange().getValues();
 
-        if (stockChanged && !logSheet) {
-          throw new Error("Sheet stock_logs not found");
-        }
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]).trim() === oldProductId) {
 
-        // ===== HANDLE SKU CHANGE =====
-        if (oldProductId !== newProductId) {
+          // 🔒 อ่าน active และ stock ล่าสุดภายใน lock
+          const currentActive = data[i][5]; // column F
+          const oldStock = Number(data[i][3]);
+          const stockChanged = oldStock !== stock;
+          const logSheet = stockChanged
+            ? ss.getSheetByName("stock_logs")
+            : null;
 
-          // 🔍 Duplicate guard
-          const exists = data.slice(1).some(
-            r => String(r[0]).trim() === newProductId
-          );
-          if (exists) {
-            throw new Error("SKU already exists");
+          if (stockChanged && !logSheet) {
+            throw new Error("Sheet stock_logs not found");
           }
 
-          // 🔄 Update SKU column A
-          sh.getRange(i + 1, 1).setValue(newProductId);
+          // ===== HANDLE SKU CHANGE =====
+          if (oldProductId !== newProductId) {
+
+            // 🔍 Duplicate guard
+            const exists = data.slice(1).some(
+              r => String(r[0]).trim() === newProductId
+            );
+            if (exists) {
+              throw new Error("SKU already exists");
+            }
+
+            // 🔄 Update SKU column A
+            sh.getRange(i + 1, 1).setValue(newProductId);
+          }
+
+          /* ================= UPDATE ================= */
+          sh.getRange(i + 1, 2).setValue(name);          // B: name
+          sh.getRange(i + 1, 3).setValue(price);         // C: price
+          sh.getRange(i + 1, 4).setValue(stock);         // D: stock
+          sh.getRange(i + 1, 5).setValue(image);         // E: image
+          sh.getRange(i + 1, 6).setValue(currentActive); // F: active (คงเดิม)
+          sh.getRange(i + 1, 7).setValue(status);        // G: status
+          sh.getRange(i + 1, 10).setValue(note);        // J: note
+          sh.getRange(i + 1, 11).setValue(detailsText);   // K: detailsText
+          sh.getRange(i + 1, 12).setValue(compareImages); // L: compareImages
+          sh.getRange(i + 1, 13).setValue(costPrice);     // M: costPrice
+
+          if (stockChanged) {
+            logSheet.appendRow([
+              "LOG-" + Date.now(),
+              newProductId,
+              "ADJUST",
+              stock - oldStock,
+              oldStock,
+              stock,
+              by,
+              "",
+              "",
+              new Date()
+            ]);
+          }
+
+          Logger.log(`Product ${newProductId} updated by ${by}`);
+
+          return {
+            updatedBy: by
+          };
         }
-
-        /* ================= UPDATE ================= */
-        sh.getRange(i + 1, 2).setValue(name);          // B: name
-        sh.getRange(i + 1, 3).setValue(price);         // C: price
-        sh.getRange(i + 1, 4).setValue(stock);         // D: stock
-        sh.getRange(i + 1, 5).setValue(image);         // E: image
-        sh.getRange(i + 1, 6).setValue(currentActive); // F: active (คงเดิม)
-        sh.getRange(i + 1, 7).setValue(status);        // G: status
-        sh.getRange(i + 1, 10).setValue(note);        // J: note
-        sh.getRange(i + 1, 11).setValue(detailsText);   // K: detailsText
-        sh.getRange(i + 1, 12).setValue(compareImages); // L: compareImages
-        sh.getRange(i + 1, 13).setValue(costPrice);     // M: costPrice
-
-        if (stockChanged) {
-          logSheet.appendRow([
-            "LOG-" + Date.now(),
-            newProductId,
-            "ADJUST",
-            stock - oldStock,
-            oldStock,
-            stock,
-            by,
-            "",
-            "",
-            new Date()
-          ]);
-        }
-
-        Logger.log(`Product ${newProductId} updated by ${by}`);
-
-        return {
-          updatedBy: by
-        };
       }
-    }
 
-    throw new Error("ไม่พบสินค้า");
+      throw new Error("ไม่พบสินค้า");
+    } finally {
+      lock.releaseLock();
+    }
 
   } catch (err) {
     Logger.log("updateProduct error: " + err);
