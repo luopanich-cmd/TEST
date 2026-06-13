@@ -42,9 +42,6 @@ function createPendingDelivery(data, by) {
   const qty =
     Number(data.qty);
 
-  const orderedQty =
-    Number(data.orderedQty);
-
   const note =
     String(data.note || "").trim();
 
@@ -52,14 +49,71 @@ function createPendingDelivery(data, by) {
     !orderId ||
     !poNumber ||
     !productId ||
-    !Number.isInteger(orderedQty) ||
-    orderedQty <= 0 ||  
     !Number.isInteger(qty) ||
     qty <= 0
   ) {
     throw new Error(
       "Invalid pending delivery data"
     );
+  }
+
+  /* ================= VERIFY ORDER ================= */
+  const orderSheet = getSS().getSheetByName("Orders");
+
+  if (!orderSheet) {
+    throw new Error("Orders sheet not found");
+  }
+
+  const orderRows = orderSheet.getDataRange().getValues();
+  orderRows.shift();
+
+  const orderRow = orderRows.find(
+    row => String(row[0]).trim() === orderId
+  );
+
+  if (!orderRow) {
+    throw new Error("Order not found");
+  }
+
+  const orderStatus =
+    String(orderRow[3] || "").trim().toUpperCase();
+
+  if (orderStatus !== "APPROVED") {
+    throw new Error("Order is not approved");
+  }
+
+  const orderPoNumber =
+    String(orderRow[7] || "").trim();
+
+  if (orderPoNumber !== poNumber) {
+    throw new Error("PO number does not match order");
+  }
+
+  const orderItems = JSON.parse(orderRow[1] || "[]");
+
+  if (!Array.isArray(orderItems)) {
+    throw new Error("Invalid order items");
+  }
+
+  const orderItem = orderItems.find(
+    item => String(item.productId || "").trim() === productId
+  );
+
+  if (!orderItem) {
+    throw new Error("Product not found in order");
+  }
+
+  const orderedQty = Number(orderItem.qty);
+
+  if (
+    !Number.isInteger(orderedQty) ||
+    orderedQty <= 0
+  ) {
+    throw new Error("Invalid ordered quantity");
+  }
+
+  if (qty > orderedQty) {
+    throw new Error("Pending quantity exceeds ordered quantity");
   }
 
  /* ================= DUPLICATE CHECK ================= */
