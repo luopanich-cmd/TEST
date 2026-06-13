@@ -2120,16 +2120,6 @@ function addProduct(e, auth) {
 
   const by = auth.username;
 
-  // 🔒 ใช้ Spreadsheet เดียวกับทั้งระบบ
-  const ss = getSS();
-
-  const sh = ss.getSheetByName("Products");
-  if (!sh) throw new Error("Products sheet not found");
-
-  // 🆕 LOG SHEET
-  const logSheet = ss.getSheetByName("stock_logs");
-  if (!logSheet) throw new Error("stock_logs sheet not found");
-
   /* ================= READ PARAM ================= */
   const id     = String(e.parameter.productId || "").trim();
   const name   = String(e.parameter.name || "").trim();
@@ -2160,48 +2150,89 @@ function addProduct(e, auth) {
     status = "out";
   }
 
-  // 🔍 กัน SKU ซ้ำ
-  const rows = sh.getDataRange().getValues();
-  const exists = rows.slice(1).some(r => String(r[0]).trim() === id);
-  if (exists) {
-    throw new Error("SKU already exists");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    // 🔒 ใช้ Spreadsheet เดียวกับทั้งระบบ
+    const ss = getSS();
+
+    const sh = ss.getSheetByName("Products");
+    if (!sh) throw new Error("Products sheet not found");
+
+    // 🆕 LOG SHEET
+    const logSheet = ss.getSheetByName("stock_logs");
+    if (!logSheet) throw new Error("stock_logs sheet not found");
+
+    // 🔍 กัน SKU ซ้ำภายใน lock
+    const rows = sh.getDataRange().getValues();
+    const exists = rows.slice(1).some(r => String(r[0]).trim() === id);
+    if (exists) {
+      throw new Error("SKU already exists");
+    }
+
+    const createdRowNumber = sh.getLastRow() + 1;
+
+    /* ================= ADD PRODUCT ================= */
+    sh.appendRow([
+      id,          // A productId
+      name,        // B name
+      price,       // C price
+      stock,       // D stock
+      image,       // E image
+      active,      // F active
+      status,      // G status  ✅ เพิ่มใหม่
+      new Date(),  // H createdAt
+      by,          // I createdBy
+      note,        // J note
+      "",          // K detailsText
+      "",          // L compareImages
+      costPrice    // M costPrice
+    ]);
+
+    try {
+      /* ================= LOG CREATE ================= */
+      logSheet.appendRow([
+        "LOG-" + Date.now(), // logId
+        id,                  // productId
+        "CREATE",            // type
+        stock,               // qty
+        0,                   // before
+        stock,               // after
+        by,                  // by
+        "",                  // orderId
+        "CREATE_PRODUCT",    // reason
+        new Date()           // timestamp
+      ]);
+    } catch (err) {
+      try {
+        const createdProductId = String(
+          sh.getRange(createdRowNumber, 1).getValue()
+        ).trim();
+
+        if (createdProductId !== id) {
+          throw new Error("Created product row no longer matches");
+        }
+
+        sh.deleteRow(createdRowNumber);
+      } catch (rollbackErr) {
+        throw new Error(
+          String(err.message || err) +
+          " | Product create rollback failed: " +
+          String(rollbackErr.message || rollbackErr)
+        );
+      }
+
+      throw err;
+    }
+
+    return {
+      success: true,
+      createdBy: by
+    };
+  } finally {
+    lock.releaseLock();
   }
-
-  /* ================= ADD PRODUCT ================= */
-  sh.appendRow([
-    id,          // A productId
-    name,        // B name
-    price,       // C price
-    stock,       // D stock
-    image,       // E image
-    active,      // F active
-    status,      // G status  ✅ เพิ่มใหม่
-    new Date(),  // H createdAt
-    by,          // I createdBy
-    note,        // J note
-    "",          // K detailsText
-    "",          // L compareImages
-    costPrice    // M costPrice
-  ]);
-
-  /* ================= LOG CREATE ================= */
-  logSheet.appendRow([
-    "LOG-" + Date.now(), // logId
-    id,                  // productId
-    "CREATE",            // type
-    stock,               // qty
-    0,                   // before
-    stock,               // after
-    by,                  // by
-    "",                  // orderId
-    "CREATE_PRODUCT",    // reason
-    new Date()           // timestamp
-  ]);
-
-  return {
-    success: true,
-    createdBy: by
-  };
 }
 
 function cleanupUnusedImages({ by, dryRun }) {
