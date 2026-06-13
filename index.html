@@ -5679,180 +5679,186 @@ style="
  }
 
  async function submitBulkPendingDelivery() {
+   if (state.admin.isSubmitting) return;
+   state.admin.isSubmitting = true;
 
-   const order =
-     state.admin.pendingDeliveryOrder;
+   try {
+     const order =
+       state.admin.pendingDeliveryOrder;
 
-   if (!order) return;
+     if (!order) return;
 
-   const items =
-     state.admin.bulkPendingItems
-       .filter(i => i.selected);
+     const items =
+       state.admin.bulkPendingItems
+         .filter(i => i.selected);
 
-   if (!items.length) {
-     showToast(
-       "กรุณาเลือกสินค้า",
-       "warning"
-     );
-     return;
-   }
-
-   const invalidItem = items.find(item => {
-     const qty = Number(item.qty);
-
-     return (
-       !Number.isInteger(qty) ||
-       qty <= 0
-     );
-   });
-
-   if (invalidItem) {
-     showToast(
-       `จำนวนค้างส่งของ "${invalidItem.name || invalidItem.productId}" ต้องเป็นจำนวนเต็ม 1-${invalidItem.orderedQty}`,
-       "warning"
-     );
-     return;
-   }
-
-   let pendingDeliveries =
-     state.admin.pendingDeliveries;
-
-   if (!Array.isArray(pendingDeliveries)) {
-     try {
-       pendingDeliveries =
-         await fetchPendingDeliveries();
-       state.admin.pendingDeliveries =
-         pendingDeliveries;
-     } catch (err) {
-       console.error(err);
+     if (!items.length) {
        showToast(
-         err.message ||
-         "ไม่สามารถตรวจสอบรายการค้างส่งได้",
-         "error"
+         "กรุณาเลือกสินค้า",
+         "warning"
        );
        return;
      }
-   }
-   const batchQtyByProduct = new Map();
-   const cumulativeInvalidItem = items.find(item => {
-     const productId = String(item.productId || "");
-     const qty = Number(item.qty);
-     const orderedQty = Number(item.orderedQty);
-     const existingOpenQty = pendingDeliveries
-       .filter(pending =>
-         String(pending.status || "").toUpperCase() === "OPEN" &&
-         String(pending.orderId || "") === String(order.orderId || "") &&
-         String(pending.productId || "") === productId
-       )
-       .reduce(
-         (sum, pending) =>
-           sum + Math.max(0, Number(pending.qty) || 0),
-         0
+
+     const invalidItem = items.find(item => {
+       const qty = Number(item.qty);
+
+       return (
+         !Number.isInteger(qty) ||
+         qty <= 0
        );
-     const batchQty =
-       (batchQtyByProduct.get(productId) || 0) + qty;
+     });
 
-     batchQtyByProduct.set(productId, batchQty);
+     if (invalidItem) {
+       showToast(
+         `จำนวนค้างส่งของ "${invalidItem.name || invalidItem.productId}" ต้องเป็นจำนวนเต็ม 1-${invalidItem.orderedQty}`,
+         "warning"
+       );
+       return;
+     }
 
-     return existingOpenQty + batchQty > orderedQty;
-   });
+     let pendingDeliveries =
+       state.admin.pendingDeliveries;
 
-   if (cumulativeInvalidItem) {
-     showToast(
-       `จำนวนค้างส่งของ "${cumulativeInvalidItem.name || cumulativeInvalidItem.productId}" เกินจำนวนใน PO`,
-       "warning"
-     );
-     return;
-   }
+     if (!Array.isArray(pendingDeliveries)) {
+       try {
+         pendingDeliveries =
+           await fetchPendingDeliveries();
+         state.admin.pendingDeliveries =
+           pendingDeliveries;
+       } catch (err) {
+         console.error(err);
+         showToast(
+           err.message ||
+           "ไม่สามารถตรวจสอบรายการค้างส่งได้",
+           "error"
+         );
+         return;
+       }
+     }
+     const batchQtyByProduct = new Map();
+     const cumulativeInvalidItem = items.find(item => {
+       const productId = String(item.productId || "");
+       const qty = Number(item.qty);
+       const orderedQty = Number(item.orderedQty);
+       const existingOpenQty = pendingDeliveries
+         .filter(pending =>
+           String(pending.status || "").toUpperCase() === "OPEN" &&
+           String(pending.orderId || "") === String(order.orderId || "") &&
+           String(pending.productId || "") === productId
+         )
+         .reduce(
+           (sum, pending) =>
+             sum + Math.max(0, Number(pending.qty) || 0),
+           0
+         );
+       const batchQty =
+         (batchQtyByProduct.get(productId) || 0) + qty;
 
-   try {
+       batchQtyByProduct.set(productId, batchQty);
+
+       return existingOpenQty + batchQty > orderedQty;
+     });
+
+     if (cumulativeInvalidItem) {
+       showToast(
+         `จำนวนค้างส่งของ "${cumulativeInvalidItem.name || cumulativeInvalidItem.productId}" เกินจำนวนใน PO`,
+         "warning"
+       );
+       return;
+     }
 
      showLoading(
        "กำลังสร้างรายการค้างส่ง..."
      );
 
+     const succeededItems = [];
+     const failedItems = [];
+
      for (const item of items) {
+       try {
+         const form =
+           new URLSearchParams();
 
-       const form =
-         new URLSearchParams();
+         form.append("action", "createPendingDelivery");
+         form.append("token", state.admin.token);
+         form.append("orderId", order.orderId);
+         form.append("poNumber", order.poNumber || "");
+         form.append("productId", item.productId);
+         form.append("qty", item.qty);
+         form.append("orderedQty", item.orderedQty);
+         form.append("note", "Bulk Pending Delivery");
 
-       form.append(
-         "action",
-         "createPendingDelivery"
-       );
+         const result =
+           await postFormAction(form);
 
-       form.append(
-         "token",
-         state.admin.token
-       );
+         if (!result?.success) {
+           throw new Error(
+             result?.error ||
+             "Create pending failed"
+           );
+         }
 
-       form.append(
-         "orderId",
-         order.orderId
-       );
-
-       form.append(
-         "poNumber",
-         order.poNumber || ""
-       );
-
-       form.append(
-         "productId",
-         item.productId
-       );
-
-       form.append(
-         "qty",
-         item.qty
-       );
-
- form.append(
-   "orderedQty",
-   item.orderedQty
- );
-      
-       form.append(
-         "note",
-         "Bulk Pending Delivery"
-       );
-
-       const result =
-         await postFormAction(form);
-
-       if (!result?.success) {
-         throw new Error(
-           result?.error ||
-           "Create pending failed"
-         );
+         succeededItems.push(item);
+       } catch (err) {
+         failedItems.push({
+           item,
+           error: err.message || "Create pending failed"
+         });
        }
      }
 
-     showToast(
-       "สร้างรายการสำเร็จ",
-       "success"
-     );
+     if (failedItems.length === 0) {
+       showToast(
+         "สร้างรายการสำเร็จ",
+         "success"
+       );
 
-     closeOverlay(
-       bulkPendingDeliverySheet
-     );
+       closeOverlay(
+         bulkPendingDeliverySheet
+       );
 
-     openPendingDeliverySheet();
+       openPendingDeliverySheet();
+       return;
+     }
 
-   } catch(err) {
+     if (succeededItems.length > 0) {
+       const successText = succeededItems
+         .map(item => `- ${item.name || item.productId}`)
+         .join("\n");
+       const failureText = failedItems
+         .map(({ item, error }) =>
+           `- ${item.name || item.productId}: ${error}`
+         )
+         .join("\n");
 
-     console.error(err);
+       alert(
+         `สร้างสำเร็จ:\n${successText}\n\nสร้างไม่สำเร็จ:\n${failureText}`
+       );
+
+       closeOverlay(
+         bulkPendingDeliverySheet
+       );
+
+       openPendingDeliverySheet();
+       return;
+     }
 
      alert(
-       err.message ||
-       "สร้างรายการไม่สำเร็จ"
+       "สร้างรายการไม่สำเร็จ\n" +
+       failedItems
+         .map(({ item, error }) =>
+           `- ${item.name || item.productId}: ${error}`
+         )
+         .join("\n")
      );
 
    } finally {
-
+     state.admin.isSubmitting = false;
      safeHideLoading();
    }
  }
- 
+
 function openCreatePendingDelivery(
   orderId,
   poNumber,
@@ -6146,114 +6152,116 @@ async function createPendingDelivery() {
 }
 
  async function createAllPendingDelivery() {
-
-   const order =
-     state.admin.pendingDeliveryOrder;
-
-   if (!order) {
-     showToast(
-       "ไม่พบข้อมูลออเดอร์",
-       "warning"
-     );
-     return;
-   }
-
-   const items =
-     Array.isArray(order.items)
-       ? order.items
-       : [];
-
-   if (!items.length) {
-     showToast(
-       "ไม่มีรายการสินค้า",
-       "warning"
-     );
-     return;
-   }
+   if (state.admin.isSubmitting) return;
+   state.admin.isSubmitting = true;
 
    try {
+     const order =
+       state.admin.pendingDeliveryOrder;
+
+     if (!order) {
+       showToast(
+         "ไม่พบข้อมูลออเดอร์",
+         "warning"
+       );
+       return;
+     }
+
+     const items =
+       Array.isArray(order.items)
+         ? order.items
+         : [];
+
+     if (!items.length) {
+       showToast(
+         "ไม่มีรายการสินค้า",
+         "warning"
+       );
+       return;
+     }
 
      showLoading(
        "กำลังสร้างรายการค้างส่ง..."
      );
 
+     const succeededItems = [];
+     const failedItems = [];
+
      for (const item of items) {
+       try {
+         const form =
+           new URLSearchParams();
 
-       const form =
-         new URLSearchParams();
+         form.append("action", "createPendingDelivery");
+         form.append("token", state.admin.token);
+         form.append("orderId", order.orderId);
+         form.append("poNumber", order.poNumber || "");
+         form.append("productId", item.productId);
+         form.append("orderedQty", Number(item.qty) || 0);
+         form.append("qty", Number(item.qty) || 0);
+         form.append("note", "Bulk Pending Delivery");
 
-       form.append(
-         "action",
-         "createPendingDelivery"
-       );
+         const result =
+           await postFormAction(form);
 
-       form.append(
-         "token",
-         state.admin.token
-       );
+         if (!result?.success) {
+           throw new Error(
+             result?.error ||
+             "Create pending delivery failed"
+           );
+         }
 
-       form.append(
-         "orderId",
-         order.orderId
-       );
-
-       form.append(
-         "poNumber",
-         order.poNumber || ""
-       );
-
-       form.append(
-         "productId",
-         item.productId
-       );
-
-       form.append(
-         "orderedQty",
-         Number(item.qty) || 0
-       );
-
-       form.append(
-         "qty",
-         Number(item.qty) || 0
-       );
-
-       form.append(
-         "note",
-         "Bulk Pending Delivery"
-       );
-
-       const result =
-         await postFormAction(form);
-
-       if (!result?.success) {
-         throw new Error(
-           result?.error ||
-           "Create pending delivery failed"
-         );
+         succeededItems.push(item);
+       } catch (err) {
+         failedItems.push({
+           item,
+           error: err.message || "Create pending delivery failed"
+         });
        }
      }
 
-     showToast(
-       "สร้างรายการค้างส่งทั้งหมดสำเร็จ",
-       "success"
-     );
+     if (failedItems.length === 0) {
+       showToast(
+         "สร้างรายการค้างส่งทั้งหมดสำเร็จ",
+         "success"
+       );
 
-     openPendingDeliverySheet();
+       openPendingDeliverySheet();
+       return;
+     }
 
-   } catch (err) {
+     if (succeededItems.length > 0) {
+       const successText = succeededItems
+         .map(item => `- ${item.name || item.productId}`)
+         .join("\n");
+       const failureText = failedItems
+         .map(({ item, error }) =>
+           `- ${item.name || item.productId}: ${error}`
+         )
+         .join("\n");
 
-     console.error(err);
+       alert(
+         `สร้างสำเร็จ:\n${successText}\n\nสร้างไม่สำเร็จ:\n${failureText}`
+       );
+
+       openPendingDeliverySheet();
+       return;
+     }
 
      alert(
-       err.message ||
-       "ไม่สามารถสร้างรายการค้างส่งได้"
+       "ไม่สามารถสร้างรายการค้างส่งได้\n" +
+       failedItems
+         .map(({ item, error }) =>
+           `- ${item.name || item.productId}: ${error}`
+         )
+         .join("\n")
      );
 
    } finally {
-
+     state.admin.isSubmitting = false;
      safeHideLoading();
    }
- } 
+ }
 
 async function handleApprove() {
   // 🔒 GUARD: ต้องอยู่ใน admin mode และมี order
