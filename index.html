@@ -3174,7 +3174,7 @@ function renderFloatingBar(){
     <div class="bar-left" style="width:100%;">
       <div style="font-weight:700">ตะกร้า</div>
       <div class="bar-subtext">
-        ${listText} • รวม ฿${money(total)}
+        ${esc(listText)} • รวม ฿${money(total)}
       </div>
     </div>
   `;
@@ -3434,7 +3434,7 @@ if (
         <div class="price">ราคา: ฿${Number(p.price).toLocaleString()}</div>
 
         <div class="meta">
-          <span class="qty">จำนวน: ${p.stock}</span>
+          <span class="qty">จำนวน: ${Number(p.stock) || 0}</span>
           <span class="status ${statusClass}">
             ${statusText}
           </span>
@@ -3561,8 +3561,8 @@ function renderProductSheet(){
    onclick="openImageViewer(${toInlineJsStringLiteral(p.image || "")})"
  >
 
-    <div class="price">฿${p.price}</div>
-    <div class="stock">คงเหลือ ${p.stock} ชิ้น</div>
+    <div class="price">฿${Number(p.price) || 0}</div>
+    <div class="stock">คงเหลือ ${Number(p.stock) || 0} ชิ้น</div>
     
      ${
       p.detailsText || p.compareImages
@@ -3580,9 +3580,7 @@ function renderProductSheet(){
    p.note
      ? `
 <div class="product-note">
-         📝 ${String(p.note)
-       .replace(/</g, "&lt;")
-       .replace(/>/g, "&gt;")}
+         📝 ${esc(p.note)}
        </div>
      `
      : ""
@@ -3625,13 +3623,13 @@ function renderCart(){
       <div>
         <div class="name">${esc(i.name)}</div>
         <div style="font-size:12px;color:#888">
-          รหัส: ${i.productId}
+          รหัส: ${esc(i.productId)}
         </div>
-        <div class="price">฿${i.price}</div>
+        <div class="price">฿${Number(i.price) || 0}</div>
       </div>
  <div class="cart-item-right">
    <div style="font-size:14px;color:#555">
-     จำนวน: ${i.qty || 1}
+     จำนวน: ${Number(i.qty) || 1}
    </div>
    <button class="btn-remove"
      onclick="removeItem(${idx})">
@@ -3690,10 +3688,10 @@ function renderConfirmSheet(){
       <div class="cart-item">
         <div>
           <div class="name">${esc(i.name)}</div>
-          <div style="font-size:12px;color:#888">รหัส: ${i.productId}</div>
-          <div style="font-size:13px">จำนวน ${i.qty}</div>
+          <div style="font-size:12px;color:#888">รหัส: ${esc(i.productId)}</div>
+          <div style="font-size:13px">จำนวน ${Number(i.qty) || 0}</div>
         </div>
-        <div>฿${sum}</div>
+        <div>฿${Number(sum) || 0}</div>
       </div>
     `;
   });
@@ -3705,7 +3703,7 @@ function renderConfirmSheet(){
      <label>เลข PO <span style="color:#ff3b30">*</span></label>
       <input
         id="poInput"
-        value="${esc(state.poNumber || "")}"
+        value="${escAttr(state.poNumber || "")}"
         placeholder="กรอกเลข PO"
         required
         oninput="state.poNumber = this.value.trim()">
@@ -4260,7 +4258,7 @@ function openQtySheet(){
           type="number"
           min="1"
           step="1"
-          max="${state.selectedProduct.stock}"
+          max="${escAttr(Number(state.selectedProduct.stock) || 0)}"
           value="1"
           oninput="state.qty = Number(this.value)">
       </div>
