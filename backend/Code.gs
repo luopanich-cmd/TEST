@@ -1547,35 +1547,42 @@ function deleteProduct(e, auth) {
 
   const by = auth.username;
 
-  const ss = getSS();
-  const sh = ss.getSheetByName("Products");
-  if (!sh) {
-    throw new Error("Sheet Products not found");
-  }
-
   const productId = String(e.parameter.productId || "").trim();
   if (!productId) {
     throw new Error("Missing productId");
   }
 
-  const rows = sh.getDataRange().getValues();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
 
-  for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]).trim() === productId) {
-
-      // ❌ HARD DELETE: ลบแถวออกจากชีตจริง
-      sh.deleteRow(i + 1);
-
-      Logger.log(`Product ${productId} hard-deleted by ${by}`);
-
-      return {
-        success: true,
-        deletedBy: by
-      };
+  try {
+    const ss = getSS();
+    const sh = ss.getSheetByName("Products");
+    if (!sh) {
+      throw new Error("Sheet Products not found");
     }
-  }
 
-  throw new Error("Product not found");
+    const rows = sh.getDataRange().getValues();
+
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === productId) {
+
+        // ❌ HARD DELETE: ลบแถวออกจากชีตจริง
+        sh.deleteRow(i + 1);
+
+        Logger.log(`Product ${productId} hard-deleted by ${by}`);
+
+        return {
+          success: true,
+          deletedBy: by
+        };
+      }
+    }
+
+    throw new Error("Product not found");
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function stockIn(token, data) {
