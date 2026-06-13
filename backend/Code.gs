@@ -367,11 +367,10 @@ function getProducts() {
         r[5] === 1 ||
         r[5] === "1";
 
+      if (!active) return null;
+
       // 🟢 status (column G)
       const status = String(r[6] || "").trim();
-      // 📝 note (column J)
-      const note = String(r[9] || "").trim();
-
       return {
         productId,
         name,
@@ -380,7 +379,6 @@ function getProducts() {
         image,
         active,
         status,
-        note,
         detailsText: String(r[10] || "").trim(),     // column K
         compareImages: String(r[11] || "").trim()    // column L
       };
