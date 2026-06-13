@@ -495,6 +495,9 @@ function doPost(e) {
     }
 
     if (action === "createOrder") {
+      enforceCreateOrderRateLimit();
+      enforceCreateOrderBodySize(e);
+
       const result = createOrder({
         items: JSON.parse(params.items || "[]"),
         poNumber: String(params.poNumber || "").trim()
@@ -868,6 +871,77 @@ function stockAdjust(token, data) {
 
 
 
+const CREATE_ORDER_MAX_ITEMS = 50;
+const CREATE_ORDER_MAX_QTY_PER_PRODUCT = 999;
+const CREATE_ORDER_MAX_BODY_BYTES = 100 * 1024;
+const CREATE_ORDER_RATE_LIMIT_MAX_REQUESTS = 30;
+const CREATE_ORDER_RATE_LIMIT_WINDOW_MS = 2 * 60 * 1000;
+const CREATE_ORDER_RATE_LIMIT_KEY = "CREATE_ORDER_RATE_LIMIT";
+
+function enforceCreateOrderBodySize(e) {
+  if (!e || !e.postData) {
+    return;
+  }
+
+  let bodySize = Number(e.postData.length);
+
+  if (!Number.isFinite(bodySize)) {
+    bodySize = Utilities
+      .newBlob(String(e.postData.contents || ""))
+      .getBytes()
+      .length;
+  }
+
+  if (bodySize > CREATE_ORDER_MAX_BODY_BYTES) {
+    throw new Error("Order request is too large");
+  }
+}
+
+function enforceCreateOrderRateLimit() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const rawState = properties.getProperty(CREATE_ORDER_RATE_LIMIT_KEY);
+    const now = Date.now();
+    let state = null;
+
+    if (rawState) {
+      try {
+        state = JSON.parse(rawState);
+      } catch (err) {
+        state = null;
+      }
+    }
+
+    if (
+      !state ||
+      !Number.isFinite(Number(state.windowStartedAt)) ||
+      !Number.isInteger(Number(state.count)) ||
+      Number(state.count) < 0 ||
+      now - Number(state.windowStartedAt) >= CREATE_ORDER_RATE_LIMIT_WINDOW_MS
+    ) {
+      state = {
+        count: 0,
+        windowStartedAt: now
+      };
+    }
+
+    if (Number(state.count) >= CREATE_ORDER_RATE_LIMIT_MAX_REQUESTS) {
+      throw new Error("Too many order requests. Please try again later");
+    }
+
+    state.count = Number(state.count) + 1;
+    properties.setProperty(
+      CREATE_ORDER_RATE_LIMIT_KEY,
+      JSON.stringify(state)
+    );
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function createOrder(data) {
   // 🔒 FIX: Web App ต้องอ้างอิง Spreadsheet แบบชัดเจน
   const SPREADSHEET_ID = "1xeNVv2yLADoxuZQwYBEZNvlZnt9CKvJ40RLTwNOrQfU";
@@ -887,6 +961,12 @@ function createOrder(data) {
     throw new Error("Order must contain at least 1 item");
   }
 
+  if (data.items.length > CREATE_ORDER_MAX_ITEMS) {
+    throw new Error(
+      `Order cannot contain more than ${CREATE_ORDER_MAX_ITEMS} items`
+    );
+  }
+
   const poNumber = String(data.poNumber || "").trim();
 
   /* ================= MERGE CLIENT ITEMS ================= */
@@ -899,17 +979,24 @@ function createOrder(data) {
     if (
       !productId ||
       !Number.isInteger(qty) ||
-      qty <= 0
+      qty <= 0 ||
+      qty > CREATE_ORDER_MAX_QTY_PER_PRODUCT
     ) {
       throw new Error(
         `Invalid item at index ${index}`
       );
     }
 
-    requestedQtyByProduct.set(
-      productId,
-      (requestedQtyByProduct.get(productId) || 0) + qty
-    );
+    const mergedQty =
+      (requestedQtyByProduct.get(productId) || 0) + qty;
+
+    if (mergedQty > CREATE_ORDER_MAX_QTY_PER_PRODUCT) {
+      throw new Error(
+        `Quantity exceeds limit for ${productId}`
+      );
+    }
+
+    requestedQtyByProduct.set(productId, mergedQty);
   });
 
   /* ================= LOAD AUTHORITATIVE PRODUCTS ================= */
