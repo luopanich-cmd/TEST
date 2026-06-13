@@ -827,18 +827,34 @@ function stockAdjust(token, data) {
     .setValue(after);
 
   /* ================= LOG ADJUST ================= */
-  logSheet.appendRow([
-    "LOG-" + Date.now(), // logId
-    data.productId,      // productId
-    "ADJUST",            // type
-    diff,                // qty (delta)
-    before,              // before
-    after,               // after
-    by,                  // by (จาก token)
-    "",                  // orderId
-    data.reason || "",   // reason
-    new Date()           // timestamp
-  ]);
+  try {
+    logSheet.appendRow([
+      "LOG-" + Date.now(), // logId
+      data.productId,      // productId
+      "ADJUST",            // type
+      diff,                // qty (delta)
+      before,              // before
+      after,               // after
+      by,                  // by (จาก token)
+      "",                  // orderId
+      data.reason || "",   // reason
+      new Date()           // timestamp
+    ]);
+  } catch (err) {
+    try {
+      productSheet
+        .getRange(idx + 2, 4)
+        .setValue(before);
+    } catch (rollbackErr) {
+      throw new Error(
+        String(err.message || err) +
+        " | Stock rollback failed: " +
+        String(rollbackErr.message || rollbackErr)
+      );
+    }
+
+    throw err;
+  }
 
   return {
     success: true,
@@ -1389,18 +1405,32 @@ function updateProduct(e, auth) {
           sh.getRange(i + 1, 13).setValue(costPrice);     // M: costPrice
 
           if (stockChanged) {
-            logSheet.appendRow([
-              "LOG-" + Date.now(),
-              newProductId,
-              "ADJUST",
-              stock - oldStock,
-              oldStock,
-              stock,
-              by,
-              "",
-              "",
-              new Date()
-            ]);
+            try {
+              logSheet.appendRow([
+                "LOG-" + Date.now(),
+                newProductId,
+                "ADJUST",
+                stock - oldStock,
+                oldStock,
+                stock,
+                by,
+                "",
+                "",
+                new Date()
+              ]);
+            } catch (err) {
+              try {
+                sh.getRange(i + 1, 4).setValue(oldStock);
+              } catch (rollbackErr) {
+                throw new Error(
+                  String(err.message || err) +
+                  " | Stock rollback failed: " +
+                  String(rollbackErr.message || rollbackErr)
+                );
+              }
+
+              throw err;
+            }
           }
 
           Logger.log(`Product ${newProductId} updated by ${by}`);
@@ -1497,18 +1527,34 @@ function stockIn(token, data) {
     .setValue(after);
 
   // ===== Log IN =====
-  logSheet.appendRow([
-    "LOG-" + Date.now(),   // logId
-    data.productId,        // productId
-    "IN",                  // type
-    data.qty,              // qty
-    before,                // before
-    after,                 // after
-    by,                    // by (จาก token)
-    "",                    // orderId
-    data.reason || "",     // reason
-    new Date()             // timestamp
-  ]);
+  try {
+    logSheet.appendRow([
+      "LOG-" + Date.now(),   // logId
+      data.productId,        // productId
+      "IN",                  // type
+      data.qty,              // qty
+      before,                // before
+      after,                 // after
+      by,                    // by (จาก token)
+      "",                    // orderId
+      data.reason || "",     // reason
+      new Date()             // timestamp
+    ]);
+  } catch (err) {
+    try {
+      productSheet
+        .getRange(idx + 2, 4)
+        .setValue(before);
+    } catch (rollbackErr) {
+      throw new Error(
+        String(err.message || err) +
+        " | Stock rollback failed: " +
+        String(rollbackErr.message || rollbackErr)
+      );
+    }
+
+    throw err;
+  }
 
   return {
     success: true,
