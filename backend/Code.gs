@@ -1237,6 +1237,15 @@ function updateProduct(e, auth) {
 
         // 🔒 อ่าน active เดิมจาก sheet (ห้ามแตะ)
         const currentActive = data[i][5]; // column F
+        const oldStock = Number(data[i][3]);
+        const stockChanged = oldStock !== stock;
+        const logSheet = stockChanged
+          ? ss.getSheetByName("stock_logs")
+          : null;
+
+        if (stockChanged && !logSheet) {
+          throw new Error("Sheet stock_logs not found");
+        }
 
         // ===== HANDLE SKU CHANGE =====
         if (oldProductId !== newProductId) {
@@ -1264,6 +1273,21 @@ function updateProduct(e, auth) {
         sh.getRange(i + 1, 11).setValue(detailsText);   // K: detailsText
         sh.getRange(i + 1, 12).setValue(compareImages); // L: compareImages
         sh.getRange(i + 1, 13).setValue(costPrice);     // M: costPrice
+
+        if (stockChanged) {
+          logSheet.appendRow([
+            "LOG-" + Date.now(),
+            newProductId,
+            "ADJUST",
+            stock - oldStock,
+            oldStock,
+            stock,
+            by,
+            "",
+            "",
+            new Date()
+          ]);
+        }
 
         Logger.log(`Product ${newProductId} updated by ${by}`);
 
