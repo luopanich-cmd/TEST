@@ -1018,88 +1018,198 @@ function approveOrder(token, orderId) {
   lock.waitLock(30000);
 
   try {
-  /* ================= SPREADSHEET ================= */
-  const SPREADSHEET_ID = "1xeNVv2yLADoxuZQwYBEZNvlZnt9CKvJ40RLTwNOrQfU";
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    /* ================= SPREADSHEET ================= */
+    const SPREADSHEET_ID = "1xeNVv2yLADoxuZQwYBEZNvlZnt9CKvJ40RLTwNOrQfU";
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-  const orderSheet   = ss.getSheetByName("Orders");
-  const productSheet = ss.getSheetByName("Products");
-  const logSheet     = ss.getSheetByName("stock_logs");
+    const orderSheet   = ss.getSheetByName("Orders");
+    const productSheet = ss.getSheetByName("Products");
+    const logSheet     = ss.getSheetByName("stock_logs");
 
-  /* ================= LOAD ORDER ================= */
-  const orders = orderSheet.getDataRange().getValues();
-  orders.shift();
+    /* ================= LOAD ORDER ================= */
+    const orders = orderSheet.getDataRange().getValues();
+    orders.shift();
 
-  const idx = orders.findIndex(r => r[0] === orderId);
-  if (idx === -1) {
-    throw new Error("Order not found");
-  }
-
-  const rowNumber = idx + 2;
-  const orderRow = orders[idx];
-  const poNumber = String(orderRow[7] || "").trim();
-
-  const items  = JSON.parse(orderRow[1]);
-  const status = orderRow[3];
-
-  if (status !== "PENDING") {
-    throw new Error("Order already processed");
-  }
-
-  /* ================= LOAD PRODUCTS ================= */
-  const products = productSheet.getDataRange().getValues();
-  products.shift();
-
-  /* ================= VALIDATE STOCK ================= */
-  items.forEach(item => {
-    const pIndex = products.findIndex(r => r[0] === item.productId);
-    if (pIndex === -1) {
-      throw new Error("Product not found: " + item.productId);
+    const idx = orders.findIndex(r => r[0] === orderId);
+    if (idx === -1) {
+      throw new Error("Order not found");
     }
 
-    const currentStock = Number(products[pIndex][3]);
-    if (currentStock < item.qty) {
-      throw new Error(
-        `Stock not enough for ${item.productId} (remain ${currentStock})`
+    const rowNumber = idx + 2;
+    const orderRow = orders[idx];
+    const status = String(orderRow[3] || "").trim().toUpperCase();
+
+    if (status === "APPROVED") {
+      return {
+        success: true,
+        approvedBy: String(orderRow[6] || by)
+      };
+    }
+
+    if (status === "REJECTED") {
+      throw new Error("Order already rejected");
+    }
+
+    if (status !== "PENDING") {
+      throw new Error("Invalid order status");
+    }
+
+    const items = JSON.parse(orderRow[1] || "[]");
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error("Invalid order items");
+    }
+
+    /* ================= LOAD PRODUCTS ================= */
+    const products = productSheet.getDataRange().getValues();
+    products.shift();
+
+    /* ================= MERGE + VALIDATE STOCK ================= */
+    const requiredQtyByProduct = new Map();
+
+    items.forEach((item, itemIndex) => {
+      const productId = String(item.productId || "").trim();
+      const qty = Number(item.qty);
+
+      if (
+        !productId ||
+        !Number.isInteger(qty) ||
+        qty <= 0
+      ) {
+        throw new Error("Invalid order item at index " + itemIndex);
+      }
+
+      requiredQtyByProduct.set(
+        productId,
+        (requiredQtyByProduct.get(productId) || 0) + qty
       );
+    });
+
+    const mutations = [];
+
+    requiredQtyByProduct.forEach((qty, productId) => {
+      const pIndex = products.findIndex(
+        r => String(r[0]).trim() === productId
+      );
+
+      if (pIndex === -1) {
+        throw new Error("Product not found: " + productId);
+      }
+
+      const currentStock = Number(products[pIndex][3]);
+      if (!Number.isFinite(currentStock) || currentStock < qty) {
+        throw new Error(
+          `Stock not enough for ${productId} (remain ${currentStock})`
+        );
+      }
+
+      mutations.push({
+        productId,
+        rowNumber: pIndex + 2,
+        qty,
+        before: currentStock,
+        after: currentStock - qty
+      });
+    });
+
+    /* ================= APPLY + COMPENSATE ON FAILURE ================= */
+    const appliedMutations = [];
+    const createdLogIds = [];
+
+    try {
+      mutations.forEach(mutation => {
+        productSheet
+          .getRange(mutation.rowNumber, 4)
+          .setValue(mutation.after);
+        appliedMutations.push(mutation);
+      });
+
+      const logTimestamp = new Date();
+
+      mutations.forEach(mutation => {
+        const logId = "LOG-" + Utilities.getUuid();
+        createdLogIds.push(logId);
+
+        logSheet.appendRow([
+          logId,
+          mutation.productId,
+          "OUT",
+          mutation.qty,
+          mutation.before,
+          mutation.after,
+          by,
+          orderId,
+          "",
+          logTimestamp
+        ]);
+      });
+
+      orderSheet
+        .getRange(rowNumber, 4, 1, 4)
+        .setValues([[
+          "APPROVED",
+          orderRow[4],
+          new Date(),
+          by
+        ]]);
+    } catch (err) {
+      let rollbackError = null;
+
+      if (createdLogIds.length > 0) {
+        try {
+          const createdLogIdSet = new Set(createdLogIds);
+          const lastLogRow = logSheet.getLastRow();
+
+          if (lastLogRow >= 2) {
+            const logIds = logSheet
+              .getRange(2, 1, lastLogRow - 1, 1)
+              .getValues();
+
+            const rowsToDelete = [];
+
+            logIds.forEach((row, index) => {
+              if (createdLogIdSet.has(String(row[0]))) {
+                rowsToDelete.push(index + 2);
+              }
+            });
+
+            rowsToDelete
+              .sort((a, b) => b - a)
+              .forEach(logRowNumber => {
+                logSheet.deleteRow(logRowNumber);
+              });
+          }
+        } catch (logRollbackErr) {
+          rollbackError = logRollbackErr;
+        }
+      }
+
+      if (appliedMutations.length > 0) {
+        try {
+          appliedMutations.reverse().forEach(mutation => {
+            productSheet
+              .getRange(mutation.rowNumber, 4)
+              .setValue(mutation.before);
+          });
+        } catch (stockRollbackErr) {
+          rollbackError = rollbackError || stockRollbackErr;
+        }
+      }
+
+      if (rollbackError) {
+        throw new Error(
+          String(err.message || err) +
+          " | Rollback failed: " +
+          String(rollbackError.message || rollbackError)
+        );
+      }
+
+      throw err;
     }
-  });
 
-  /* ================= APPLY STOCK + LOG ================= */
-  items.forEach(item => {
-    const pIndex = products.findIndex(r => r[0] === item.productId);
-
-    const before = Number(products[pIndex][3]);
-    const after  = before - item.qty;
-
-    productSheet
-      .getRange(pIndex + 2, 4)
-      .setValue(after);
-
-    logSheet.appendRow([
-      "LOG-" + Date.now(),
-      item.productId,
-      "OUT",
-      item.qty,
-      before,
-      after,
-      by,
-      orderId,
-      "",        // reason
-      new Date()
-    ]);
-  });
-
-  /* ================= UPDATE ORDER ================= */
-  orderSheet.getRange(rowNumber, 4).setValue("APPROVED");
-  orderSheet.getRange(rowNumber, 6).setValue(new Date());
-  orderSheet.getRange(rowNumber, 7).setValue(by);
-  // 🔒 ไม่ต้อง set ซ้ำ เพราะเก็บตั้งแต่ createOrder แล้ว
-
-  return {
-    success: true,
-    approvedBy: by
-  };
+    return {
+      success: true,
+      approvedBy: by
+    };
   } finally {
     lock.releaseLock();
   }
