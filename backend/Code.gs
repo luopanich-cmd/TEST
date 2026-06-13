@@ -19,7 +19,10 @@ function getPendingDeliverySheet() {
 }
 
 function createPendingDelivery(data, by) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
 
+  try {
   const sheet = getPendingDeliverySheet();
 
   /* ================= VALIDATE ================= */
@@ -125,6 +128,9 @@ function createPendingDelivery(data, by) {
     success: true,
     pendingId
   };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function getPendingDeliveries() {
@@ -154,7 +160,10 @@ function getPendingDeliveries() {
 }
 
 function closePendingDelivery(pendingId, by) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
 
+  try {
   const sheet = getPendingDeliverySheet();
 
   const rows = sheet.getDataRange().getValues();
@@ -225,6 +234,9 @@ function closePendingDelivery(pendingId, by) {
     success: true,
     pendingId
   };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function doGet(e) {
@@ -406,8 +418,10 @@ function doPost(e) {
     const params = e.parameter;
     const action = String(params.action || "").trim();
 
-    Logger.log("POST PARAMS: " + JSON.stringify(params));
-    Logger.log("ACTION: " + action);
+    Logger.log(
+      "ACTION: " + action +
+      " | TIMESTAMP: " + new Date().toISOString()
+    );
 
     if (!action) {
       throw new Error("Missing action");
@@ -429,7 +443,6 @@ function doPost(e) {
     if (action === "createOrder") {
       const result = createOrder({
         items: JSON.parse(params.items || "[]"),
-        total: Number(params.total || 0),
         poNumber: String(params.poNumber || "").trim()
       });
 
@@ -719,6 +732,10 @@ function stockAdjust(token, data) {
   const auth = requireAuth(token);
   const by = auth.username;
 
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
   // 🔒 FIX: ใช้ Spreadsheet เดียวทั้งระบบ
   const ss = getSS();
   const productSheet = ss.getSheetByName("Products");
@@ -773,6 +790,9 @@ function stockAdjust(token, data) {
     success: true,
     adjustedBy: by
   };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 
@@ -781,15 +801,12 @@ function stockAdjust(token, data) {
 function createOrder(data) {
   // 🔒 FIX: Web App ต้องอ้างอิง Spreadsheet แบบชัดเจน
   const SPREADSHEET_ID = "1xeNVv2yLADoxuZQwYBEZNvlZnt9CKvJ40RLTwNOrQfU";
-  const sheet = SpreadsheetApp
-    .openById(SPREADSHEET_ID)
-    .getSheetByName("Orders");
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName("Orders");
   
   if (!sheet) {
     throw new Error("Orders sheet not found");
   }
-  
-  const poNumber = String(data.poNumber || "").trim();
 
   /* ================= VALIDATE ROOT ================= */
   if (!data || !Array.isArray(data.items)) {
@@ -800,43 +817,32 @@ function createOrder(data) {
     throw new Error("Order must contain at least 1 item");
   }
 
-  /* ================= VALIDATE ITEMS ================= */
-  const cleanItems = [];
-  let total = 0;
+  const poNumber = String(data.poNumber || "").trim();
+
+  /* ================= MERGE CLIENT ITEMS ================= */
+  const requestedQtyByProduct = new Map();
 
   data.items.forEach((item, index) => {
     const productId = String(item.productId || "").trim();
-    const name      = String(item.name || "").trim();
     const qty       = Number(item.qty);
-    const price     = Number(item.price);
     
-    // 🔒 schema guard (คงเดิม)
     if (
       !productId ||
-      !name ||
       !Number.isInteger(qty) ||
-      qty <= 0 ||
-      !Number.isFinite(price) ||
-      price < 0
+      qty <= 0
     ) {
       throw new Error(
         `Invalid item at index ${index}`
       );
     }
 
-    const lineTotal = qty * price;
-    total += lineTotal;
-
-    cleanItems.push({
+    requestedQtyByProduct.set(
       productId,
-      name,
-      qty,
-      price
-    });
+      (requestedQtyByProduct.get(productId) || 0) + qty
+    );
   });
 
-  /* ================= STOCK RECHECK (HARDENING) ================= */
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  /* ================= LOAD AUTHORITATIVE PRODUCTS ================= */
   const productSheet = ss.getSheetByName("Products");
   if (!productSheet) {
     throw new Error("Products sheet not found");
@@ -845,21 +851,51 @@ function createOrder(data) {
   const productRows = productSheet.getDataRange().getValues();
   productRows.shift(); // remove header
 
-  cleanItems.forEach(item => {
+  const cleanItems = [];
+  let total = 0;
+
+  requestedQtyByProduct.forEach((qty, productId) => {
     const pIndex = productRows.findIndex(
-      r => String(r[0]).trim() === item.productId
+      r => String(r[0]).trim() === productId
     );
 
     if (pIndex === -1) {
-      throw new Error("Product not found: " + item.productId);
+      throw new Error("Product not found: " + productId);
     }
 
-    const currentStock = Number(productRows[pIndex][3]);
-    if (currentStock < item.qty) {
+    const productRow = productRows[pIndex];
+    const name = String(productRow[1] || "").trim();
+    const price = Number(productRow[2]);
+    const currentStock = Number(productRow[3]);
+    const rawActive = productRow[5];
+    const active =
+      rawActive === true ||
+      rawActive === "TRUE" ||
+      rawActive === 1 ||
+      rawActive === "1";
+
+    if (!name || !Number.isFinite(price) || price < 0) {
+      throw new Error("Invalid product data: " + productId);
+    }
+
+    if (!active) {
+      throw new Error("Product is not active: " + productId);
+    }
+
+    if (!Number.isFinite(currentStock) || currentStock < qty) {
       throw new Error(
-        `Stock not enough for ${item.productId} (remain ${currentStock})`
+        `Stock not enough for ${productId} (remain ${currentStock})`
       );
     }
+
+    cleanItems.push({
+      productId,
+      name,
+      qty,
+      price
+    });
+
+    total += qty * price;
   });
 
   /* ================= CREATE ORDER ================= */
@@ -923,6 +959,10 @@ function approveOrder(token, orderId) {
   const auth = requireAuth(token);
   const by = auth.username;
 
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
   /* ================= SPREADSHEET ================= */
   const SPREADSHEET_ID = "1xeNVv2yLADoxuZQwYBEZNvlZnt9CKvJ40RLTwNOrQfU";
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -1005,6 +1045,9 @@ function approveOrder(token, orderId) {
     success: true,
     approvedBy: by
   };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 
@@ -1015,6 +1058,10 @@ function rejectOrder(token, orderId) {
   const auth = requireAuth(token);
   const by = auth.username;
 
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
   // 🔒 FIX: ใช้ Spreadsheet เดียวทั้งระบบ
   const ss = getSS();
   const orderSheet = ss.getSheetByName("Orders");
@@ -1044,6 +1091,9 @@ function rejectOrder(token, orderId) {
     success: true,
     rejectedBy: by
   };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 
@@ -1220,6 +1270,10 @@ function stockIn(token, data) {
   const auth = requireAuth(token);
   const by = auth.username;
 
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
   // 🔒 FIX: ใช้ Spreadsheet เดียวทั้งระบบ
   const ss = getSS();
   const productSheet = ss.getSheetByName("Products");
@@ -1264,6 +1318,9 @@ function stockIn(token, data) {
     success: true,
     by
   };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 
