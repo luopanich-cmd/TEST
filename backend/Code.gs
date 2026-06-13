@@ -1510,6 +1510,53 @@ function rejectOrder(token, orderId) {
  }
 
 
+function isProductReferencedByPendingOrder(ss, productId) {
+  const orderSheet = ss.getSheetByName("Orders");
+  if (!orderSheet) {
+    throw new Error("Orders sheet not found");
+  }
+
+  const rows = orderSheet.getDataRange().getValues();
+  if (rows.length < 2) {
+    return false;
+  }
+
+  const headers = rows[0].map(header => String(header || "").trim());
+  const itemsCol = headers.indexOf("items");
+  const statusCol = headers.indexOf("status");
+
+  if (itemsCol === -1 || statusCol === -1) {
+    throw new Error("Orders schema mismatch");
+  }
+
+  const normalizedProductId = String(productId || "").trim();
+
+  return rows.slice(1).some(row => {
+    const status = String(row[statusCol] || "").trim().toUpperCase();
+    if (status !== "PENDING") {
+      return false;
+    }
+
+    let items;
+    try {
+      items = JSON.parse(row[itemsCol] || "[]");
+    } catch (err) {
+      throw new Error("Invalid pending order items");
+    }
+
+    if (!Array.isArray(items)) {
+      throw new Error("Invalid pending order items");
+    }
+
+    return items.some(
+      item =>
+        String(item && item.productId || "").trim() ===
+        normalizedProductId
+    );
+  });
+}
+
+
 function updateProduct(e, auth) {
   try {
     // 🔐 AUTH GUARD
@@ -1578,6 +1625,11 @@ function updateProduct(e, auth) {
           try {
             // ===== HANDLE SKU CHANGE =====
             if (oldProductId !== newProductId) {
+              if (isProductReferencedByPendingOrder(ss, oldProductId)) {
+                throw new Error(
+                  "Cannot change SKU while it is referenced by a pending order"
+                );
+              }
 
               // 🔍 Duplicate guard
               const exists = data.slice(1).some(
@@ -1679,6 +1731,11 @@ function deleteProduct(e, auth) {
 
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][0]).trim() === productId) {
+        if (isProductReferencedByPendingOrder(ss, productId)) {
+          throw new Error(
+            "Cannot delete product while it is referenced by a pending order"
+          );
+        }
 
         // ❌ HARD DELETE: ลบแถวออกจากชีตจริง
         sh.deleteRow(i + 1);
