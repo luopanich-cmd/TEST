@@ -1056,7 +1056,7 @@ function createOrder(data) {
   });
 
   /* ================= CREATE ORDER ================= */
-  const orderId   = "ORD-" + Date.now();
+  const orderId   = "ORD-" + Utilities.getUuid();
   const status    = "PENDING";
   const createdAt = new Date();
 
