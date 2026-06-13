@@ -2658,6 +2658,39 @@ function isAuthError(message = "") {
 /* ================= API LAYER ================= */
 const API_URL="https://script.google.com/macros/s/AKfycbzx9WlWXUqZ9OM_R0tO9wJvw79RPWIn40iakCPNuPDLBmvcuHXkqp9EMPoRiuMRnaM2Wg/exec";
 
+let adminLogoutPromise = null;
+
+async function adminLogout(token) {
+  const form = new URLSearchParams();
+  form.append("action", "adminLogout");
+  form.append("token", token);
+
+  return await postFormAction(form);
+}
+
+function handleAdminLogout() {
+  if (adminLogoutPromise) {
+    return adminLogoutPromise;
+  }
+
+  const token = String(state.admin?.token || "").trim();
+
+  adminLogoutPromise = (async () => {
+    try {
+      if (token) {
+        await adminLogout(token);
+      }
+    } catch (err) {
+      console.warn("Backend logout failed:", err);
+    } finally {
+      exitAdmin();
+      adminLogoutPromise = null;
+    }
+  })();
+
+  return adminLogoutPromise;
+}
+
 const fetchProducts = async () => {
   const res = await fetchWithTimeout(
    `${API_URL}?action=products`,
@@ -6999,7 +7032,7 @@ function openMainMenu(triggerEl){
           <hr>
           <div class="menu-group danger">
             <button class="btn btn-danger"
-               onclick="closeMainMenu(); exitAdmin();">
+               onclick="closeMainMenu(); handleAdminLogout();">
                🚪 Logout
              </button>
           </div>
