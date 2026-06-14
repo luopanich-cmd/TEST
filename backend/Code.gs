@@ -2123,6 +2123,8 @@ function stockIn(token, data) {
 const PASSWORD_HASH_VERSION = "SHA256I";
 const PASSWORD_HASH_ITERATIONS = 5000;
 const PASSWORD_MAX_LENGTH = 128;
+const PASSWORD_PEPPER_PROPERTY = "ADMIN_PASSWORD_PEPPER";
+const PASSWORD_VERIFIER_PREFIX = "ADMIN_PASSWORD_VERIFIER_";
 
 function bytesToHex(bytes) {
   return bytes
@@ -2181,6 +2183,86 @@ function createPasswordHash(password) {
     salt,
     hash
   ].join("$");
+}
+
+function getPasswordPepper() {
+  const properties = PropertiesService.getScriptProperties();
+  let pepper = String(
+    properties.getProperty(PASSWORD_PEPPER_PROPERTY) || ""
+  );
+
+  if (pepper) {
+    return pepper;
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+
+  try {
+    pepper = String(
+      properties.getProperty(PASSWORD_PEPPER_PROPERTY) || ""
+    );
+
+    if (!pepper) {
+      pepper = Utilities.getUuid().replace(/-/g, "") +
+        Utilities.getUuid().replace(/-/g, "");
+      properties.setProperty(PASSWORD_PEPPER_PROPERTY, pepper);
+    }
+
+    return pepper;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getPasswordVerifierKey(username) {
+  const normalizedUsername =
+    String(username || "").trim().toLowerCase();
+
+  return PASSWORD_VERIFIER_PREFIX + sha256Hex(normalizedUsername);
+}
+
+function createCheapPasswordVerifier(username, password) {
+  const normalizedUsername =
+    String(username || "").trim().toLowerCase();
+
+  return sha256Hex(
+    normalizedUsername + ":" +
+    String(password) + ":" +
+    getPasswordPepper()
+  );
+}
+
+function getCheapPasswordVerifier(username) {
+  return String(
+    PropertiesService
+      .getScriptProperties()
+      .getProperty(getPasswordVerifierKey(username)) || ""
+  );
+}
+
+function setCheapPasswordVerifier(username, verifier) {
+  PropertiesService
+    .getScriptProperties()
+    .setProperty(
+      getPasswordVerifierKey(username),
+      verifier
+    );
+}
+
+function clearCheapPasswordVerifier(username) {
+  PropertiesService
+    .getScriptProperties()
+    .deleteProperty(getPasswordVerifierKey(username));
+}
+
+function clearLegacyLoginAttempts(username) {
+  const normalizedUsername =
+    String(username || "").trim().toLowerCase();
+
+  PropertiesService
+    .getScriptProperties()
+    .deleteProperty("LOGIN_ATTEMPTS_" + sha256Hex(normalizedUsername));
 }
 
 function isLegacyPasswordHash(storedHash) {
@@ -2248,13 +2330,6 @@ function adminLogin(username, password) {
     };
   }
 
-  if (!reserveLoginVerificationAttempt(username)) {
-    return {
-      success: false,
-      message: "พยายามเข้าสู่ระบบมากเกินไป กรุณารอสักครู่"
-    };
-  }
-
   const lastRow = adminSheet.getLastRow();
   if (lastRow < 2) {
     return {
@@ -2272,9 +2347,33 @@ function adminLogin(username, password) {
       String(r[1]).trim()  // password_hash
     ]);
 
-  const found = admins.find(
-    r => r[0] === username && verifyPassword(password, r[1])
-  );
+  const adminRecord = admins.find(r => r[0] === username);
+
+  if (!adminRecord) {
+    return {
+      success: false,
+      message: "Username หรือ Password ไม่ถูกต้อง"
+    };
+  }
+
+  const cheapVerifier = getCheapPasswordVerifier(username);
+
+  if (
+    cheapVerifier &&
+    !constantTimeEqual(
+      createCheapPasswordVerifier(username, password),
+      cheapVerifier
+    )
+  ) {
+    return {
+      success: false,
+      message: "Username หรือ Password ไม่ถูกต้อง"
+    };
+  }
+
+  const found = verifyPassword(password, adminRecord[1])
+    ? adminRecord
+    : null;
 
   if (!found) {
     return {
@@ -2283,8 +2382,10 @@ function adminLogin(username, password) {
     };
   }
 
-  clearLoginAttempts(username);
-
+  const verifiedCheapPassword = createCheapPasswordVerifier(
+    username,
+    password
+  );
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
 
@@ -2322,6 +2423,9 @@ function adminLogin(username, password) {
         .getRange(currentAdminIndex + 2, 2)
         .setValue(createPasswordHash(password));
     }
+
+    setCheapPasswordVerifier(username, verifiedCheapPassword);
+    clearLegacyLoginAttempts(username);
 
     const now = new Date();
     const sessionRows = sessionSheet.getDataRange().getValues();
@@ -2427,6 +2531,10 @@ function changePassword(token, currentPassword, newPassword) {
   }
 
   const newHash = createPasswordHash(newPassword);
+  const newCheapPasswordVerifier = createCheapPasswordVerifier(
+    username,
+    newPassword
+  );
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -2460,7 +2568,9 @@ function changePassword(token, currentPassword, newPassword) {
       throw new Error("Current password is incorrect");
     }
 
+    clearCheapPasswordVerifier(username);
     adminSheet.getRange(rowIndex + 2, 2).setValue(newHash);
+    setCheapPasswordVerifier(username, newCheapPasswordVerifier);
 
     const sessionRows = sessionSheet.getDataRange().getValues();
 
@@ -2564,132 +2674,6 @@ function cleanupExpiredSessions() {
     lock.releaseLock();
   }
 }
-
-// ================= LOGIN RATE LIMIT =================
-const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5;
-const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
-const LOGIN_RATE_LIMIT_LOCKOUT_MS = 30 * 1000;
-
-function getLoginAttemptKey(username) {
-  const normalizedUsername =
-    String(username || "").trim().toLowerCase();
-
-  const hash = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    normalizedUsername
-  )
-    .map(b => ('0' + (b & 0xff).toString(16)).slice(-2))
-    .join('');
-
-  return "LOGIN_ATTEMPTS_" + hash;
-}
-
-function isLoginRateLimited(username) {
-  const key = getLoginAttemptKey(username);
-  const properties = PropertiesService.getScriptProperties();
-  const rawState = properties.getProperty(key);
-
-  if (!rawState) {
-    return false;
-  }
-
-  let state;
-
-  try {
-    state = JSON.parse(rawState);
-  } catch (err) {
-    properties.deleteProperty(key);
-    return false;
-  }
-
-  const firstFailedAt = Number(state.firstFailedAt);
-  const count = Number(state.count);
-
-  if (
-    !Number.isFinite(firstFailedAt) ||
-    !Number.isInteger(count) ||
-    Date.now() - firstFailedAt >= LOGIN_RATE_LIMIT_WINDOW_MS
-  ) {
-    properties.deleteProperty(key);
-    return false;
-  }
-
-  if (count < LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
-    return false;
-  }
-
-  const lockedUntil = Number(state.lockedUntil);
-  return Number.isFinite(lockedUntil) && Date.now() < lockedUntil;
-}
-
-function reserveLoginVerificationAttempt(username) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(5000);
-
-  try {
-    const key = getLoginAttemptKey(username);
-    const properties = PropertiesService.getScriptProperties();
-    const rawState = properties.getProperty(key);
-
-    const now = Date.now();
-    let state = null;
-
-    if (rawState) {
-      try {
-        state = JSON.parse(rawState);
-      } catch (err) {
-        state = null;
-      }
-    }
-
-    if (
-      !state ||
-      !Number.isFinite(Number(state.firstFailedAt)) ||
-      !Number.isInteger(Number(state.count)) ||
-      Number(state.count) < 0 ||
-      now - Number(state.firstFailedAt) >= LOGIN_RATE_LIMIT_WINDOW_MS
-    ) {
-      state = {
-        count: 0,
-        firstFailedAt: now
-      };
-    }
-
-    if (state.count >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
-      const lockedUntil = Number(state.lockedUntil);
-
-      if (
-        Number.isFinite(lockedUntil) &&
-        now < lockedUntil
-      ) {
-        return false;
-      }
-
-      state = {
-        count: 0,
-        firstFailedAt: now
-      };
-    }
-
-    state.count = Number(state.count) + 1;
-
-    if (state.count >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
-      state.lockedUntil = now + LOGIN_RATE_LIMIT_LOCKOUT_MS;
-    }
-
-    properties.setProperty(key, JSON.stringify(state));
-    return true;
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function clearLoginAttempts(username) {
-  PropertiesService
-    .getScriptProperties()
-    .deleteProperty(getLoginAttemptKey(username));
-}
-
 
 function getOrders() {
   // 🔒 FIX: ใช้ Spreadsheet เดียวกับทั้งระบบ
