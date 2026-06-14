@@ -2644,6 +2644,16 @@ textarea.input{
   white-space:pre;
 }
 
+.bulk-import-actions{
+  display:grid;
+  gap:10px;
+  margin:12px 0;
+}
+
+.bulk-import-file-input{
+  width:100%;
+}
+
 .bulk-import-textarea{
   min-height:150px;
   font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -2814,6 +2824,8 @@ Object.assign(window, {
   closeBulkProductImportSheet,
   previewBulkProductImport,
   submitBulkProductImport,
+  downloadBulkProductTemplate,
+  handleBulkProductFileUpload,
   openPendingDeliverySheet,
   closePendingDeliverySheet,
   openChangePasswordSheet,
@@ -7768,7 +7780,7 @@ function openMainMenu(triggerEl){
                 
                 <button class="btn btn-secondary"
                   onclick="closeMainMenu(); openBulkProductImportSheet();">
-                  Bulk Import Products
+                  นำเข้าสินค้าหลายรายการ
                 </button>
 
                 <button class="btn btn-secondary"
@@ -9123,7 +9135,8 @@ const BULK_PRODUCT_COLUMNS = [
 
 const BULK_PRODUCT_SAMPLE =
   BULK_PRODUCT_COLUMNS.join("\t") +
-  "\nSKU001\tSample product\t100\t70\t10\tready\thttps://example.com/image.jpg\ttrue\tNote\tDetails\thttps://example.com/compare.jpg";
+  "\nSKU001\tสินค้าตัวอย่าง 1\t100\t70\t10\tready\thttps://example.com/image.jpg\ttrue\tหมายเหตุ\tรายละเอียด\thttps://example.com/compare.jpg" +
+  "\nSKU002\tสินค้าตัวอย่าง 2\t250\t180\t0\tout\t\ttrue\t\t\t";
 
 function ensureAdminSessionForBulkImport() {
   if (
@@ -9132,7 +9145,7 @@ function ensureAdminSessionForBulkImport() {
     !state.admin.token ||
     isAdminSessionExpired()
   ) {
-    showToast("Session expired. Please login again.", "warning");
+    showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
     exitAdmin();
     return false;
   }
@@ -9155,6 +9168,46 @@ function closeBulkProductImportSheet() {
   closeOverlay(adminBulkProductImportSheet);
 }
 
+function downloadBulkProductTemplate() {
+  const blob = new Blob([BULK_PRODUCT_SAMPLE], {
+    type: "text/tab-separated-values;charset=utf-8"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "bulk-product-template.tsv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  showToast("ดาวน์โหลดแม่แบบแล้ว", "success");
+}
+
+function handleBulkProductFileUpload(event) {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+
+  const fileName = String(file.name || "").toLowerCase();
+  if (!fileName.endsWith(".tsv") && !fileName.endsWith(".txt")) {
+    showToast("เวอร์ชันนี้รองรับเฉพาะไฟล์ .tsv หรือ .txt", "warning");
+    event.target.value = "";
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.admin.bulkProductImport.rawText = String(reader.result || "");
+    state.admin.bulkProductImport.backendErrors = [];
+    state.admin.bulkProductImport.summary = "";
+    renderBulkProductImportSheet();
+    showToast("อ่านไฟล์แล้ว กรุณาตรวจสอบข้อมูลก่อนนำเข้า", "success");
+  };
+  reader.onerror = () => {
+    showToast("ไม่สามารถอ่านไฟล์ได้ กรุณาลองใหม่อีกครั้ง", "error");
+  };
+  reader.readAsText(file, "UTF-8");
+}
+
 function renderBulkProductImportSheet() {
   const bulkState = state.admin.bulkProductImport;
   const parsed = parseBulkProductImportText(bulkState.rawText || "");
@@ -9171,20 +9224,36 @@ function renderBulkProductImportSheet() {
     <div class="sheet-topbar">
       <button class="btn btn-outline sheet-nav-btn"
         onclick="closeBulkProductImportSheet()"
-        aria-label="Close bulk import">×</button>
-      <h3 id="adminBulkProductImportSheetTitle">Bulk Import Products</h3>
+        aria-label="ปิดหน้าต่างนำเข้าสินค้า">×</button>
+      <h3 id="adminBulkProductImportSheetTitle">นำเข้าสินค้าหลายรายการ</h3>
       <div aria-hidden="true"></div>
     </div>
 
     <div class="helper-text" style="margin-bottom:10px">
-      Paste TSV copied from Excel or Google Sheets. The first row may be a header.
-      Backend validation remains authoritative.
+      ใช้ไฟล์ .tsv หรือคัดลอกจาก Google Sheets แล้ววางในช่องนี้
+      ระบบจะตรวจสอบข้อมูลก่อนนำเข้า และเวอร์ชันนี้ยังไม่รองรับไฟล์ .xlsx โดยตรง
+    </div>
+
+    <div class="bulk-import-actions">
+      <button class="btn btn-outline" type="button" onclick="downloadBulkProductTemplate()">
+        ดาวน์โหลดแม่แบบ
+      </button>
+      <div class="form-group">
+        <label for="bulkProductImportFile">อัปโหลดไฟล์ TSV</label>
+        <input
+          id="bulkProductImportFile"
+          class="input bulk-import-file-input"
+          type="file"
+          accept=".tsv,.txt"
+          onchange="handleBulkProductFileUpload(event)">
+        <div class="helper-text">รองรับไฟล์ .tsv หรือ .txt เท่านั้น ยังไม่รองรับไฟล์ .xlsx โดยตรง</div>
+      </div>
     </div>
 
     <div class="bulk-import-template">${esc(BULK_PRODUCT_SAMPLE)}</div>
 
     <div class="form-group">
-      <label>Paste product rows</label>
+      <label for="bulkProductImportText">วางข้อมูลจาก Excel / Google Sheets</label>
       <textarea
         id="bulkProductImportText"
         class="input bulk-import-textarea"
@@ -9193,7 +9262,7 @@ function renderBulkProductImportSheet() {
     </div>
 
     <button class="btn btn-outline" onclick="previewBulkProductImport()">
-      Preview TSV
+      ตรวจสอบข้อมูล
     </button>
 
     ${bulkState.summary ? `
@@ -9207,10 +9276,10 @@ function renderBulkProductImportSheet() {
       <button class="btn btn-primary"
         ${canSubmit && !state.admin.isSubmitting ? "" : "disabled"}
         onclick="submitBulkProductImport(this)">
-        ${state.admin.isSubmitting ? "Importing..." : "Import Products"}
+        ${state.admin.isSubmitting ? "กำลังนำเข้า..." : "นำเข้าสินค้า"}
       </button>
       <button class="btn btn-outline" onclick="closeBulkProductImportSheet()">
-        Cancel
+        ยกเลิก
       </button>
     </div>
   `;
@@ -9248,7 +9317,7 @@ function parseBulkProductImportText(rawText) {
   const seenSkus = new Set();
 
   if (dataLines.length > 100) {
-    errors.push(bulkImportError(0, "", "items", "Maximum 100 product rows allowed"));
+    errors.push(bulkImportError(0, "", "items", "นำเข้าได้สูงสุด 100 รายการต่อครั้ง"));
     return { items, errors };
   }
 
@@ -9268,7 +9337,7 @@ function parseBulkProductImportText(rawText) {
   });
 
   if (items.length === 0) {
-    errors.push(bulkImportError(1, "", "items", "At least one product row is required"));
+    errors.push(bulkImportError(1, "", "items", "กรุณาเพิ่มข้อมูลสินค้าอย่างน้อย 1 รายการ"));
   }
 
   return { items, errors };
@@ -9336,9 +9405,9 @@ function validateBulkProductImportRow(item, rowNumber, seenSkus, errors) {
   const stock = Number(item.stock);
 
   if (!productId) {
-    errors.push(bulkImportError(rowNumber, productId, "productId", "SKU is required"));
+    errors.push(bulkImportError(rowNumber, productId, "productId", "กรุณากรอกรหัสสินค้า"));
   } else if (seenSkus.has(productId)) {
-    errors.push(bulkImportError(rowNumber, productId, "productId", "Duplicate SKU inside pasted rows"));
+    errors.push(bulkImportError(rowNumber, productId, "productId", "รหัสสินค้าซ้ำในข้อมูลที่วาง"));
   }
 
   if (productId) {
@@ -9346,30 +9415,30 @@ function validateBulkProductImportRow(item, rowNumber, seenSkus, errors) {
   }
 
   if (!item.name) {
-    errors.push(bulkImportError(rowNumber, productId, "name", "Name is required"));
+    errors.push(bulkImportError(rowNumber, productId, "name", "กรุณากรอกชื่อสินค้า"));
   }
 
   if (item.price === "" || !Number.isInteger(price) || price < 0) {
-    errors.push(bulkImportError(rowNumber, productId, "price", "Price must be an integer >= 0"));
+    errors.push(bulkImportError(rowNumber, productId, "price", "ราคาต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป"));
   }
 
   if (item.costPrice === "" || !Number.isInteger(costPrice) || costPrice < 0) {
-    errors.push(bulkImportError(rowNumber, productId, "costPrice", "Cost price must be an integer >= 0"));
+    errors.push(bulkImportError(rowNumber, productId, "costPrice", "ต้นทุนต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป"));
   }
 
   if (item.stock === "" || !Number.isInteger(stock) || stock < 0) {
-    errors.push(bulkImportError(rowNumber, productId, "stock", "Stock must be an integer >= 0"));
+    errors.push(bulkImportError(rowNumber, productId, "stock", "จำนวนสต๊อกต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป"));
   }
 
   if (!item.status || !allowedStatuses.includes(item.status)) {
-    errors.push(bulkImportError(rowNumber, productId, "status", "Invalid status"));
+    errors.push(bulkImportError(rowNumber, productId, "status", "สถานะสินค้าไม่ถูกต้อง"));
   }
 
   if (
     item.active &&
     !["true", "false", "1", "0"].includes(item.active.toLowerCase())
   ) {
-    errors.push(bulkImportError(rowNumber, productId, "active", "Active must be true/false/1/0 or blank"));
+    errors.push(bulkImportError(rowNumber, productId, "active", "active ต้องเป็น true/false/1/0 หรือเว้นว่าง"));
   }
 }
 
@@ -9377,15 +9446,42 @@ function bulkImportError(row, productId, field, message) {
   return { row, productId, field, message };
 }
 
+function getBulkImportErrorMessage(error) {
+  const message = String(error?.message || "").trim();
+  const field = String(error?.field || "").trim();
+  const knownMessages = {
+    "Bulk import validation failed": "ตรวจสอบข้อมูลนำเข้าไม่ผ่าน",
+    "Maximum 100 product rows allowed": "นำเข้าได้สูงสุด 100 รายการต่อครั้ง",
+    "At least one product row is required": "กรุณาเพิ่มข้อมูลสินค้าอย่างน้อย 1 รายการ",
+    "SKU is required": "กรุณากรอกรหัสสินค้า",
+    "Duplicate SKU inside batch": "รหัสสินค้าซ้ำในชุดข้อมูล",
+    "Duplicate SKU inside pasted rows": "รหัสสินค้าซ้ำในข้อมูลที่วาง",
+    "Product already exists": "รหัสสินค้านี้มีอยู่แล้ว",
+    "Name is required": "กรุณากรอกชื่อสินค้า",
+    "Price must be an integer >= 0": "ราคาต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป",
+    "Cost price must be an integer >= 0": "ต้นทุนต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป",
+    "Stock must be an integer >= 0": "จำนวนสต๊อกต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป",
+    "Invalid product status": "สถานะสินค้าไม่ถูกต้อง",
+    "Invalid status": "สถานะสินค้าไม่ถูกต้อง",
+    "Active must be true/false/1/0": "active ต้องเป็น true/false/1/0 หรือเว้นว่าง",
+    "Active must be true/false/1/0 or blank": "active ต้องเป็น true/false/1/0 หรือเว้นว่าง",
+    "Image must be an http/https URL": "รูปภาพต้องเป็น URL แบบ http/https",
+    "Compare image must be an http/https URL": "รูปภาพเปรียบเทียบต้องเป็น URL แบบ http/https",
+    "Note is too long": "หมายเหตุยาวเกินไป",
+    "Details text is too long": "รายละเอียดสินค้ายาวเกินไป"
+  };
+  return knownMessages[message] || `${field || "items"} ไม่ถูกต้อง กรุณาตรวจสอบข้อมูลอีกครั้ง`;
+}
+
 function renderBulkProductImportSummary(items, errors) {
   return `
     <div class="cart-summary">
       <div class="summary-row">
-        <span>Rows ready</span>
+        <span>รายการพร้อมนำเข้า</span>
         <strong>${items.length}</strong>
       </div>
       <div class="summary-row">
-        <span>Errors</span>
+        <span>ข้อผิดพลาด</span>
         <strong>${errors.length}</strong>
       </div>
     </div>
@@ -9396,7 +9492,7 @@ function renderBulkProductImportPreview(items, errors) {
   if (!items.length && !errors.length) {
     return `
       <div class="empty-state">
-        Paste TSV rows and tap Preview TSV.
+        วางข้อมูล TSV หรืออัปโหลดไฟล์ แล้วกดตรวจสอบข้อมูล
       </div>
     `;
   }
@@ -9413,15 +9509,15 @@ function renderBulkProductImportPreview(items, errors) {
     const rowErrors = errorsByRow.get(rowNumber) || [];
     return `
       <div class="bulk-preview-card ${rowErrors.length ? "has-error" : ""}">
-        <div class="name">${esc(item.productId || "(missing SKU)")}</div>
+        <div class="name">${esc(item.productId || "(ยังไม่มีรหัสสินค้า)")}</div>
         <div class="bulk-preview-meta">
-          ${esc(item.name || "(missing name)")}<br>
-          Price: ${esc(item.price)} | Cost: ${esc(item.costPrice)} | Stock: ${esc(item.stock)} | Status: ${esc(item.status || "-")}
+          ${esc(item.name || "(ยังไม่มีชื่อสินค้า)")}<br>
+          ราคา: ${esc(item.price)} | ต้นทุน: ${esc(item.costPrice)} | สต๊อก: ${esc(item.stock)} | สถานะ: ${esc(item.status || "-")}
         </div>
         ${
           rowErrors.length
-            ? `<ul class="bulk-error-list">${rowErrors.map(error => `<li>${esc(error.field)}: ${esc(error.message)}</li>`).join("")}</ul>`
-            : `<div class="status-badge status-approved compact" style="margin-top:8px">Ready</div>`
+            ? `<ul class="bulk-error-list">${rowErrors.map(error => `<li>${esc(error.field)}: ${esc(getBulkImportErrorMessage(error))}</li>`).join("")}</ul>`
+            : `<div class="status-badge status-approved compact" style="margin-top:8px">พร้อมนำเข้า</div>`
         }
       </div>
     `;
@@ -9430,7 +9526,7 @@ function renderBulkProductImportPreview(items, errors) {
   const globalErrors = errorsByRow.get(0) || [];
 
   return `
-    ${globalErrors.length ? `<ul class="bulk-error-list">${globalErrors.map(error => `<li>${esc(error.message)}</li>`).join("")}</ul>` : ""}
+    ${globalErrors.length ? `<ul class="bulk-error-list">${globalErrors.map(error => `<li>${esc(getBulkImportErrorMessage(error))}</li>`).join("")}</ul>` : ""}
     <div class="bulk-preview-list">${cards}</div>
   `;
 }
@@ -9443,7 +9539,7 @@ async function submitBulkProductImport(btn) {
 
   const bulkState = state.admin.bulkProductImport;
   if (!bulkState.items.length || bulkState.errors.length) {
-    showToast("Please fix bulk import errors before submitting.", "warning");
+    showToast("กรุณาแก้ไขข้อผิดพลาดก่อนนำเข้าสินค้า", "warning");
     return;
   }
 
@@ -9451,7 +9547,7 @@ async function submitBulkProductImport(btn) {
   renderBulkProductImportSheet();
 
   try {
-    showLoading("Importing products...");
+    showLoading("กำลังนำเข้าสินค้า...");
     const form = new URLSearchParams();
     form.append("action", "bulkAddProducts");
     form.append("token", state.admin.token);
@@ -9466,7 +9562,7 @@ async function submitBulkProductImport(btn) {
     if (json?.success === true) {
       const imported = Number(json.imported || json.data?.imported || 0);
       bulkState.backendErrors = [];
-      bulkState.summary = `Imported ${imported} products successfully.`;
+      bulkState.summary = `นำเข้าสินค้าสำเร็จ ${imported} รายการ`;
       showToast(bulkState.summary, "success");
       await refreshProducts();
       renderBulkProductImportSheet();
@@ -9479,14 +9575,14 @@ async function submitBulkProductImport(btn) {
     bulkState.summary = "";
     renderBulkProductImportSheet();
     if (isAuthError(json?.error)) {
-      showToast("Session expired. Please login again.", "warning");
+      showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
       exitAdmin({ silent: true });
       return;
     }
-    showToast(json?.error || "Bulk import failed", "error");
+    showToast(getBulkImportErrorMessage({ message: json?.error }) || "นำเข้าสินค้าไม่สำเร็จ", "error");
   } catch (err) {
     console.error(err);
-    showToast(err.message || "Bulk import failed", "error");
+    showToast("นำเข้าสินค้าไม่สำเร็จ กรุณาลองใหม่อีกครั้ง", "error");
   } finally {
     safeHideLoading();
     state.admin.isSubmitting = false;
