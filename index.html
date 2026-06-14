@@ -434,18 +434,19 @@ header.scrolled{
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
 
-  transform: translateY(100%);
+  transform: translate3d(0, 100%, 0);
   opacity: 0;
   transition:
     transform var(--dur-sheet) var(--ease-out),
-    opacity var(--motion-duration-normal) var(--motion-ease-standard);
+    opacity var(--motion-duration-fast) var(--motion-ease-standard);
   will-change: transform, opacity;
+  backface-visibility: hidden;
 
   z-index: 101;
 }
 
 .sheet.show{
-  transform: translateY(0);
+  transform: translate3d(0, 0, 0);
   opacity: 1;
 }
 
@@ -1668,16 +1669,17 @@ textarea:focus-visible {
   overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;
 
-  transform: translateX(100%);
+  transform: translate3d(100%, 0, 0);
   opacity: 0;
   transition:
     transform var(--dur-sheet) var(--ease-out),
-    opacity var(--motion-duration-normal) var(--motion-ease-standard);
+    opacity var(--motion-duration-fast) var(--motion-ease-standard);
   will-change: transform, opacity;
+  backface-visibility: hidden;
 }
 
 .side-menu.show {
-  transform: translateX(0);
+  transform: translate3d(0, 0, 0);
   opacity: 1;
 }
 
