@@ -2632,6 +2632,58 @@ textarea.input{
   padding-right:6px; /* กันชิดขอบขาว */
 }
   
+.bulk-import-template{
+  margin:10px 0 12px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.08);
+  font-size:12px;
+  line-height:1.45;
+  overflow-x:auto;
+  white-space:pre;
+}
+
+.bulk-import-textarea{
+  min-height:150px;
+  font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size:13px;
+  line-height:1.45;
+}
+
+.bulk-preview-list{
+  display:grid;
+  gap:10px;
+  margin-top:12px;
+}
+
+.bulk-preview-card{
+  padding:12px;
+  border-radius:14px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.08);
+}
+
+.bulk-preview-card.has-error{
+  border-color:rgba(255,59,48,.55);
+  background:rgba(255,59,48,.10);
+}
+
+.bulk-preview-meta{
+  margin-top:6px;
+  font-size:12px;
+  color:rgba(235,235,245,.72);
+  line-height:1.45;
+}
+
+.bulk-error-list{
+  margin:8px 0 0;
+  padding-left:18px;
+  color:#ff9f0a;
+  font-size:12px;
+  line-height:1.45;
+}
+
 </style>
 </head>
 <body>
@@ -2697,6 +2749,7 @@ textarea.input{
  <div id="adminProductEditSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminProductEditSheetTitle" tabindex="-1"></div>
  <div id="adminStockActionSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminStockActionSheetTitle" tabindex="-1"></div>
  <div id="adminAddProductSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminAddProductSheetTitle" tabindex="-1"></div>
+ <div id="adminBulkProductImportSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminBulkProductImportSheetTitle" tabindex="-1"></div>
 
   
 <script>
@@ -2729,6 +2782,8 @@ const adminProductActionSheet = document.getElementById("adminProductActionSheet
 const adminProductEditSheet = document.getElementById("adminProductEditSheet");
 const adminStockActionSheet = document.getElementById("adminStockActionSheet");
 const adminAddProductSheet = document.getElementById("adminAddProductSheet");
+const adminBulkProductImportSheet =
+  document.getElementById("adminBulkProductImportSheet");
 
 // ================= ADMIN UI REGISTRY =================
 // 🔒 รวม ref ฝั่ง admin ไว้จุดเดียว เพื่อให้เพิ่ม/ถอดเมนูในอนาคตง่ายขึ้น
@@ -2743,6 +2798,7 @@ const ADMIN_SHEETS = Object.freeze({
   productEdit: adminProductEditSheet,
   stockAction: adminStockActionSheet,
   addProduct: adminAddProductSheet,
+  bulkProductImport: adminBulkProductImportSheet,
   bulkPending: bulkPendingDeliverySheet
 });
 
@@ -2754,6 +2810,10 @@ function getAdminSheets() {
 Object.assign(window, {
   openBulkPendingDeliverySheet,
   submitBulkPendingDelivery,
+  openBulkProductImportSheet,
+  closeBulkProductImportSheet,
+  previewBulkProductImport,
+  submitBulkProductImport,
   openPendingDeliverySheet,
   closePendingDeliverySheet,
   openChangePasswordSheet,
@@ -2812,6 +2872,13 @@ const state = {
       status: "all",
       dashboardFrom: "",
       dashboardTo: ""
+    },
+    bulkProductImport: {
+      rawText: "",
+      items: [],
+      errors: [],
+      backendErrors: [],
+      summary: ""
     },
     ui: {
       activeSheet: null
@@ -4774,6 +4841,7 @@ function closeTopSheet(){
     document.getElementById("bulkPendingDeliverySheet"),
     document.getElementById("pendingDeliverySheet"),
     document.getElementById("adminAddProductSheet"),
+    document.getElementById("adminBulkProductImportSheet"),
     document.getElementById("adminProductActionSheet"),
     document.getElementById("adminProductEditSheet"),
     document.getElementById("adminStockActionSheet"),
@@ -7699,6 +7767,11 @@ function openMainMenu(triggerEl){
                 </button>
                 
                 <button class="btn btn-secondary"
+                  onclick="closeMainMenu(); openBulkProductImportSheet();">
+                  Bulk Import Products
+                </button>
+
+                <button class="btn btn-secondary"
                   onclick="closeMainMenu(); openChangePasswordSheet();">
                   🔐 เปลี่ยนรหัสผ่าน
                 </button>
@@ -9031,6 +9104,392 @@ async function submitAddProduct(btn){
       btn.disabled = false;
       btn.textContent = "บันทึกสินค้า";
     }
+  }
+}
+
+const BULK_PRODUCT_COLUMNS = [
+  "productId",
+  "name",
+  "price",
+  "costPrice",
+  "stock",
+  "status",
+  "image",
+  "active",
+  "note",
+  "detailsText",
+  "compareImages"
+];
+
+const BULK_PRODUCT_SAMPLE =
+  BULK_PRODUCT_COLUMNS.join("\t") +
+  "\nSKU001\tSample product\t100\t70\t10\tready\thttps://example.com/image.jpg\ttrue\tNote\tDetails\thttps://example.com/compare.jpg";
+
+function ensureAdminSessionForBulkImport() {
+  if (
+    state.mode !== "admin" ||
+    !state.admin.loggedIn ||
+    !state.admin.token ||
+    isAdminSessionExpired()
+  ) {
+    showToast("Session expired. Please login again.", "warning");
+    exitAdmin();
+    return false;
+  }
+  return true;
+}
+
+function openBulkProductImportSheet() {
+  if (!ensureAdminSessionForBulkImport()) return;
+
+  const bulkState = state.admin.bulkProductImport;
+  bulkState.rawText = bulkState.rawText || "";
+  bulkState.backendErrors = [];
+  bulkState.summary = "";
+
+  renderBulkProductImportSheet();
+  openOverlay(adminBulkProductImportSheet);
+}
+
+function closeBulkProductImportSheet() {
+  closeOverlay(adminBulkProductImportSheet);
+}
+
+function renderBulkProductImportSheet() {
+  const bulkState = state.admin.bulkProductImport;
+  const parsed = parseBulkProductImportText(bulkState.rawText || "");
+  bulkState.items = parsed.items;
+  bulkState.errors = parsed.errors;
+
+  const backendErrors = Array.isArray(bulkState.backendErrors)
+    ? bulkState.backendErrors
+    : [];
+  const allErrors = parsed.errors.concat(backendErrors);
+  const canSubmit = parsed.items.length > 0 && allErrors.length === 0;
+
+  adminBulkProductImportSheet.innerHTML = `
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeBulkProductImportSheet()"
+        aria-label="Close bulk import">×</button>
+      <h3 id="adminBulkProductImportSheetTitle">Bulk Import Products</h3>
+      <div aria-hidden="true"></div>
+    </div>
+
+    <div class="helper-text" style="margin-bottom:10px">
+      Paste TSV copied from Excel or Google Sheets. The first row may be a header.
+      Backend validation remains authoritative.
+    </div>
+
+    <div class="bulk-import-template">${esc(BULK_PRODUCT_SAMPLE)}</div>
+
+    <div class="form-group">
+      <label>Paste product rows</label>
+      <textarea
+        id="bulkProductImportText"
+        class="input bulk-import-textarea"
+        placeholder="${escAttr(BULK_PRODUCT_SAMPLE)}"
+        oninput="state.admin.bulkProductImport.rawText = this.value; state.admin.bulkProductImport.backendErrors = []; state.admin.bulkProductImport.summary = '';">${esc(bulkState.rawText || "")}</textarea>
+    </div>
+
+    <button class="btn btn-outline" onclick="previewBulkProductImport()">
+      Preview TSV
+    </button>
+
+    ${bulkState.summary ? `
+      <div class="success-note" role="status">${esc(bulkState.summary)}</div>
+    ` : ""}
+
+    ${renderBulkProductImportSummary(parsed.items, allErrors)}
+    ${renderBulkProductImportPreview(parsed.items, allErrors)}
+
+    <div class="sheet-action-footer">
+      <button class="btn btn-primary"
+        ${canSubmit && !state.admin.isSubmitting ? "" : "disabled"}
+        onclick="submitBulkProductImport(this)">
+        ${state.admin.isSubmitting ? "Importing..." : "Import Products"}
+      </button>
+      <button class="btn btn-outline" onclick="closeBulkProductImportSheet()">
+        Cancel
+      </button>
+    </div>
+  `;
+}
+
+function previewBulkProductImport() {
+  const input = document.getElementById("bulkProductImportText");
+  if (input) {
+    state.admin.bulkProductImport.rawText = input.value;
+  }
+  state.admin.bulkProductImport.backendErrors = [];
+  state.admin.bulkProductImport.summary = "";
+  renderBulkProductImportSheet();
+}
+
+function parseBulkProductImportText(rawText) {
+  const text = String(rawText || "").replace(/\r/g, "").trimEnd();
+  const errors = [];
+  const items = [];
+
+  if (!text.trim()) {
+    return { items, errors };
+  }
+
+  const lines = text
+    .split("\n")
+    .filter(line => line.trim());
+
+  if (lines.length > 101) {
+    errors.push(bulkImportError(0, "", "items", "Maximum 100 product rows allowed"));
+  }
+
+  const firstCells = splitTsvLine(lines[0]);
+  const hasHeader = isBulkProductHeaderRow(firstCells);
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+  const columns = hasHeader
+    ? firstCells.map(normalizeBulkHeader)
+    : BULK_PRODUCT_COLUMNS;
+  const seenSkus = new Set();
+
+  dataLines.slice(0, 100).forEach((line, index) => {
+    const rowNumber = index + 1;
+    const cells = splitTsvLine(line);
+    const row = {};
+
+    columns.forEach((column, cellIndex) => {
+      if (!column) return;
+      row[column] = String(cells[cellIndex] || "").trim();
+    });
+
+    const item = normalizeBulkProductImportRow(row);
+    validateBulkProductImportRow(item, rowNumber, seenSkus, errors);
+    items.push(item);
+  });
+
+  if (items.length === 0) {
+    errors.push(bulkImportError(1, "", "items", "At least one product row is required"));
+  }
+
+  return { items, errors };
+}
+
+function splitTsvLine(line) {
+  return String(line || "").split("\t");
+}
+
+function isBulkProductHeaderRow(cells) {
+  const normalized = cells.map(normalizeBulkHeader).filter(Boolean);
+  return normalized.includes("productId") &&
+    normalized.includes("name") &&
+    normalized.includes("price");
+}
+
+function normalizeBulkHeader(value) {
+  const key = String(value || "").trim().toLowerCase();
+  const map = {
+    productid: "productId",
+    sku: "productId",
+    name: "name",
+    price: "price",
+    costprice: "costPrice",
+    cost: "costPrice",
+    stock: "stock",
+    qty: "stock",
+    status: "status",
+    image: "image",
+    active: "active",
+    note: "note",
+    detailstext: "detailsText",
+    details: "detailsText",
+    compareimages: "compareImages"
+  };
+  return map[key] || "";
+}
+
+function normalizeBulkProductImportRow(row) {
+  const stock = Number(row.stock);
+  const status = Number.isInteger(stock) && stock === 0
+    ? "out"
+    : String(row.status || "").trim();
+
+  return {
+    productId: normalizeProductId(row.productId || ""),
+    name: String(row.name || "").trim(),
+    price: String(row.price || "").trim(),
+    costPrice: String(row.costPrice || "").trim(),
+    stock: String(row.stock || "").trim(),
+    status,
+    image: String(row.image || "").trim(),
+    active: String(row.active || "").trim(),
+    note: String(row.note || "").trim(),
+    detailsText: String(row.detailsText || "").trim(),
+    compareImages: String(row.compareImages || "").trim()
+  };
+}
+
+function validateBulkProductImportRow(item, rowNumber, seenSkus, errors) {
+  const allowedStatuses = ["ready", "ready_plus", "shipping", "warehouse", "out"];
+  const productId = item.productId;
+  const price = Number(item.price);
+  const costPrice = Number(item.costPrice);
+  const stock = Number(item.stock);
+
+  if (!productId) {
+    errors.push(bulkImportError(rowNumber, productId, "productId", "SKU is required"));
+  } else if (seenSkus.has(productId)) {
+    errors.push(bulkImportError(rowNumber, productId, "productId", "Duplicate SKU inside pasted rows"));
+  }
+
+  if (productId) {
+    seenSkus.add(productId);
+  }
+
+  if (!item.name) {
+    errors.push(bulkImportError(rowNumber, productId, "name", "Name is required"));
+  }
+
+  if (item.price === "" || !Number.isInteger(price) || price < 0) {
+    errors.push(bulkImportError(rowNumber, productId, "price", "Price must be an integer >= 0"));
+  }
+
+  if (item.costPrice === "" || !Number.isInteger(costPrice) || costPrice < 0) {
+    errors.push(bulkImportError(rowNumber, productId, "costPrice", "Cost price must be an integer >= 0"));
+  }
+
+  if (item.stock === "" || !Number.isInteger(stock) || stock < 0) {
+    errors.push(bulkImportError(rowNumber, productId, "stock", "Stock must be an integer >= 0"));
+  }
+
+  if (!item.status || !allowedStatuses.includes(item.status)) {
+    errors.push(bulkImportError(rowNumber, productId, "status", "Invalid status"));
+  }
+
+  if (
+    item.active &&
+    !["true", "false", "1", "0"].includes(item.active.toLowerCase())
+  ) {
+    errors.push(bulkImportError(rowNumber, productId, "active", "Active must be true/false/1/0 or blank"));
+  }
+}
+
+function bulkImportError(row, productId, field, message) {
+  return { row, productId, field, message };
+}
+
+function renderBulkProductImportSummary(items, errors) {
+  return `
+    <div class="cart-summary">
+      <div class="summary-row">
+        <span>Rows ready</span>
+        <strong>${items.length}</strong>
+      </div>
+      <div class="summary-row">
+        <span>Errors</span>
+        <strong>${errors.length}</strong>
+      </div>
+    </div>
+  `;
+}
+
+function renderBulkProductImportPreview(items, errors) {
+  if (!items.length && !errors.length) {
+    return `
+      <div class="empty-state">
+        Paste TSV rows and tap Preview TSV.
+      </div>
+    `;
+  }
+
+  const errorsByRow = new Map();
+  errors.forEach(error => {
+    const row = Number(error.row) || 0;
+    if (!errorsByRow.has(row)) errorsByRow.set(row, []);
+    errorsByRow.get(row).push(error);
+  });
+
+  const cards = items.map((item, index) => {
+    const rowNumber = index + 1;
+    const rowErrors = errorsByRow.get(rowNumber) || [];
+    return `
+      <div class="bulk-preview-card ${rowErrors.length ? "has-error" : ""}">
+        <div class="name">${esc(item.productId || "(missing SKU)")}</div>
+        <div class="bulk-preview-meta">
+          ${esc(item.name || "(missing name)")}<br>
+          Price: ${esc(item.price)} | Cost: ${esc(item.costPrice)} | Stock: ${esc(item.stock)} | Status: ${esc(item.status || "-")}
+        </div>
+        ${
+          rowErrors.length
+            ? `<ul class="bulk-error-list">${rowErrors.map(error => `<li>${esc(error.field)}: ${esc(error.message)}</li>`).join("")}</ul>`
+            : `<div class="status-badge status-approved compact" style="margin-top:8px">Ready</div>`
+        }
+      </div>
+    `;
+  }).join("");
+
+  const globalErrors = errorsByRow.get(0) || [];
+
+  return `
+    ${globalErrors.length ? `<ul class="bulk-error-list">${globalErrors.map(error => `<li>${esc(error.message)}</li>`).join("")}</ul>` : ""}
+    <div class="bulk-preview-list">${cards}</div>
+  `;
+}
+
+async function submitBulkProductImport(btn) {
+  if (!ensureAdminSessionForBulkImport()) return;
+  if (state.admin.isSubmitting) return;
+
+  previewBulkProductImport();
+
+  const bulkState = state.admin.bulkProductImport;
+  if (!bulkState.items.length || bulkState.errors.length) {
+    showToast("Please fix bulk import errors before submitting.", "warning");
+    return;
+  }
+
+  state.admin.isSubmitting = true;
+  renderBulkProductImportSheet();
+
+  try {
+    showLoading("Importing products...");
+    const form = new URLSearchParams();
+    form.append("action", "bulkAddProducts");
+    form.append("token", state.admin.token);
+    form.append("items", JSON.stringify(bulkState.items));
+
+    const res = await fetchWithTimeout(API_URL, {
+      method: "POST",
+      body: form
+    }, 45000);
+    const json = await res.json();
+
+    if (json?.success === true) {
+      const imported = Number(json.imported || json.data?.imported || 0);
+      bulkState.backendErrors = [];
+      bulkState.summary = `Imported ${imported} products successfully.`;
+      showToast(bulkState.summary, "success");
+      await refreshProducts();
+      renderBulkProductImportSheet();
+      return;
+    }
+
+    bulkState.backendErrors = Array.isArray(json?.data?.errors)
+      ? json.data.errors
+      : [];
+    bulkState.summary = "";
+    renderBulkProductImportSheet();
+    if (isAuthError(json?.error)) {
+      showToast("Session expired. Please login again.", "warning");
+      exitAdmin({ silent: true });
+      return;
+    }
+    showToast(json?.error || "Bulk import failed", "error");
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || "Bulk import failed", "error");
+  } finally {
+    safeHideLoading();
+    state.admin.isSubmitting = false;
+    renderBulkProductImportSheet();
   }
 }
 
