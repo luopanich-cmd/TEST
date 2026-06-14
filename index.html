@@ -2748,6 +2748,11 @@ textarea.input{
   background:rgba(255,59,48,.08);
 }
 
+.bulk-data-preview-table .placeholder-row td{
+  color:rgba(235,235,245,.60);
+  text-align:center;
+}
+
 .bulk-preview-card{
   padding:12px;
   border-radius:14px;
@@ -9764,8 +9769,7 @@ function renderBulkProductImportSummary(items, errors) {
 }
 
 function renderBulkProductDataPreviewTable(items, errorsByRow) {
-  if (!items.length) return "";
-  const columns = ["productId", "name", "price", "costPrice", "stock", "status"];
+  const columns = BULK_PRODUCT_COLUMNS;
   return `
     <div class="bulk-template-table bulk-data-preview-table" aria-label="ตัวอย่างข้อมูลที่นำเข้า">
       <table>
@@ -9773,20 +9777,28 @@ function renderBulkProductDataPreviewTable(items, errorsByRow) {
           <tr>${columns.map(column => `<th>${esc(column)}</th>`).join("")}<th>สถานะ</th></tr>
         </thead>
         <tbody>
-          ${items.map((item, index) => {
-            const rowNumber = index + 1;
-            const rowErrors = errorsByRow.get(rowNumber) || [];
-            return `
-              <tr class="${rowErrors.length ? "has-error" : ""}">
-                ${columns.map(column => `<td>${esc(item[column] || "-")}</td>`).join("")}
-                <td>
-                  <span class="status-badge ${rowErrors.length ? "status-rejected" : "status-approved"} compact">
-                    ${rowErrors.length ? "พบข้อผิดพลาด" : "พร้อมนำเข้า"}
-                  </span>
-                </td>
-              </tr>
-            `;
-          }).join("")}
+          ${
+            items.length
+              ? items.map((item, index) => {
+                  const rowNumber = index + 1;
+                  const rowErrors = errorsByRow.get(rowNumber) || [];
+                  return `
+                    <tr class="${rowErrors.length ? "has-error" : ""}">
+                      ${columns.map(column => `<td>${esc(item[column] || "-")}</td>`).join("")}
+                      <td>
+                        <span class="status-badge ${rowErrors.length ? "status-rejected" : "status-approved"} compact">
+                          ${rowErrors.length ? "พบข้อผิดพลาด" : "พร้อมนำเข้า"}
+                        </span>
+                      </td>
+                    </tr>
+                  `;
+                }).join("")
+              : `
+                <tr class="placeholder-row">
+                  <td colspan="${columns.length + 1}">วาง/อัปโหลดข้อมูลเพื่อแสดงตัวอย่าง</td>
+                </tr>
+              `
+          }
         </tbody>
       </table>
     </div>
@@ -9796,6 +9808,7 @@ function renderBulkProductDataPreviewTable(items, errorsByRow) {
 function renderBulkProductImportPreview(items, errors) {
   if (!items.length && !errors.length) {
     return `
+      ${renderBulkProductDataPreviewTable(items, new Map())}
       <div class="empty-state">
         วางข้อมูล TSV หรืออัปโหลดไฟล์ แล้วกดตรวจสอบข้อมูล
       </div>
