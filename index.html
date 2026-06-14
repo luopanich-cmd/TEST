@@ -2730,6 +2730,18 @@ textarea.input{
   line-height:1.45;
 }
 
+.bulk-raw-input{
+  margin-top:12px;
+}
+
+.bulk-raw-input summary{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  color:#fff;
+  cursor:pointer;
+}
+
 .bulk-preview-list{
   display:grid;
   gap:10px;
@@ -9418,14 +9430,14 @@ function getBulkProductImportStatus(items, errors) {
   }
   if (errors.length > 0) {
     return {
-      label: "พบข้อผิดพลาด",
+      label: `พบข้อผิดพลาด ${errors.length} รายการ`,
       detail: "กรุณาตรวจสอบรายการที่มีปัญหาก่อนนำเข้า",
       type: "error"
     };
   }
   if (items.length > 0) {
     return {
-      label: "พร้อมนำเข้า",
+      label: `พร้อมนำเข้า ${items.length} รายการ`,
       detail: `ตรวจสอบแล้ว ${items.length} รายการ พร้อมนำเข้าสู่ระบบ`,
       type: "ready"
     };
@@ -9526,12 +9538,7 @@ function renderBulkProductImportSheet() {
     ${renderBulkProductTemplateTable()}
 
     <div class="form-group">
-      <label for="bulkProductImportText">วางข้อมูลจาก Excel / Google Sheets</label>
-      <textarea
-        id="bulkProductImportText"
-        class="input bulk-import-textarea"
-        placeholder="${escAttr(BULK_PRODUCT_SAMPLE)}"
-        oninput="state.admin.bulkProductImport.rawText = this.value; state.admin.bulkProductImport.backendErrors = []; state.admin.bulkProductImport.summary = ''; state.admin.bulkProductImport.importedCount = 0;">${esc(bulkState.rawText || "")}</textarea>
+      <label>วางข้อมูลจาก Excel / Google Sheets</label>
       <div class="bulk-paste-actions">
         <button class="btn btn-outline" type="button" onclick="pasteBulkProductImportFromClipboard()">
           วางจากคลิปบอร์ด
@@ -9541,15 +9548,26 @@ function renderBulkProductImportSheet() {
         </button>
       </div>
     </div>
-
-    <button class="btn btn-outline" onclick="previewBulkProductImport()">
-      ตรวจสอบข้อมูล
-    </button>
-
     ${renderBulkProductImportStatus(parsed.items, allErrors)}
     ${renderBulkProductImportSuccessCard()}
     ${renderBulkProductImportSummary(parsed.items, allErrors)}
     ${hasImportSuccess ? "" : renderBulkProductImportPreview(parsed.items, allErrors)}
+
+    <details class="bulk-raw-input">
+      <summary>แก้ไขข้อความต้นฉบับ</summary>
+      <div class="form-group">
+        <label for="bulkProductImportText">ข้อความ TSV ต้นฉบับ</label>
+        <textarea
+          id="bulkProductImportText"
+          class="input bulk-import-textarea"
+          placeholder="${escAttr(BULK_PRODUCT_SAMPLE)}"
+          oninput="state.admin.bulkProductImport.rawText = this.value; state.admin.bulkProductImport.backendErrors = []; state.admin.bulkProductImport.summary = ''; state.admin.bulkProductImport.importedCount = 0;">${esc(bulkState.rawText || "")}</textarea>
+      </div>
+    </details>
+
+    <button class="btn btn-outline" onclick="previewBulkProductImport()">
+      ตรวจสอบข้อมูล
+    </button>
 
     <div class="sheet-action-footer">
       <button class="btn btn-primary"
