@@ -661,6 +661,10 @@ function doPost(e) {
       return json({ success: true, data: result });
     }
 
+    if (action === "bulkUpdateProducts") {
+      return json(bulkUpdateProducts(e, auth));
+    }
+
     if (action === "deleteProduct") {
       const result = deleteProduct(e, auth);
       return json({ success: true, data: result });
@@ -2965,6 +2969,315 @@ function bulkAddProducts(e, auth) {
     } catch (releaseErr) {
       // Ignore release errors when lock acquisition failed before waitLock.
     }
+  }
+}
+
+function bulkUpdateProducts(e, auth) {
+  if (!auth || !auth.username) {
+    return bulkUpdateRuntimeFailure("Unauthorized");
+  }
+
+  const lock = LockService.getScriptLock();
+
+  try {
+    const parsedItems = parseBulkUpdateProductItems(e.parameter.items);
+    if (parsedItems.errors.length) {
+      return bulkUpdateValidationFailure(parsedItems.errors);
+    }
+
+    lock.waitLock(30000);
+
+    const ss = getSS();
+    const productSheet = ss.getSheetByName("Products");
+    if (!productSheet) {
+      throw new Error("Products sheet not found");
+    }
+
+    const productRows = productSheet.getDataRange().getValues();
+    const validation = validateBulkUpdateProductItems(
+      parsedItems.items,
+      productRows
+    );
+
+    if (validation.errors.length) {
+      return bulkUpdateValidationFailure(validation.errors);
+    }
+
+    const changedRows = [];
+
+    try {
+      validation.updates.forEach(update => {
+        const rowNumber = update.rowIndex + 1;
+        const originalRow = productRows[update.rowIndex].slice();
+        const nextRow = originalRow.slice();
+
+        if (update.hasOwnProperty("price")) {
+          nextRow[2] = update.price;
+        }
+        if (update.hasOwnProperty("active")) {
+          nextRow[5] = update.active;
+        }
+        if (update.hasOwnProperty("status")) {
+          nextRow[6] = update.status;
+        }
+        if (update.hasOwnProperty("costPrice")) {
+          nextRow[12] = update.costPrice;
+        }
+
+        productSheet
+          .getRange(rowNumber, 1, 1, nextRow.length)
+          .setValues([nextRow]);
+
+        changedRows.push({
+          rowNumber,
+          values: originalRow
+        });
+      });
+    } catch (err) {
+      try {
+        rollbackBulkProductUpdates(productSheet, changedRows);
+      } catch (rollbackErr) {
+        throw new Error(
+          String(err.message || err) +
+          " | Bulk update rollback failed: " +
+          String(rollbackErr.message || rollbackErr)
+        );
+      }
+      throw err;
+    }
+
+    return {
+      success: true,
+      updated: validation.updates.length,
+      failed: 0,
+      errors: []
+    };
+  } catch (err) {
+    Logger.log("bulkUpdateProducts error: " + err);
+    return bulkUpdateRuntimeFailure(
+      err && err.message ? err.message : "Bulk update failed"
+    );
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (releaseErr) {
+      // Ignore release errors when lock acquisition failed before waitLock.
+    }
+  }
+}
+
+function parseBulkUpdateProductItems(rawItems) {
+  let items;
+  try {
+    items = JSON.parse(String(rawItems || "[]"));
+  } catch (err) {
+    return {
+      items: [],
+      errors: [
+        bulkProductError(0, "", "items", "Items must be valid JSON")
+      ]
+    };
+  }
+
+  if (!Array.isArray(items)) {
+    return {
+      items: [],
+      errors: [
+        bulkProductError(0, "", "items", "Items must be an array")
+      ]
+    };
+  }
+
+  return {
+    items,
+    errors: []
+  };
+}
+
+function validateBulkUpdateProductItems(items, productRows) {
+  const errors = [];
+  const updates = [];
+  const batchSkus = new Set();
+  const allowedFields = ["productId", "price", "costPrice", "status", "active"];
+  const updateFields = ["price", "costPrice", "status", "active"];
+  const allowedStatuses = ["ready", "ready_plus", "shipping", "warehouse", "out"];
+  const productMap = new Map();
+
+  productRows.slice(1).forEach((row, index) => {
+    const productId = String(row[0] || "").trim().toUpperCase();
+    if (productId) {
+      productMap.set(productId, {
+        rowIndex: index + 1,
+        row
+      });
+    }
+  });
+
+  if (items.length === 0) {
+    errors.push(bulkProductError(1, "", "items", "At least one product update is required"));
+  }
+
+  if (items.length > 100) {
+    errors.push(bulkProductError(0, "", "items", "Batch size limit is 100 rows"));
+    return {
+      updates: [],
+      errors
+    };
+  }
+
+  items.forEach((item, index) => {
+    const rowNumber = index + 1;
+
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      errors.push(bulkProductError(rowNumber, "", "item", "Item must be an object"));
+      return;
+    }
+
+    const keys = Object.keys(item);
+    const productId = String(item.productId || "").trim().toUpperCase();
+    const update = {
+      productId
+    };
+    let hasAllowedUpdate = false;
+
+    keys.forEach(key => {
+      if (key === "stock") {
+        errors.push(bulkProductError(rowNumber, productId, key, "Stock cannot be updated by bulkUpdateProducts"));
+      } else if (allowedFields.indexOf(key) === -1) {
+        errors.push(bulkProductError(rowNumber, productId, key, "Unknown field is not allowed"));
+      }
+    });
+
+    if (!productId) {
+      errors.push(bulkProductError(rowNumber, productId, "productId", "SKU is required"));
+    } else if (batchSkus.has(productId)) {
+      errors.push(bulkProductError(rowNumber, productId, "productId", "Duplicate SKU inside update batch"));
+    } else if (!productMap.has(productId)) {
+      errors.push(bulkProductError(rowNumber, productId, "productId", "Product not found"));
+    }
+
+    if (productId) {
+      batchSkus.add(productId);
+    }
+
+    updateFields.forEach(field => {
+      if (Object.prototype.hasOwnProperty.call(item, field)) {
+        hasAllowedUpdate = true;
+      }
+    });
+
+    if (!hasAllowedUpdate) {
+      errors.push(bulkProductError(rowNumber, productId, "items", "At least one allowed field is required"));
+    }
+
+    if (Object.prototype.hasOwnProperty.call(item, "price")) {
+      const price = Number(item.price);
+      if (isBlankBulkValue(item.price) || !Number.isInteger(price) || price < 0) {
+        errors.push(bulkProductError(rowNumber, productId, "price", "Price must be an integer >= 0"));
+      } else {
+        update.price = price;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(item, "costPrice")) {
+      const costPrice = Number(item.costPrice);
+      if (isBlankBulkValue(item.costPrice) || !Number.isInteger(costPrice) || costPrice < 0) {
+        errors.push(bulkProductError(rowNumber, productId, "costPrice", "Cost price must be an integer >= 0"));
+      } else {
+        update.costPrice = costPrice;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(item, "status")) {
+      const status = String(item.status || "").trim();
+      if (!status || allowedStatuses.indexOf(status) === -1) {
+        errors.push(bulkProductError(rowNumber, productId, "status", "Invalid product status"));
+      } else {
+        update.status = status;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(item, "active")) {
+      const activeResult = parseBulkUpdateProductActive(item.active);
+      if (!activeResult.valid) {
+        errors.push(bulkProductError(rowNumber, productId, "active", "Active must be true/false or 1/0"));
+      } else {
+        update.active = activeResult.value;
+      }
+    }
+
+    if (productMap.has(productId)) {
+      update.rowIndex = productMap.get(productId).rowIndex;
+    }
+
+    updates.push(update);
+  });
+
+  return {
+    updates,
+    errors
+  };
+}
+
+function parseBulkUpdateProductActive(value) {
+  if (value === true || value === false) {
+    return {
+      valid: true,
+      value
+    };
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") {
+    return {
+      valid: true,
+      value: true
+    };
+  }
+
+  if (normalized === "false" || normalized === "0") {
+    return {
+      valid: true,
+      value: false
+    };
+  }
+
+  return {
+    valid: false,
+    value: true
+  };
+}
+
+function bulkUpdateValidationFailure(errors) {
+  return {
+    success: false,
+    error: "Bulk update validation failed",
+    data: {
+      updated: 0,
+      errors
+    }
+  };
+}
+
+function bulkUpdateRuntimeFailure(message) {
+  return {
+    success: false,
+    error: message || "Bulk update failed",
+    data: {
+      updated: 0,
+      errors: []
+    }
+  };
+}
+
+function rollbackBulkProductUpdates(productSheet, changedRows) {
+  if (!changedRows || !changedRows.length) return;
+
+  for (let i = changedRows.length - 1; i >= 0; i--) {
+    const changed = changedRows[i];
+    productSheet
+      .getRange(changed.rowNumber, 1, 1, changed.values.length)
+      .setValues([changed.values]);
   }
 }
 
