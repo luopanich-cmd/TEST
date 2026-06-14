@@ -43,6 +43,7 @@
    --motion-duration-fast: 140ms;
    --motion-duration-normal: 300ms;
    --motion-duration-slow: 360ms;
+   --motion-duration-toast: 220ms;
    --motion-ease-standard: cubic-bezier(.22,.61,.36,1);
    --motion-ease-emphasized: cubic-bezier(.2,.8,.2,1);
 
@@ -434,13 +435,18 @@ header.scrolled{
   box-sizing: border-box;
 
   transform: translateY(100%);
-  transition: transform var(--dur-sheet) var(--ease-out);
+  opacity: 0;
+  transition:
+    transform var(--dur-sheet) var(--ease-out),
+    opacity var(--motion-duration-normal) var(--motion-ease-standard);
+  will-change: transform, opacity;
 
   z-index: 101;
 }
 
 .sheet.show{
   transform: translateY(0);
+  opacity: 1;
 }
 
 body:has(.sheet.show),
@@ -582,7 +588,8 @@ button:disabled {
   gap: 8px;
   transition:
     transform var(--dur-tap) var(--ease-tap),
-    box-shadow var(--dur-tap) ease;
+    box-shadow var(--dur-tap) ease,
+    filter var(--dur-tap) ease;
 }
 
 /* Primary */
@@ -623,6 +630,8 @@ button:disabled {
 /* Interaction */
 .btn:active {
   transform: scale(var(--tap-scale-primary));
+  filter: brightness(.96);
+  box-shadow: var(--shadow-card-pressed);
 }
 
 .admin-sheet-topbar{
@@ -1660,12 +1669,16 @@ textarea:focus-visible {
   -webkit-overflow-scrolling:touch;
 
   transform: translateX(100%);
-  transition: transform var(--dur-sheet) var(--ease-out);
-  will-change: transform;
+  opacity: 0;
+  transition:
+    transform var(--dur-sheet) var(--ease-out),
+    opacity var(--motion-duration-normal) var(--motion-ease-standard);
+  will-change: transform, opacity;
 }
 
 .side-menu.show {
   transform: translateX(0);
+  opacity: 1;
 }
 
 .side-menu-topbar{
@@ -1896,7 +1909,8 @@ textarea {
   backdrop-filter: blur(18px) saturate(160%);   /* 🔴 เพิ่ม glass */
   -webkit-backdrop-filter: blur(18px) saturate(160%);
 
-  animation: toast-slide-down .25s ease;
+  animation: toast-slide-down var(--motion-duration-toast) var(--motion-ease-standard);
+  transform-origin: top center;
 }
 
 /* ===== Toast Variants ===== */
@@ -1909,11 +1923,11 @@ textarea {
 @keyframes toast-slide-down {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-8px) scale(.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -1929,6 +1943,7 @@ textarea {
   align-items: center;
   justify-content: center;
   z-index: 9999;
+  animation: loading-fade-in var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 #loading-overlay.hidden {
@@ -1944,6 +1959,23 @@ textarea {
   box-shadow: var(--shadow-float);
   text-align: center;
   min-width: 200px;
+  animation: loading-pop var(--motion-duration-normal) var(--motion-ease-standard);
+}
+
+@keyframes loading-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes loading-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .skeleton-list{
