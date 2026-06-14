@@ -329,7 +329,6 @@ function doGet(e) {
 
     // 🔓 PUBLIC ONLY
     if (action === "products") {
-      enforcePublicProductsRateLimit();
       return json({
         success: true,
         data: getProducts()
@@ -912,9 +911,6 @@ const CREATE_ORDER_RATE_LIMIT_MAX_REQUESTS_PER_BUCKET = 5;
 const CREATE_ORDER_RATE_LIMIT_GLOBAL_MAX_REQUESTS = 100;
 const CREATE_ORDER_RATE_LIMIT_WINDOW_MS = 2 * 60 * 1000;
 const CREATE_ORDER_RATE_LIMIT_KEY = "CREATE_ORDER_RATE_LIMIT";
-const PUBLIC_PRODUCTS_RATE_LIMIT_MAX_REQUESTS = 300;
-const PUBLIC_PRODUCTS_RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const PUBLIC_PRODUCTS_RATE_LIMIT_KEY = "PUBLIC_PRODUCTS_RATE_LIMIT";
 const PUBLIC_PRODUCTS_CACHE_KEY = "PUBLIC_PRODUCTS_ROWS";
 const PUBLIC_PRODUCTS_CACHE_SECONDS = 10;
 const INVALID_CANONICAL_ORDER_MAX_ATTEMPTS = 5;
@@ -956,58 +952,6 @@ function getCachedPublicProductRows() {
     Logger.log("Public products cache skipped: " + err.message);
   }
   return rows;
-}
-
-function enforcePublicProductsRateLimit() {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(5000);
-
-  try {
-    const properties = PropertiesService.getScriptProperties();
-    const rawState = properties.getProperty(
-      PUBLIC_PRODUCTS_RATE_LIMIT_KEY
-    );
-    const now = Date.now();
-    let state = null;
-
-    if (rawState) {
-      try {
-        state = JSON.parse(rawState);
-      } catch (err) {
-        state = null;
-      }
-    }
-
-    if (
-      !state ||
-      !Number.isInteger(Number(state.count)) ||
-      !Number.isFinite(Number(state.startedAt)) ||
-      now - Number(state.startedAt) >=
-        PUBLIC_PRODUCTS_RATE_LIMIT_WINDOW_MS
-    ) {
-      state = {
-        count: 0,
-        startedAt: now
-      };
-    }
-
-    if (
-      Number(state.count) >=
-      PUBLIC_PRODUCTS_RATE_LIMIT_MAX_REQUESTS
-    ) {
-      throw new Error(
-        "Too many product requests. Please try again later"
-      );
-    }
-
-    state.count = Number(state.count) + 1;
-    properties.setProperty(
-      PUBLIC_PRODUCTS_RATE_LIMIT_KEY,
-      JSON.stringify(state)
-    );
-  } finally {
-    lock.releaseLock();
-  }
 }
 
 function getInvalidCanonicalOrderRateLimitKey(requestedQtyByProduct) {
