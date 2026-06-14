@@ -8608,6 +8608,26 @@ function openProductEdit(p){
   const safeEditStock = escAttr(latestProduct.stock ?? "");
   const safeEditNote = esc(latestProduct.note || "");
   const safeEditDetailsText = esc(latestProduct.detailsText || "");
+  const editStockQty = Number(latestProduct.stock) || 0;
+  const editStatusKey = normalizeProductStatus(
+    latestProduct.status || (editStockQty <= 0 ? "out" : "ready")
+  );
+  const editStatusLabelMap = {
+    ready: "พร้อมส่ง",
+    ready_plus: "พร้อมส่ง + เพิ่มได้",
+    shipping: "อยู่ระหว่างจัดส่ง",
+    warehouse: "อยู่โกดังไทย",
+    out: "หมด"
+  };
+  const editStatusBadgeClass = editStockQty <= 0
+    ? "status-rejected"
+    : editStatusKey === "shipping"
+      ? "status-pending"
+      : editStatusKey === "warehouse"
+        ? "status-neutral"
+        : "status-approved";
+  const editPriceText = Number(latestProduct.price || 0).toLocaleString("th-TH");
+  const editCostText = Number(latestProduct.costPrice || 0).toLocaleString("th-TH");
 
   adminProductEditSheet.innerHTML = `
     <div class="sheet-topbar">
@@ -8616,6 +8636,28 @@ function openProductEdit(p){
         aria-label="ปิดหน้าแก้ไขสินค้า">×</button>
       <h3 id="adminProductEditSheetTitle">แก้ไขสินค้า</h3>
       <div aria-hidden="true"></div>
+    </div>
+
+    <div class="admin-detail-section">
+      <div class="admin-product-summary">
+        ${renderCartItemThumb({
+          productId: latestProduct.productId,
+          name: latestProduct.name || latestProduct.productId || "สินค้า",
+          image: latestProduct.image || ""
+        })}
+        <div class="admin-product-summary-main">
+          <div class="admin-detail-title">${esc(latestProduct.name || "-")}</div>
+          <div class="admin-product-summary-meta">
+            <span>SKU: ${esc(latestProduct.productId || "-")}</span>
+            <span>คงเหลือ ${editStockQty} ชิ้น</span>
+            <span class="status-badge compact ${editStatusBadgeClass}">
+              ${esc(editStatusLabelMap[editStatusKey] || "พร้อมส่ง")}
+            </span>
+            <span>ขาย ฿${editPriceText}</span>
+            <span>ต้นทุน ฿${editCostText}</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="form-group">
