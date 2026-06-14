@@ -844,6 +844,46 @@ button:disabled {
    gap:8px;
  }
 
+ .cart-with-thumb{
+   align-items:flex-start;
+ }
+
+ .cart-with-thumb > .cart-thumb{
+   flex:0 0 56px;
+ }
+
+ .cart-thumb{
+   width:56px;
+   height:56px;
+   border-radius:14px;
+   overflow:hidden;
+   background:rgba(255,255,255,.06);
+   border:1px solid rgba(255,255,255,.08);
+   display:grid;
+   place-items:center;
+ }
+
+ .cart-thumb img{
+   width:100%;
+   height:100%;
+   object-fit:cover;
+   display:block;
+ }
+
+ .cart-thumb-placeholder{
+   width:100%;
+   height:100%;
+   display:grid;
+   place-items:center;
+   color:rgba(235,235,245,.62);
+   font-size:20px;
+ }
+
+ .cart-content{
+   flex:1;
+   min-width:0;
+ }
+
  .cart-line-total{
    font-size:15px;
    font-weight:700;
@@ -4383,6 +4423,33 @@ function renderProductSheet(){
   `;
 }
   
+function getCartItemImageUrl(item) {
+  const existingImage = String(item?.image || "").trim();
+  if (existingImage) return existingImage;
+
+  const product = Array.isArray(state.products)
+    ? state.products.find(p => String(p.productId || "") === String(item?.productId || ""))
+    : null;
+  return String(product?.image || "").trim();
+}
+
+function renderCartItemThumb(item) {
+  const imageUrl = getCartItemImageUrl(item);
+  const placeholder = `<div class="cart-thumb-placeholder" aria-hidden="true">รูป</div>`;
+  if (!imageUrl) {
+    return `<div class="cart-thumb">${placeholder}</div>`;
+  }
+  return `
+    <div class="cart-thumb">
+      <img
+        src="${escAttr(imageUrl)}"
+        alt="${escAttr(item?.name || "สินค้า")}"
+        onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';">
+      <div class="cart-thumb-placeholder" aria-hidden="true" style="display:none">รูป</div>
+    </div>
+  `;
+}
+
 function renderCart(){
   cartSheet.innerHTML=`
     <div class="sheet-topbar">
@@ -4406,8 +4473,9 @@ function renderCart(){
 
   state.cart.forEach((i,idx)=>{
   cartSheet.innerHTML+=`
-    <div class="cart-item">
-      <div>
+    <div class="cart-item cart-with-thumb">
+      ${renderCartItemThumb(i)}
+      <div class="cart-content">
         <div class="name">${esc(i.name)}</div>
         <div class="cart-meta">
           รหัส: ${esc(i.productId)}
