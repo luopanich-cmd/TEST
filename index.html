@@ -39,15 +39,21 @@
    --tap-scale-icon:    .95;   /* icon circle buttons */
    --tap-scale-card:    .98;   /* cards should feel heavier */
 
-   /* Durations */
-   --dur-tap:   140ms;
-   --dur-sheet: 300ms;
-   --dur-chrome:360ms;
+   /* Motion tokens */
+   --motion-duration-fast: 140ms;
+   --motion-duration-normal: 300ms;
+   --motion-duration-slow: 360ms;
+   --motion-ease-standard: cubic-bezier(.22,.61,.36,1);
+   --motion-ease-emphasized: cubic-bezier(.2,.8,.2,1);
 
-   /* Easings (keep minimal, iOS-like) */
-   --ease-tap:   cubic-bezier(.2,.8,.2,1);
-   --ease-out:   cubic-bezier(.22,.61,.36,1);
-   --ease-chrome:cubic-bezier(.22,.61,.36,1); 
+   /* Legacy aliases */
+   --dur-tap:   var(--motion-duration-fast);
+   --dur-sheet: var(--motion-duration-normal);
+   --dur-chrome:var(--motion-duration-slow);
+
+   --ease-tap:   var(--motion-ease-emphasized);
+   --ease-out:   var(--motion-ease-standard);
+   --ease-chrome:var(--motion-ease-standard);
  }
   
  html, body {
@@ -2771,6 +2777,20 @@ const state = {
 const CART_KEY = "luopanich_cart";
 const LAST_ORDER_KEY = "luopanich_last_order"; 
 
+const MOTION = Object.freeze({
+  CARD_ENTRANCE_LIMIT: 24,
+  CARD_STAGGER_MS: 18,
+  DURATION_NORMAL_MS: 260,
+  EASING_STANDARD: "cubic-bezier(.22,.61,.36,1)"
+});
+
+function isReducedMotion() {
+  return !!(
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
 function escapeHtml(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -3984,31 +4004,32 @@ if (
     app.appendChild(pagination);
   }
 
- // Product Card Stagger Animation
-  const cards = document.querySelectorAll('.product-card');
+  // Product card entrance is intentionally limited for mobile performance.
+  if (!isReducedMotion()) {
+    const cards = Array.from(document.querySelectorAll(".product-card"))
+      .slice(0, MOTION.CARD_ENTRANCE_LIMIT);
 
-  cards.forEach((card,index)=>{
-
-    card.animate(
-      [
+    cards.forEach((card, index) => {
+      card.animate(
+        [
+          {
+            opacity: 0,
+            transform: "translateY(10px)"
+          },
+          {
+            opacity: 1,
+            transform: "translateY(0)"
+          }
+        ],
         {
-          opacity:0,
-          transform:'translateY(10px)'
-        },
-        {
-          opacity:1,
-          transform:'translateY(0)'
+          duration: MOTION.DURATION_NORMAL_MS,
+          delay: index * MOTION.CARD_STAGGER_MS,
+          easing: MOTION.EASING_STANDARD,
+          fill: "both"
         }
-      ],
-      {
-        duration:300,
-        delay:index * 25,
-        easing:'ease-out',
-        fill:'both'
-      }
-    );
-
-  });
+      );
+    });
+  }
 
 }
 
@@ -9691,8 +9712,7 @@ async function restoreAdminSessionIfValid() {
 // ================= BACK TO TOP =================
 let btnTop = null; // 🔴 must bind after DOM parsed (button is below this <script>)
 const prefersReducedMotion =
-  window.matchMedia &&
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  isReducedMotion();
 
 window.addEventListener("DOMContentLoaded", () => {
   btnTop = document.getElementById("btnTop");
