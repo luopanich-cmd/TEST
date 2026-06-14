@@ -9239,10 +9239,6 @@ function parseBulkProductImportText(rawText) {
     .split("\n")
     .filter(line => line.trim());
 
-  if (lines.length > 101) {
-    errors.push(bulkImportError(0, "", "items", "Maximum 100 product rows allowed"));
-  }
-
   const firstCells = splitTsvLine(lines[0]);
   const hasHeader = isBulkProductHeaderRow(firstCells);
   const dataLines = hasHeader ? lines.slice(1) : lines;
@@ -9251,7 +9247,12 @@ function parseBulkProductImportText(rawText) {
     : BULK_PRODUCT_COLUMNS;
   const seenSkus = new Set();
 
-  dataLines.slice(0, 100).forEach((line, index) => {
+  if (dataLines.length > 100) {
+    errors.push(bulkImportError(0, "", "items", "Maximum 100 product rows allowed"));
+    return { items, errors };
+  }
+
+  dataLines.forEach((line, index) => {
     const rowNumber = index + 1;
     const cells = splitTsvLine(line);
     const row = {};
