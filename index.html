@@ -2644,6 +2644,40 @@ textarea.input{
   white-space:pre;
 }
 
+.bulk-template-table{
+  margin:10px 0 12px;
+  overflow-x:auto;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  background:rgba(255,255,255,.04);
+}
+
+.bulk-template-table table{
+  width:100%;
+  min-width:760px;
+  border-collapse:collapse;
+  font-size:12px;
+}
+
+.bulk-template-table th,
+.bulk-template-table td{
+  padding:9px 10px;
+  border-bottom:1px solid rgba(255,255,255,.07);
+  text-align:left;
+  vertical-align:top;
+  white-space:nowrap;
+}
+
+.bulk-template-table th{
+  color:#fff;
+  background:rgba(255,255,255,.07);
+  font-weight:700;
+}
+
+.bulk-template-table tr:last-child td{
+  border-bottom:0;
+}
+
 .bulk-import-actions{
   display:grid;
   gap:10px;
@@ -2652,6 +2686,34 @@ textarea.input{
 
 .bulk-import-file-input{
   width:100%;
+}
+
+.bulk-import-status{
+  margin:12px 0;
+  padding:12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.05);
+}
+
+.bulk-import-status strong{
+  display:block;
+  margin-bottom:4px;
+}
+
+.bulk-import-success-card{
+  display:grid;
+  gap:10px;
+  margin:12px 0;
+  padding:14px;
+  border-radius:16px;
+  border:1px solid rgba(52,199,89,.35);
+  background:rgba(52,199,89,.12);
+}
+
+.bulk-import-success-actions{
+  display:grid;
+  gap:8px;
 }
 
 .bulk-import-textarea{
@@ -2826,6 +2888,11 @@ Object.assign(window, {
   submitBulkProductImport,
   downloadBulkProductTemplate,
   handleBulkProductFileUpload,
+  copyBulkProductHeader,
+  copyBulkProductSample,
+  resetBulkProductImport,
+  viewBulkProductImportProducts,
+  backToAdminMenuFromBulkImport,
   openPendingDeliverySheet,
   closePendingDeliverySheet,
   openChangePasswordSheet,
@@ -2890,7 +2957,8 @@ const state = {
       items: [],
       errors: [],
       backendErrors: [],
-      summary: ""
+      summary: "",
+      importedCount: 0
     },
     ui: {
       activeSheet: null
@@ -9159,6 +9227,7 @@ function openBulkProductImportSheet() {
   bulkState.rawText = bulkState.rawText || "";
   bulkState.backendErrors = [];
   bulkState.summary = "";
+  bulkState.importedCount = 0;
 
   renderBulkProductImportSheet();
   openOverlay(adminBulkProductImportSheet);
@@ -9166,6 +9235,40 @@ function openBulkProductImportSheet() {
 
 function closeBulkProductImportSheet() {
   closeOverlay(adminBulkProductImportSheet);
+}
+
+function getBulkProductTemplateHeader() {
+  return BULK_PRODUCT_COLUMNS.join("\t");
+}
+
+async function copyTextToClipboard(text, successMessage) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    showToast(successMessage, "success");
+  } catch (err) {
+    console.error(err);
+    showToast("คัดลอกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง", "error");
+  }
+}
+
+function copyBulkProductHeader() {
+  copyTextToClipboard(getBulkProductTemplateHeader(), "คัดลอกหัวตารางแล้ว");
+}
+
+function copyBulkProductSample() {
+  copyTextToClipboard(BULK_PRODUCT_SAMPLE, "คัดลอกแม่แบบตัวอย่างแล้ว");
 }
 
 function downloadBulkProductTemplate() {
@@ -9199,6 +9302,7 @@ function handleBulkProductFileUpload(event) {
     state.admin.bulkProductImport.rawText = String(reader.result || "");
     state.admin.bulkProductImport.backendErrors = [];
     state.admin.bulkProductImport.summary = "";
+    state.admin.bulkProductImport.importedCount = 0;
     renderBulkProductImportSheet();
     showToast("อ่านไฟล์แล้ว กรุณาตรวจสอบข้อมูลก่อนนำเข้า", "success");
   };
@@ -9206,6 +9310,123 @@ function handleBulkProductFileUpload(event) {
     showToast("ไม่สามารถอ่านไฟล์ได้ กรุณาลองใหม่อีกครั้ง", "error");
   };
   reader.readAsText(file, "UTF-8");
+}
+
+function resetBulkProductImport() {
+  const bulkState = state.admin.bulkProductImport;
+  bulkState.rawText = "";
+  bulkState.items = [];
+  bulkState.errors = [];
+  bulkState.backendErrors = [];
+  bulkState.summary = "";
+  bulkState.importedCount = 0;
+  renderBulkProductImportSheet();
+}
+
+async function viewBulkProductImportProducts() {
+  closeBulkProductImportSheet();
+  await refreshProducts();
+  showToast("อัปเดตรายการสินค้าแล้ว", "success");
+}
+
+function backToAdminMenuFromBulkImport() {
+  closeBulkProductImportSheet();
+  openMainMenu();
+}
+
+function renderBulkProductTemplateTable() {
+  const rows = BULK_PRODUCT_SAMPLE.split("\n").map(splitTsvLine);
+  const headers = rows[0] || BULK_PRODUCT_COLUMNS;
+  const samples = rows.slice(1);
+  return `
+    <div class="bulk-template-table" aria-label="แม่แบบ TSV">
+      <table>
+        <thead>
+          <tr>${headers.map(header => `<th>${esc(header)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>
+          ${samples.map(row => `
+            <tr>
+              ${headers.map((_, index) => `<td>${esc(row[index] || "")}</td>`).join("")}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function getBulkProductImportStatus(items, errors) {
+  if (state.admin.isSubmitting) {
+    return {
+      label: "กำลังนำเข้าสินค้า...",
+      detail: "กรุณารอสักครู่ ระบบกำลังส่งข้อมูลไปยังหลังบ้าน",
+      type: "loading"
+    };
+  }
+  if (state.admin.bulkProductImport.summary) {
+    return {
+      label: "นำเข้าสินค้าสำเร็จ",
+      detail: state.admin.bulkProductImport.summary,
+      type: "success"
+    };
+  }
+  if (errors.length > 0) {
+    return {
+      label: "พบข้อผิดพลาด",
+      detail: "กรุณาตรวจสอบรายการที่มีปัญหาก่อนนำเข้า",
+      type: "error"
+    };
+  }
+  if (items.length > 0) {
+    return {
+      label: "พร้อมนำเข้า",
+      detail: `ตรวจสอบแล้ว ${items.length} รายการ พร้อมนำเข้าสู่ระบบ`,
+      type: "ready"
+    };
+  }
+  return {
+    label: "ยังไม่ได้ตรวจสอบข้อมูล",
+    detail: "วางข้อมูลหรืออัปโหลดไฟล์ แล้วกดตรวจสอบข้อมูล",
+    type: "idle"
+  };
+}
+
+function renderBulkProductImportStatus(items, errors) {
+  const status = getBulkProductImportStatus(items, errors);
+  const badgeClass = status.type === "success" || status.type === "ready"
+    ? "status-approved"
+    : status.type === "error"
+      ? "status-rejected"
+      : "status-pending";
+  return `
+    <div class="bulk-import-status" role="status" aria-live="polite">
+      <span class="status-badge ${badgeClass} compact">${esc(status.label)}</span>
+      <div class="helper-text" style="margin-top:8px">${esc(status.detail)}</div>
+    </div>
+  `;
+}
+
+function renderBulkProductImportSuccessCard() {
+  const imported = Number(state.admin.bulkProductImport.importedCount || 0);
+  if (!state.admin.bulkProductImport.summary) return "";
+  return `
+    <div class="bulk-import-success-card" role="status" aria-live="polite">
+      <strong>นำเข้าสินค้าสำเร็จ</strong>
+      <div>นำเข้าสำเร็จ ${imported} รายการ</div>
+      <div class="bulk-import-success-actions">
+        <button class="btn btn-primary" type="button" onclick="viewBulkProductImportProducts()">
+          ดูรายการสินค้า
+        </button>
+        <button class="btn btn-outline" type="button" onclick="resetBulkProductImport()">
+          นำเข้าเพิ่ม
+        </button>
+        <button class="btn btn-secondary" type="button" onclick="backToAdminMenuFromBulkImport()">
+          กลับเมนูแอดมิน
+        </button>
+      </div>
+    </div>
+  `;
 }
 
 function renderBulkProductImportSheet() {
@@ -9219,6 +9440,7 @@ function renderBulkProductImportSheet() {
     : [];
   const allErrors = parsed.errors.concat(backendErrors);
   const canSubmit = parsed.items.length > 0 && allErrors.length === 0;
+  const hasImportSuccess = Boolean(bulkState.summary);
 
   adminBulkProductImportSheet.innerHTML = `
     <div class="sheet-topbar">
@@ -9238,6 +9460,12 @@ function renderBulkProductImportSheet() {
       <button class="btn btn-outline" type="button" onclick="downloadBulkProductTemplate()">
         ดาวน์โหลดแม่แบบ
       </button>
+      <button class="btn btn-outline" type="button" onclick="copyBulkProductHeader()">
+        คัดลอกหัวตาราง
+      </button>
+      <button class="btn btn-outline" type="button" onclick="copyBulkProductSample()">
+        คัดลอกแม่แบบตัวอย่าง
+      </button>
       <div class="form-group">
         <label for="bulkProductImportFile">อัปโหลดไฟล์ TSV</label>
         <input
@@ -9250,7 +9478,7 @@ function renderBulkProductImportSheet() {
       </div>
     </div>
 
-    <div class="bulk-import-template">${esc(BULK_PRODUCT_SAMPLE)}</div>
+    ${renderBulkProductTemplateTable()}
 
     <div class="form-group">
       <label for="bulkProductImportText">วางข้อมูลจาก Excel / Google Sheets</label>
@@ -9258,23 +9486,21 @@ function renderBulkProductImportSheet() {
         id="bulkProductImportText"
         class="input bulk-import-textarea"
         placeholder="${escAttr(BULK_PRODUCT_SAMPLE)}"
-        oninput="state.admin.bulkProductImport.rawText = this.value; state.admin.bulkProductImport.backendErrors = []; state.admin.bulkProductImport.summary = '';">${esc(bulkState.rawText || "")}</textarea>
+        oninput="state.admin.bulkProductImport.rawText = this.value; state.admin.bulkProductImport.backendErrors = []; state.admin.bulkProductImport.summary = ''; state.admin.bulkProductImport.importedCount = 0;">${esc(bulkState.rawText || "")}</textarea>
     </div>
 
     <button class="btn btn-outline" onclick="previewBulkProductImport()">
       ตรวจสอบข้อมูล
     </button>
 
-    ${bulkState.summary ? `
-      <div class="success-note" role="status">${esc(bulkState.summary)}</div>
-    ` : ""}
-
+    ${renderBulkProductImportStatus(parsed.items, allErrors)}
+    ${renderBulkProductImportSuccessCard()}
     ${renderBulkProductImportSummary(parsed.items, allErrors)}
-    ${renderBulkProductImportPreview(parsed.items, allErrors)}
+    ${hasImportSuccess ? "" : renderBulkProductImportPreview(parsed.items, allErrors)}
 
     <div class="sheet-action-footer">
       <button class="btn btn-primary"
-        ${canSubmit && !state.admin.isSubmitting ? "" : "disabled"}
+        ${canSubmit && !state.admin.isSubmitting && !hasImportSuccess ? "" : "disabled"}
         onclick="submitBulkProductImport(this)">
         ${state.admin.isSubmitting ? "กำลังนำเข้า..." : "นำเข้าสินค้า"}
       </button>
@@ -9292,6 +9518,7 @@ function previewBulkProductImport() {
   }
   state.admin.bulkProductImport.backendErrors = [];
   state.admin.bulkProductImport.summary = "";
+  state.admin.bulkProductImport.importedCount = 0;
   renderBulkProductImportSheet();
 }
 
@@ -9562,6 +9789,7 @@ async function submitBulkProductImport(btn) {
     if (json?.success === true) {
       const imported = Number(json.imported || json.data?.imported || 0);
       bulkState.backendErrors = [];
+      bulkState.importedCount = imported;
       bulkState.summary = `นำเข้าสินค้าสำเร็จ ${imported} รายการ`;
       showToast(bulkState.summary, "success");
       await refreshProducts();
@@ -9573,6 +9801,7 @@ async function submitBulkProductImport(btn) {
       ? json.data.errors
       : [];
     bulkState.summary = "";
+    bulkState.importedCount = 0;
     renderBulkProductImportSheet();
     if (isAuthError(json?.error)) {
       showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
