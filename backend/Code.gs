@@ -557,6 +557,10 @@ function doPost(e) {
       return json({ success: true, data: result });
     }
 
+    if (action === "bulkAddProducts") {
+      return json(bulkAddProducts(e, auth));
+    }
+
     /* ========= ADMIN READ ========= */
     if (action === "orders") {
       return json({
@@ -2827,6 +2831,371 @@ function addProduct(e, auth) {
     };
   } finally {
     lock.releaseLock();
+  }
+}
+
+function bulkAddProducts(e, auth) {
+  if (!auth || !auth.username) {
+    return bulkRuntimeFailure("Unauthorized");
+  }
+
+  const by = auth.username;
+  const lock = LockService.getScriptLock();
+
+  try {
+    const parsedItems = parseBulkProductItems(e.parameter.items);
+    if (parsedItems.errors.length) {
+      return {
+        success: false,
+        error: "Bulk import validation failed",
+        data: {
+          imported: 0,
+          errors: parsedItems.errors
+        }
+      };
+    }
+
+    const items = parsedItems.items;
+
+    lock.waitLock(30000);
+
+    const ss = getSS();
+    const productSheet = ss.getSheetByName("Products");
+    if (!productSheet) {
+      throw new Error("Products sheet not found");
+    }
+
+    const logSheet = ss.getSheetByName("stock_logs");
+    if (!logSheet) {
+      throw new Error("stock_logs sheet not found");
+    }
+
+    const productRows = productSheet.getDataRange().getValues();
+    const existingSkus = new Set(
+      productRows
+        .slice(1)
+        .map(row => String(row[0] || "").trim().toUpperCase())
+        .filter(Boolean)
+    );
+
+    const validation = validateBulkProductItems(items, existingSkus);
+    if (validation.errors.length) {
+      return {
+        success: false,
+        error: "Bulk import validation failed",
+        data: {
+          imported: 0,
+          errors: validation.errors
+        }
+      };
+    }
+
+    const createdProductIds = [];
+    const createdLogIds = [];
+    const createdAt = new Date();
+
+    try {
+      validation.products.forEach(product => {
+        productSheet.appendRow([
+          product.productId,
+          product.name,
+          product.price,
+          product.stock,
+          product.image,
+          product.active,
+          product.status,
+          createdAt,
+          by,
+          product.note,
+          product.detailsText,
+          product.compareImages,
+          product.costPrice
+        ]);
+        createdProductIds.push(product.productId);
+      });
+
+      validation.products.forEach(product => {
+        const logId = "LOG-" + Utilities.getUuid();
+        logSheet.appendRow([
+          logId,
+          product.productId,
+          "CREATE",
+          product.stock,
+          0,
+          product.stock,
+          by,
+          "",
+          "BULK_CREATE_PRODUCT",
+          new Date()
+        ]);
+        createdLogIds.push(logId);
+      });
+    } catch (err) {
+      try {
+        rollbackBulkProductImport(
+          productSheet,
+          logSheet,
+          createdProductIds,
+          createdLogIds
+        );
+      } catch (rollbackErr) {
+        throw new Error(
+          String(err.message || err) +
+          " | Bulk import rollback failed: " +
+          String(rollbackErr.message || rollbackErr)
+        );
+      }
+      throw err;
+    }
+
+    return {
+      success: true,
+      imported: validation.products.length,
+      failed: 0,
+      errors: []
+    };
+  } catch (err) {
+    Logger.log("bulkAddProducts error: " + err);
+    return bulkRuntimeFailure(
+      err && err.message ? err.message : "Bulk import failed"
+    );
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (releaseErr) {
+      // Ignore release errors when lock acquisition failed before waitLock.
+    }
+  }
+}
+
+function parseBulkProductItems(rawItems) {
+  let items;
+  try {
+    items = JSON.parse(String(rawItems || "[]"));
+  } catch (err) {
+    return {
+      items: [],
+      errors: [
+        bulkProductError(0, "", "items", "Items must be valid JSON")
+      ]
+    };
+  }
+
+  if (!Array.isArray(items)) {
+    return {
+      items: [],
+      errors: [
+        bulkProductError(0, "", "items", "Items must be an array")
+      ]
+    };
+  }
+
+  return {
+    items,
+    errors: []
+  };
+}
+
+function validateBulkProductItems(items, existingSkus) {
+  const errors = [];
+  const products = [];
+  const batchSkus = new Set();
+
+  if (items.length === 0) {
+    errors.push(bulkProductError(1, "", "items", "At least one product is required"));
+  }
+
+  if (items.length > 100) {
+    errors.push(bulkProductError(0, "", "items", "Batch size limit is 100 rows"));
+  }
+
+  items.slice(0, 100).forEach((item, index) => {
+    const rowNumber = index + 1;
+    const productId = String(item && item.productId || "").trim().toUpperCase();
+    const name = String(item && item.name || "").trim();
+    const rawPrice = item ? item.price : "";
+    const rawCostPrice = item ? item.costPrice : "";
+    const rawStock = item ? item.stock : "";
+    const price = Number(rawPrice);
+    const costPrice = Number(rawCostPrice);
+    const stock = Number(rawStock);
+    const rawStatus = String(item && item.status || "").trim();
+    const image = String(item && item.image || "").trim();
+    const note = String(item && item.note || "").trim();
+    const detailsText = String(item && item.detailsText || "").trim();
+    const compareImages = String(item && item.compareImages || "").trim();
+    const activeResult = parseBulkProductActive(item ? item.active : undefined);
+    const allowedStatuses = ["ready", "ready_plus", "shipping", "warehouse", "out"];
+    let status = rawStatus;
+
+    if (!productId) {
+      errors.push(bulkProductError(rowNumber, productId, "productId", "SKU is required"));
+    } else if (batchSkus.has(productId)) {
+      errors.push(bulkProductError(rowNumber, productId, "productId", "Duplicate SKU inside import batch"));
+    } else if (existingSkus.has(productId)) {
+      errors.push(bulkProductError(rowNumber, productId, "productId", "SKU already exists"));
+    }
+
+    if (productId) {
+      batchSkus.add(productId);
+    }
+
+    if (!name) {
+      errors.push(bulkProductError(rowNumber, productId, "name", "Product name is required"));
+    }
+
+    if (isBlankBulkValue(rawPrice) || !Number.isInteger(price) || price < 0) {
+      errors.push(bulkProductError(rowNumber, productId, "price", "Price must be an integer >= 0"));
+    }
+
+    if (isBlankBulkValue(rawCostPrice) || !Number.isInteger(costPrice) || costPrice < 0) {
+      errors.push(bulkProductError(rowNumber, productId, "costPrice", "Cost price must be an integer >= 0"));
+    }
+
+    if (isBlankBulkValue(rawStock) || !Number.isInteger(stock) || stock < 0) {
+      errors.push(bulkProductError(rowNumber, productId, "stock", "Stock must be an integer >= 0"));
+    }
+
+    if (!status) {
+      errors.push(bulkProductError(rowNumber, productId, "status", "Status is required"));
+    } else if (allowedStatuses.indexOf(status) === -1) {
+      errors.push(bulkProductError(rowNumber, productId, "status", "Invalid product status"));
+    }
+
+    if (!activeResult.valid) {
+      errors.push(bulkProductError(rowNumber, productId, "active", "Active must be true/false or 1/0"));
+    }
+
+    if (image && !/^https?:\/\//i.test(image)) {
+      errors.push(bulkProductError(rowNumber, productId, "image", "Image must be an http/https URL"));
+    }
+
+    if (compareImages && !compareImages.split(",").every(isHttpUrlText)) {
+      errors.push(bulkProductError(rowNumber, productId, "compareImages", "Compare images must be comma-separated http/https URLs"));
+    }
+
+    if (note.length > 2000) {
+      errors.push(bulkProductError(rowNumber, productId, "note", "Note must be 2000 characters or fewer"));
+    }
+
+    if (detailsText.length > 5000) {
+      errors.push(bulkProductError(rowNumber, productId, "detailsText", "Details text must be 5000 characters or fewer"));
+    }
+
+    if (Number.isInteger(stock) && stock === 0) {
+      status = "out";
+    }
+
+    products.push({
+      productId,
+      name,
+      price,
+      costPrice,
+      stock,
+      image,
+      active: activeResult.value,
+      status,
+      note,
+      detailsText,
+      compareImages
+    });
+  });
+
+  return {
+    products,
+    errors
+  };
+}
+
+function parseBulkProductActive(value) {
+  if (value === undefined || value === null || value === "") {
+    return {
+      valid: true,
+      value: true
+    };
+  }
+
+  if (value === true || value === false) {
+    return {
+      valid: true,
+      value
+    };
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") {
+    return {
+      valid: true,
+      value: true
+    };
+  }
+
+  if (normalized === "false" || normalized === "0") {
+    return {
+      valid: true,
+      value: false
+    };
+  }
+
+  return {
+    valid: false,
+    value: true
+  };
+}
+
+function isBlankBulkValue(value) {
+  return value === undefined ||
+    value === null ||
+    String(value).trim() === "";
+}
+
+function isHttpUrlText(value) {
+  const text = String(value || "").trim();
+  return !text || /^https?:\/\//i.test(text);
+}
+
+function bulkProductError(row, productId, field, message) {
+  return {
+    row,
+    productId,
+    field,
+    message
+  };
+}
+
+function bulkRuntimeFailure(message) {
+  return {
+    success: false,
+    error: message || "Bulk import failed",
+    data: {
+      imported: 0,
+      errors: []
+    }
+  };
+}
+
+function rollbackBulkProductImport(productSheet, logSheet, productIds, logIds) {
+  if (logIds && logIds.length) {
+    const logIdSet = new Set(logIds);
+    const logRows = logSheet.getDataRange().getValues();
+    for (let i = logRows.length - 1; i >= 1; i--) {
+      if (logIdSet.has(String(logRows[i][0] || "").trim())) {
+        logSheet.deleteRow(i + 1);
+      }
+    }
+  }
+
+  if (productIds && productIds.length) {
+    const productIdSet = new Set(
+      productIds.map(id => String(id || "").trim().toUpperCase())
+    );
+    const productRows = productSheet.getDataRange().getValues();
+    for (let i = productRows.length - 1; i >= 1; i--) {
+      const productId = String(productRows[i][0] || "").trim().toUpperCase();
+      if (productIdSet.has(productId)) {
+        productSheet.deleteRow(i + 1);
+      }
+    }
   }
 }
 
