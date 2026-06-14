@@ -1881,6 +1881,27 @@ textarea {
   margin-top:4px;
 }
 
+.timeline-card-with-thumb,
+.timeline-product-row{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+}
+
+.timeline-main{
+  flex:1;
+  min-width:0;
+}
+
+.timeline-product-row{
+  padding:10px 0;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.timeline-product-row:last-child{
+  border-bottom:0;
+}
+
 .timeline-muted{
   color:#888;
 }
@@ -6035,7 +6056,8 @@ async function openStockTimeline(force = false) {
 
     orderMap[orderRef].items.push({
       productId: l.productId,
-      productName: l.productName || l.name || "",
+      productName: l.productName || l.name || matchedOrderItem?.name || "",
+      image: l.image || matchedOrderItem?.image || "",
       qty: Math.abs(Number(l.qty || 0)),
       before: l.before,
       after: l.after,
@@ -6074,6 +6096,7 @@ async function openStockTimeline(force = false) {
         type: l.type,
         productId: l.productId,
         productName: l.productName || l.name || "",
+        image: l.image || "",
         qty: l.qty,
         before: l.before,
         after: l.after,
@@ -6114,18 +6137,29 @@ async function openStockTimeline(force = false) {
                     </div>                    
 
                     ${t.items.map(i => `
-                      <div class="timeline-row">
-                        ${esc(i.productId)}
-                        ${i.productName ? ` — ${esc(i.productName)}` : ""}
-                        x ${Number(i.qty || 0)}
-                        ${
-                          Number.isFinite(Number(i.before)) &&
-                          Number.isFinite(Number(i.after))
-                            ? `<span class="timeline-muted">
-                                (${Number(i.before)} → ${Number(i.after)})
-                              </span>`
-                            : ""
-                        }
+                      <div class="timeline-product-row">
+                        ${renderCartItemThumb({
+                          productId: i.productId,
+                          name: i.productName || i.productId || "สินค้า",
+                          image: i.image || ""
+                        })}
+                        <div class="timeline-main">
+                          <div class="timeline-row">
+                            <strong>${esc(i.productId)}</strong>
+                            ${i.productName ? ` — ${esc(i.productName)}` : ""}
+                          </div>
+                          <div class="timeline-row">
+                            จำนวนที่เปลี่ยน: -${Number(i.qty || 0)}
+                            ${
+                              Number.isFinite(Number(i.before)) &&
+                              Number.isFinite(Number(i.after))
+                                ? `<span class="timeline-muted">
+                                    · สต็อก ${Number(i.before)} → ${Number(i.after)}
+                                  </span>`
+                                : ""
+                            }
+                          </div>
+                        </div>
                       </div>
                     `).join("")}
 
@@ -6188,25 +6222,42 @@ async function openStockTimeline(force = false) {
                 ADJUST: { text: "✏️ ปรับสต๊อก", class: "tag-adjust" }
               };
 
+              typeMap.OUT = { text: "ลดสต็อก", class: "tag-out" };
+
               const cfg = typeMap[t.type] || { text: t.type, class: "" };
 
               return `
                 <div class="card">
-                  <div class="timeline-tag ${escAttr(cfg.class)}">
-                    ${esc(cfg.text)}
-                  </div>
+                  <div class="timeline-card-with-thumb">
+                    ${renderCartItemThumb({
+                      productId: t.productId,
+                      name: t.productName || t.productId || "สินค้า",
+                      image: t.image || ""
+                    })}
+                    <div class="timeline-main">
+                      <div class="timeline-tag ${escAttr(cfg.class)}">
+                        ${esc(cfg.text)}
+                      </div>
 
-                  <div class="timeline-row">
-                    ${esc(t.productId)}
-                    ${t.productName ? ` — ${esc(t.productName)}` : ""}
-                    ${Number.isFinite(Number(t.qty)) ? ` x ${Math.abs(Number(t.qty))}` : ""}
-                    ${
-                      Number.isFinite(Number(t.before)) &&
-                      Number.isFinite(Number(t.after))
-                        ? ` (${Number(t.before)} → ${Number(t.after)})`
-                        : ""
-                    }
-                  </div>
+                      <div class="timeline-row">
+                        <strong>${esc(t.productId)}</strong>
+                        ${t.productName ? ` — ${esc(t.productName)}` : ""}
+                      </div>
+                      <div class="timeline-row">
+                        ${
+                          Number.isFinite(Number(t.qty))
+                            ? `จำนวนที่เปลี่ยน: ${Number(t.qty) > 0 ? "+" : ""}${Number(t.qty)}`
+                            : ""
+                        }
+                        ${
+                          Number.isFinite(Number(t.before)) &&
+                          Number.isFinite(Number(t.after))
+                            ? `<span class="timeline-muted">
+                                · สต็อก ${Number(t.before)} → ${Number(t.after)}
+                              </span>`
+                            : ""
+                        }
+                      </div>
 
                   ${
                     t.note
@@ -6236,10 +6287,12 @@ async function openStockTimeline(force = false) {
                       : ""
                   }
 
-                  <div style="font-size:12px;color:#888;margin-top:6px">
-                    ${t.time.toLocaleDateString("th-TH")}
-                    ${t.time.toLocaleTimeString("th-TH")}
-                    · โดย ${esc(t.by)}
+                      <div style="font-size:12px;color:#888;margin-top:6px">
+                        ${t.time.toLocaleDateString("th-TH")}
+                        ${t.time.toLocaleTimeString("th-TH")}
+                        · โดย ${esc(t.by)}
+                      </div>
+                    </div>
                   </div>
                 </div>
               `;
