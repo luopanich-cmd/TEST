@@ -6326,8 +6326,9 @@ adminOrderSheet.innerHTML = `
       <div class="admin-detail-title">รายการสินค้า</div>
       <div class="admin-item-list">
     ${items.map(i => `
-      <div class="cart-item">
-   <div>
+      <div class="cart-item cart-with-thumb">
+   ${renderCartItemThumb(i)}
+   <div class="cart-content">
      <div class="name">${esc(i.name)}</div>
      <div class="cart-meta">SKU: ${esc(i.productId || "-")}</div>
      <div class="cart-qty">จำนวน ${Number(i.qty) || 0}</div>
