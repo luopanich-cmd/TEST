@@ -213,13 +213,17 @@ header.scrolled{
   font-size:12px;
   font-weight:700;
   letter-spacing:.2px;
-  background: rgba(255,59,48,.88);
+  background: #0066cc;
   border: 1px solid rgba(255,255,255,.28);
   box-shadow:
     0 10px 24px rgba(0,0,0,.14),
     inset 0 1px 0 rgba(255,255,255,.35);
   margin-left:8px;
   flex-shrink:0;   
+  }
+
+  .badge-count{
+    background:#d70015;
   }
   .container{padding:16px;display:grid;gap:16px;}
 
@@ -436,7 +440,7 @@ button:disabled {
   min-height:44px;
   padding:6px 12px;
   border-radius:10px;
-  background:#ff3b30;
+  background:#d70015;
   color:#fff;
   border:none;
 
@@ -474,26 +478,33 @@ button:disabled {
 
 /* Primary */
 .btn-primary {
-  background: #007aff;
+  background: #0066cc;
   color: #fff;
 }
 
-/* Secondary (soft green) */
+/* Secondary / neutral utility */
 .btn-secondary {
-  background: #34c759;
+  background: rgba(72,72,74,.92);
+  color: #f5f5f7;
+  border: 1px solid rgba(255,255,255,.10);
+}
+
+/* Success / completed action */
+.btn-success {
+  background: #1f7a35;
   color: #fff;
 }
 
-/* Outline (cancel / back) */
+/* Outline / low-emphasis action */
 .btn-outline {
-  background: rgba(44,44,46,.90);
+  background: rgba(44,44,46,.58);
   color: #f5f5f7;
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.16);
 }
 
 /* Danger (logout / destructive) */
 .btn-danger{
-  background:#ff3b30;
+  background:#d70015;
   color:#fff;
 }
 .btn-danger:active{
@@ -1246,9 +1257,50 @@ textarea:focus-visible {
   gap: 4px;
 }
 
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: .1px;
+}
+
+.status-pending,
+.status-open {
+  color: #ffd60a;
+  background: rgba(255,214,10,.14);
+  border-color: rgba(255,214,10,.28);
+}
+
+.status-approved,
+.status-closed {
+  color: #63d471;
+  background: rgba(52,199,89,.14);
+  border-color: rgba(52,199,89,.26);
+}
+
+.status-rejected {
+  color: #ff6961;
+  background: rgba(255,59,48,.14);
+  border-color: rgba(255,59,48,.28);
+}
+
+.status-neutral {
+  color: rgba(245,245,247,.82);
+  background: rgba(142,142,147,.14);
+  border-color: rgba(142,142,147,.24);
+}
+
  .status.ready{
-  background: rgba(52,199,89,.15);
-  color:#34c759;
+  background: rgba(52,199,89,.16);
+  color:#63d471;
+  border: 1px solid rgba(52,199,89,.24);
 }
 /* พร้อมส่ง */
 .status.ready::before{
@@ -1290,25 +1342,29 @@ textarea:focus-visible {
  
  .status.ready_plus {
    background: rgba(52,199,89,.22);
-   color: #34c759;
+   color: #7ee787;
+   border: 1px solid rgba(52,199,89,.32);
  }
  
 /* อยู่ระหว่างจัดส่ง */
 .status.shipping {
   background: rgba(0,122,255,.15);
-  color: #007aff;
+  color: #64b5ff;
+  border: 1px solid rgba(10,132,255,.26);
 }
 
 /* อยู่โกดังไทย */
 .status.warehouse {
   background: rgba(90,140,255,.18);
-  color: #8fb2ff;
+  color: #a9c3ff;
+  border: 1px solid rgba(90,140,255,.28);
 }
 
 /* หมด */
 .status.out {
   background: rgba(255,59,48,.15);
-  color: #ff3b30;
+  color: #ff6961;
+  border: 1px solid rgba(255,59,48,.28);
 }
 
 
@@ -1318,15 +1374,20 @@ textarea:focus-visible {
   margin-top: 16px;
 }
 
+.admin-action .btn {
+  flex: 1;
+  width: auto;
+}
+
 .btn-approve {
   flex: 1;
-  background: #007aff;
+  background: #1f7a35;
   color: #fff;
 }
 
 .btn-reject {
   flex: 1;
-  background: #ff3b30;
+  background: #d70015;
   color: #fff;
 }
 
@@ -2234,7 +2295,7 @@ textarea.input{
 }
 
 .btn-primary{
-  background:#0A84FF;
+  background:#0066cc;
   color:#fff;
   border:none;
 }
@@ -2537,7 +2598,7 @@ function renderLastOrderSheet() {
       onclick="exportOrderPrint()">
       ดาวน์โหลดใบสั่งซื้อ
     </button>
-    <button class="btn btn-secondary"
+    <button class="btn btn-outline"
       style="margin-top:8px"
       onclick="
         state.ui.backdropLocked = false;
@@ -3437,7 +3498,7 @@ function closeImageViewer(ev){
          : ""
      }
 
-<button class="btn btn-secondary product-info-close-btn"
+<button class="btn btn-outline product-info-close-btn"
    onclick="closeProductInfoSheet()">
    ปิด
  </button>
@@ -5038,7 +5099,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
                   onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})"
                   onkeydown="handleKeyboardActivation(event, this)">
                   <div class="name">${esc(o.orderId)}</div>
-                  <div>Status: ${esc(o.status)}</div>
+                  <div class="status-badge status-pending">${esc(o.status)}</div>
                   <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
  <div class="stock">
    วันที่:
@@ -5133,7 +5194,7 @@ ${
               onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})"
               onkeydown="handleKeyboardActivation(event, this)">
               <div class="name">${esc(o.orderId)}</div>
-              <div>Status: ${esc(o.status)}</div>
+              <div class="status-badge status-approved">${esc(o.status)}</div>
               <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
 <div class="stock">
   วันที่:
@@ -5171,13 +5232,13 @@ ${
         ไม่สามารถโหลดข้อมูลแดชบอร์ดได้
       </div>
 
-      <button class="btn btn-secondary"
+      <button class="btn btn-primary"
         style="width:100%;margin-top:16px"
         onclick="allowOpenOrders = true; openAdminDashboard('SUMMARY', true)">
         🔄 ลองใหม่
       </button>
 
-      <button class="btn"
+      <button class="btn btn-outline"
         style="width:100%;margin-top:8px"
         onclick="finishAdminAction({ refresh:false })">
         ← กลับ
@@ -5387,7 +5448,7 @@ async function openStockTimeline(force = false) {
     adminStockSheet.innerHTML = `
       <h3 id="adminStockSheetTitle">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
 
-      <button class="btn btn-secondary"
+      <button class="btn btn-outline"
         style="width:100%;margin-bottom:12px"
         onclick="finishAdminAction({ refresh:false })">
         ← กลับ
@@ -5589,6 +5650,12 @@ function openAdminOrder(orderId){
     : [];
 
   const isPending = order.status === "PENDING";
+  const normalizedOrderStatus = String(order.status || "").toUpperCase();
+  const orderStatusClass = {
+    PENDING: "status-pending",
+    APPROVED: "status-approved",
+    REJECTED: "status-rejected"
+  }[normalizedOrderStatus] || "status-neutral";
 
 adminOrderSheet.innerHTML = `
   <button
@@ -5652,19 +5719,21 @@ adminOrderSheet.innerHTML = `
     `).join("")}
 
     <div class="total">Total: ฿${Number(order.total) || 0}</div>
-    <div style="margin-top:8px;color:rgba(235,235,245,.72);font-size:14px">
-      สถานะ: ${esc(order.status)}
+    <div style="margin-top:8px">
+      <span class="status-badge ${orderStatusClass}">
+        ${esc(order.status)}
+      </span>
     </div>
 
     ${
       isPending
         ? `
           <div class="admin-action">
-            <button class="btn btn-approve" onclick="handleApprove()">
+            <button class="btn btn-success" onclick="handleApprove()">
               Approve
             </button>
 
-            <button class="btn btn-reject" onclick="handleReject()">
+            <button class="btn btn-danger" onclick="handleReject()">
               Reject
             </button>
           </div>
@@ -6700,7 +6769,7 @@ function openStockAction(p){
 
     <div class="sheet-action-footer">
       <button
-        class="btn btn-secondary"
+        class="btn btn-success"
         onclick="submitStockIn()">
         ➕ รับเข้า (IN)
       </button>
@@ -6914,16 +6983,12 @@ container.innerHTML =
    </div>
 
    <div
-     style="
-       font-size:13px;
-       margin-top:4px;
-       color:
-       ${
-         poStatus[po] > 0
-           ? "#ffcc00"
-           : "#34c759"
-       };
-     ">
+     class="status-badge ${
+       poStatus[po] > 0
+         ? "status-open"
+         : "status-closed"
+     }"
+     style="margin-top:6px">
 
      ${
        poStatus[po] > 0
@@ -6991,8 +7056,11 @@ ${
  ${
    item.status === "OPEN"
      ? `
+     <div class="status-badge status-open" style="margin-top:10px">
+       OPEN
+     </div>
      <button
-       class="btn btn-secondary"
+       class="btn btn-success"
        style="
          margin-top:12px;
          width:100%;
@@ -7006,8 +7074,8 @@ ${
      </button>
      `
      : `
-     <div class="stock">
-       ✅ CLOSED
+     <div class="status-badge status-closed" style="margin-top:10px">
+       CLOSED
      </div>
      `
  }
@@ -7069,7 +7137,7 @@ async function markPendingDelivered(
      </button>
 
      <button
-       class="btn btn-secondary"
+       class="btn btn-success"
        onclick="
          closeOverlay(confirmSheet);
          confirmClosePendingDelivery(
@@ -7212,7 +7280,7 @@ function openMainMenu(triggerEl){
                ${
                  hasLastOrder
                    ? `
-                       <button class="btn btn-primary"
+                       <button class="btn btn-secondary"
                          onclick="closeMainMenu(); reopenLastOrderSheet();">
                          🧾 บิลล่าสุด
                        </button>
@@ -7227,7 +7295,7 @@ function openMainMenu(triggerEl){
 
                 <button class="btn btn-secondary"
                   onclick="closeMainMenu(); handleOpenPendingOrders();">
-                  📦 Pending Orders ${pendingCount > 0 ? `<span class="badge">${pendingCount}</span>` : ``}
+                  📦 Pending Orders ${pendingCount > 0 ? `<span class="badge badge-count">${pendingCount}</span>` : ``}
                 </button>
 
                 <button class="btn btn-secondary"
