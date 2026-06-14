@@ -329,6 +329,7 @@ function doGet(e) {
 
     // 🔓 PUBLIC ONLY
     if (action === "products") {
+      enforcePublicProductsRateLimit();
       return json({
         success: true,
         data: getProducts()
@@ -354,15 +355,7 @@ function doGet(e) {
 function getProducts() {
   // 🔒 FIX: Web App ต้องอ้างอิง Spreadsheet แบบชัดเจน
   const SPREADSHEET_ID = "1xeNVv2yLADoxuZQwYBEZNvlZnt9CKvJ40RLTwNOrQfU";
-  const sheet = SpreadsheetApp
-    .openById(SPREADSHEET_ID)
-    .getSheetByName("Products");
-
-  if (!sheet) {
-    return [];
-  }
-
-  const rows = sheet.getDataRange().getValues();
+  const rows = getCachedPublicProductRows();
 
   // ❌ ไม่มีข้อมูลจริง (มีแต่ header)
   if (rows.length < 2) {
@@ -528,7 +521,17 @@ function doPost(e) {
 
       const requestedQtyByProduct =
         validateCreateOrderRequestStructure(orderData);
-      preflightCreateOrderCanonical(requestedQtyByProduct);
+
+      enforceInvalidCanonicalOrderRateLimit(requestedQtyByProduct);
+
+      try {
+        preflightCreateOrderCanonical(requestedQtyByProduct);
+        clearInvalidCanonicalOrderAttempts(requestedQtyByProduct);
+      } catch (err) {
+        recordInvalidCanonicalOrderAttempt(requestedQtyByProduct);
+        throw err;
+      }
+
       enforceCreateOrderRateLimit(orderData);
 
       const result = createOrder(orderData);
@@ -909,6 +912,223 @@ const CREATE_ORDER_RATE_LIMIT_MAX_REQUESTS_PER_BUCKET = 5;
 const CREATE_ORDER_RATE_LIMIT_GLOBAL_MAX_REQUESTS = 100;
 const CREATE_ORDER_RATE_LIMIT_WINDOW_MS = 2 * 60 * 1000;
 const CREATE_ORDER_RATE_LIMIT_KEY = "CREATE_ORDER_RATE_LIMIT";
+const PUBLIC_PRODUCTS_RATE_LIMIT_MAX_REQUESTS = 300;
+const PUBLIC_PRODUCTS_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const PUBLIC_PRODUCTS_RATE_LIMIT_KEY = "PUBLIC_PRODUCTS_RATE_LIMIT";
+const PUBLIC_PRODUCTS_CACHE_KEY = "PUBLIC_PRODUCTS_ROWS";
+const PUBLIC_PRODUCTS_CACHE_SECONDS = 10;
+const INVALID_CANONICAL_ORDER_MAX_ATTEMPTS = 5;
+const INVALID_CANONICAL_ORDER_WINDOW_MS = 2 * 60 * 1000;
+const INVALID_CANONICAL_ORDER_RATE_LIMIT_PREFIX =
+  "INVALID_CANONICAL_ORDER_";
+
+function getCachedPublicProductRows() {
+  const cache = CacheService.getScriptCache();
+  const cachedRows = cache.get(PUBLIC_PRODUCTS_CACHE_KEY);
+
+  if (cachedRows) {
+    try {
+      const rows = JSON.parse(cachedRows);
+      if (Array.isArray(rows)) {
+        return rows;
+      }
+    } catch (err) {
+      cache.remove(PUBLIC_PRODUCTS_CACHE_KEY);
+    }
+  }
+
+  const sheet = SpreadsheetApp
+    .openById(SPREADSHEET_ID)
+    .getSheetByName("Products");
+
+  if (!sheet) {
+    return [];
+  }
+
+  const rows = sheet.getDataRange().getValues();
+  try {
+    cache.put(
+      PUBLIC_PRODUCTS_CACHE_KEY,
+      JSON.stringify(rows),
+      PUBLIC_PRODUCTS_CACHE_SECONDS
+    );
+  } catch (err) {
+    Logger.log("Public products cache skipped: " + err.message);
+  }
+  return rows;
+}
+
+function enforcePublicProductsRateLimit() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const rawState = properties.getProperty(
+      PUBLIC_PRODUCTS_RATE_LIMIT_KEY
+    );
+    const now = Date.now();
+    let state = null;
+
+    if (rawState) {
+      try {
+        state = JSON.parse(rawState);
+      } catch (err) {
+        state = null;
+      }
+    }
+
+    if (
+      !state ||
+      !Number.isInteger(Number(state.count)) ||
+      !Number.isFinite(Number(state.startedAt)) ||
+      now - Number(state.startedAt) >=
+        PUBLIC_PRODUCTS_RATE_LIMIT_WINDOW_MS
+    ) {
+      state = {
+        count: 0,
+        startedAt: now
+      };
+    }
+
+    if (
+      Number(state.count) >=
+      PUBLIC_PRODUCTS_RATE_LIMIT_MAX_REQUESTS
+    ) {
+      throw new Error(
+        "Too many product requests. Please try again later"
+      );
+    }
+
+    state.count = Number(state.count) + 1;
+    properties.setProperty(
+      PUBLIC_PRODUCTS_RATE_LIMIT_KEY,
+      JSON.stringify(state)
+    );
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getInvalidCanonicalOrderRateLimitKey(requestedQtyByProduct) {
+  const signature = Array.from(requestedQtyByProduct.keys())
+    .sort()
+    .map(productId =>
+      productId + ":" + requestedQtyByProduct.get(productId)
+    )
+    .join("|");
+  const digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    signature,
+    Utilities.Charset.UTF_8
+  );
+  const hash = digest
+    .slice(0, 12)
+    .map(byte => (byte + 256).toString(16).slice(-2))
+    .join("");
+
+  return INVALID_CANONICAL_ORDER_RATE_LIMIT_PREFIX + hash;
+}
+
+function getInvalidCanonicalOrderAttemptState(requestedQtyByProduct) {
+  const key =
+    getInvalidCanonicalOrderRateLimitKey(requestedQtyByProduct);
+  const cache = CacheService.getScriptCache();
+  const rawState = cache.get(key);
+
+  if (!rawState) {
+    return { key, cache, state: null };
+  }
+
+  try {
+    return {
+      key,
+      cache,
+      state: JSON.parse(rawState)
+    };
+  } catch (err) {
+    cache.remove(key);
+    return { key, cache, state: null };
+  }
+}
+
+function enforceInvalidCanonicalOrderRateLimit(
+  requestedQtyByProduct
+) {
+  const attempt =
+    getInvalidCanonicalOrderAttemptState(requestedQtyByProduct);
+  const state = attempt.state;
+
+  if (!state) {
+    return;
+  }
+
+  const startedAt = Number(state.startedAt);
+  const count = Number(state.count);
+
+  if (
+    !Number.isFinite(startedAt) ||
+    !Number.isInteger(count) ||
+    Date.now() - startedAt >= INVALID_CANONICAL_ORDER_WINDOW_MS
+  ) {
+    attempt.cache.remove(attempt.key);
+    return;
+  }
+
+  if (count >= INVALID_CANONICAL_ORDER_MAX_ATTEMPTS) {
+    throw new Error(
+      "Too many invalid order requests. Please try again later"
+    );
+  }
+}
+
+function recordInvalidCanonicalOrderAttempt(
+  requestedQtyByProduct
+) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+
+  try {
+    const attempt =
+      getInvalidCanonicalOrderAttemptState(requestedQtyByProduct);
+    const now = Date.now();
+    let state = attempt.state;
+
+    if (
+      !state ||
+      !Number.isFinite(Number(state.startedAt)) ||
+      !Number.isInteger(Number(state.count)) ||
+      now - Number(state.startedAt) >=
+        INVALID_CANONICAL_ORDER_WINDOW_MS
+    ) {
+      state = {
+        count: 0,
+        startedAt: now
+      };
+    }
+
+    state.count = Number(state.count) + 1;
+    attempt.cache.put(
+      attempt.key,
+      JSON.stringify(state),
+      Math.ceil(INVALID_CANONICAL_ORDER_WINDOW_MS / 1000)
+    );
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function clearInvalidCanonicalOrderAttempts(
+  requestedQtyByProduct
+) {
+  CacheService
+    .getScriptCache()
+    .remove(
+      getInvalidCanonicalOrderRateLimitKey(
+        requestedQtyByProduct
+      )
+    );
+}
 
 function enforceCreateOrderBodySize(e) {
   if (!e || !e.postData) {
@@ -993,13 +1213,7 @@ function validateCreateOrderRequestStructure(data) {
 }
 
 function preflightCreateOrderCanonical(requestedQtyByProduct) {
-  const productSheet = getSS().getSheetByName("Products");
-
-  if (!productSheet) {
-    throw new Error("Products sheet not found");
-  }
-
-  const productRows = productSheet.getDataRange().getValues();
+  const productRows = getCachedPublicProductRows();
   productRows.shift();
 
   requestedQtyByProduct.forEach((qty, productId) => {
