@@ -1725,8 +1725,8 @@ function rejectOrder(token, orderId) {
   const ss = getSS();
   const orderSheet = ss.getSheetByName("Orders");
 
-  const rows = orderSheet.getDataRange().getValues();
-  rows.shift(); // header
+  const allRows = orderSheet.getDataRange().getValues();
+  const rows = allRows.slice(1);
 
   const orderRowIndex = rows.findIndex(r => r[0] === orderId);
   if (orderRowIndex === -1) {
@@ -1742,9 +1742,14 @@ function rejectOrder(token, orderId) {
   }
 
   // ===== Update status + audit =====
-  orderSheet.getRange(rowNumber, 4).setValue("REJECTED");  // status
-  orderSheet.getRange(rowNumber, 6).setValue(new Date()); // rejectedAt
-  orderSheet.getRange(rowNumber, 7).setValue(by);         // rejectedBy
+  const updatedRow = rows[orderRowIndex].slice();
+  updatedRow[3] = "REJECTED";
+  updatedRow[5] = new Date();
+  updatedRow[6] = by;
+
+  orderSheet
+    .getRange(rowNumber, 1, 1, updatedRow.length)
+    .setValues([updatedRow]);
 
   return {
     success: true,
