@@ -307,12 +307,18 @@ header.scrolled{
   border-radius: 22px 22px 0 0;
   box-shadow: var(--shadow-float);
 
-  padding: 16px 16px 24px; /* ลดด้านข้างให้พอดีมือถือมากขึ้น */
+  padding:
+    16px
+    max(16px, env(safe-area-inset-right, 0px))
+    calc(24px + env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
 
-  /* ✅ CORE FIX */
-  max-height: calc(100dvh - 40px);   /* ใช้ dvh แทน vh */
+  max-height: calc(100dvh - max(24px, env(safe-area-inset-top, 0px)));
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
 
   transform: translateY(100%);
   transition: transform var(--dur-sheet) var(--ease-out);
@@ -322,6 +328,11 @@ header.scrolled{
 
 .sheet.show{
   transform: translateY(0);
+}
+
+body:has(.sheet.show),
+body:has(.side-menu.show){
+  overflow: hidden;
 }
 
  #confirmSheet.show{
@@ -421,6 +432,8 @@ button:disabled {
 }
 
  .btn-remove{
+  min-width:44px;
+  min-height:44px;
   padding:6px 12px;
   border-radius:10px;
   background:#ff3b30;
@@ -444,6 +457,7 @@ button:disabled {
 
 .btn {
   padding: 12px;
+  min-height: 44px;
   border: none;
   border-radius: 12px;
   font-weight: 600;
@@ -492,11 +506,24 @@ button:disabled {
 }
 
 .admin-sheet-topbar{
+  position: sticky;
+  top: -16px;
+  z-index: 4;
   display:flex;
-  align-items:flex-start;
+  align-items:center;
   gap:10px;
-  margin-bottom:12px;
+  margin:-16px -16px 12px;
+  padding:
+    12px
+    max(16px, env(safe-area-inset-right, 0px))
+    12px
+    max(16px, env(safe-area-inset-left, 0px));
   width:100%;
+  box-sizing:border-box;
+  background:rgba(28,28,30,.94);
+  backdrop-filter:blur(24px) saturate(160%);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);
+  border-bottom:1px solid rgba(255,255,255,.08);
 }
 
 .admin-sheet-topbar .back-btn{
@@ -505,6 +532,77 @@ button:disabled {
   padding:10px 14px;
   min-height:44px;
   align-self:flex-start;
+}
+
+.sheet-topbar{
+  position:sticky;
+  top:-16px;
+  z-index:4;
+  display:grid;
+  grid-template-columns:44px minmax(0, 1fr) 44px;
+  align-items:center;
+  gap:10px;
+  margin:-16px -16px 12px;
+  padding:
+    12px
+    max(16px, env(safe-area-inset-right, 0px))
+    12px
+    max(16px, env(safe-area-inset-left, 0px));
+  background:rgba(28,28,30,.94);
+  backdrop-filter:blur(24px) saturate(160%);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.sheet-topbar h3{
+  margin:0;
+  min-width:0;
+  text-align:center;
+  overflow-wrap:anywhere;
+}
+
+.sheet-nav-btn{
+  width:44px !important;
+  min-width:44px;
+  height:44px;
+  min-height:44px;
+  padding:0 !important;
+  flex:0 0 44px;
+  font-size:20px;
+}
+
+.sheet-action-footer,
+.qty-action,
+.product-action-zone,
+.admin-action{
+  position:sticky;
+  bottom:calc(-24px - env(safe-area-inset-bottom, 0px));
+  z-index:3;
+  margin:
+    16px
+    -16px
+    calc(-24px - env(safe-area-inset-bottom, 0px));
+  padding:
+    12px
+    max(16px, env(safe-area-inset-right, 0px))
+    calc(12px + env(safe-area-inset-bottom, 0px))
+    max(16px, env(safe-area-inset-left, 0px));
+  background:rgba(28,28,30,.96);
+  backdrop-filter:blur(24px) saturate(160%);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);
+  border-top:1px solid rgba(255,255,255,.08);
+}
+
+.sheet-action-footer .btn + .btn{
+  margin-top:8px;
+}
+
+.sheet-action-footer .btn{
+  margin-bottom:0 !important;
+}
+
+.sheet-action-footer .btn:first-child{
+  margin-top:0 !important;
 }
 
 .admin-sheet-topbar h3{
@@ -657,8 +755,8 @@ button:disabled {
 }
 
 .search-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   padding: 0;
   display: flex;
@@ -779,9 +877,9 @@ button:disabled {
  /* ================= FILTER ICON DROPDOWN ================= */
  .filter-wrap{ position:relative; }
 
- .filter-btn{
-   width:40px;
-   height:40px;
+.filter-btn{
+   width:44px;
+   height:44px;
    border-radius:50%;
    border:none;
    position: relative;          /* ✅ needed for glass layers */
@@ -882,6 +980,7 @@ button:disabled {
    cursor: pointer;
    user-select: none;
    transition: background .16s ease, transform .16s ease;
+   min-height:44px;
  }
 
  /* 🔴 CHANGED: เส้นแบ่งแบบ iOS (ช่วยแยก item ไม่ให้กลืน) */
@@ -902,8 +1001,8 @@ button:disabled {
   
 /* ================= HEADER MENU BUTTON (iOS TACTILE) ================= */
 .menu-btn{
-  width:40px;
-  height:40px;
+  width:44px;
+  height:44px;
   border:none;
   border-radius:50%;
   position: relative;
@@ -1241,7 +1340,8 @@ textarea:focus-visible {
 
   width: min(65vw, 260px);
    /* ✅ ลดลงอีกนิด กำลังพอดี */
-  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
 
   background: rgba(28,28,30,.82);
   backdrop-filter: blur(24px);
@@ -1249,7 +1349,15 @@ textarea:focus-visible {
   box-shadow: var(--shadow-side);
 
   z-index: 102;
-  padding: 16px;            /* ✅ ลด padding ให้ดูไม่อึดอัด */
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 16px)
+    max(16px, env(safe-area-inset-right, 0px))
+    calc(env(safe-area-inset-bottom, 0px) + 24px)
+    16px;
+  box-sizing:border-box;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
 
   transform: translateX(100%);
   transition: transform var(--dur-sheet) var(--ease-out);
@@ -1258,6 +1366,32 @@ textarea:focus-visible {
 
 .side-menu.show {
   transform: translateX(0);
+}
+
+.side-menu-topbar{
+  position:sticky;
+  top:calc(-16px - env(safe-area-inset-top, 0px));
+  z-index:2;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:
+    calc(-16px - env(safe-area-inset-top, 0px))
+    -16px
+    16px;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 12px)
+    16px
+    12px;
+  background:rgba(28,28,30,.94);
+  backdrop-filter:blur(24px) saturate(160%);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.side-menu .side-menu-topbar h3{
+  margin:0;
 }
 
 /* ===== UI DETAILS ===== */
@@ -1369,6 +1503,7 @@ textarea {
 
 .timeline-detail-toggle{
   width:100%;
+  min-height:44px;
   border:none;
   border-radius:12px;
   padding:10px 12px;
@@ -1661,8 +1796,8 @@ textarea {
   top: calc(env(safe-area-inset-top) + 14px);
   right: 14px;
 
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
 
@@ -1732,8 +1867,8 @@ textarea {
   top: calc(env(safe-area-inset-top) + 12px);
   right: 12px;
 
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
 
   border-radius: 50%;
   border: none;
@@ -2173,7 +2308,10 @@ textarea.input{
       tabindex="-1"></div>
 <div
   id="createPendingDeliverySheet"
-  class="sheet">
+  class="sheet"
+  role="dialog"
+  aria-modal="true"
+  tabindex="-1">
 </div>
 
  <div
@@ -3609,7 +3747,15 @@ function renderProductSheet(){
 }
   
 function renderCart(){
-  cartSheet.innerHTML="<h3>ตะกร้า</h3>";
+  cartSheet.innerHTML=`
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeCart()"
+        aria-label="ปิดตะกร้า">×</button>
+      <h3>ตะกร้า</h3>
+      <div aria-hidden="true"></div>
+    </div>
+  `;
 
   if(state.cart.length===0){
     cartSheet.innerHTML+=`<div style="color:#888">ยังไม่มีสินค้าในตะกร้า</div>
@@ -3646,10 +3792,12 @@ const total = state.cart.reduce(
 
 cartSheet.innerHTML += `
   <div class="total">Total: ฿${total}</div>
-  <button class="btn btn-primary"
-    onclick="openConfirm()">
-    สร้างใบสั่งซื้อ
-  </button>
+  <div class="sheet-action-footer">
+    <button class="btn btn-primary"
+      onclick="openConfirm()">
+      สร้างใบสั่งซื้อ
+    </button>
+  </div>
 `;
 }
 
@@ -3710,12 +3858,19 @@ function renderConfirmSheet(){
     </div>
 
 
-<button class="btn btn-primary"
-  id="submitBtn"
-  ${state.isSubmitting ? "disabled" : ""}
-  onclick="submitOrder()">
-  ยืนยันสร้างใบสั่งซื้อ
-</button>
+<div class="sheet-action-footer">
+  <button class="btn btn-primary"
+    id="submitBtn"
+    ${state.isSubmitting ? "disabled" : ""}
+    onclick="submitOrder()">
+    ยืนยันสร้างใบสั่งซื้อ
+  </button>
+
+  <button class="btn btn-outline"
+    onclick="cancelConfirm()">
+    ยกเลิก
+  </button>
+</div>
   `;
  
 }
@@ -4212,15 +4367,6 @@ function openConfirm(){
   // render เนื้อหา
   renderConfirmSheet();
 
-  // ปุ่มยกเลิก
-  confirmSheet.innerHTML += `
-    <button class="btn btn-secondary"
-      style="width:100%;margin-top:8px"
-      onclick="cancelConfirm()">
-      ยกเลิก
-    </button>
-  `;
-
   // 🔥 หัวใจ: ต้องเปิด sheet จริง
   openOverlay(confirmSheet);
 }
@@ -4249,7 +4395,13 @@ function openQtySheet(){
   closeOverlay(productSheet);
 
   qtySheet.innerHTML = `
-    <h3>ระบุจำนวน</h3>
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeQty()"
+        aria-label="ปิดหน้าระบุจำนวน">×</button>
+      <h3>ระบุจำนวน</h3>
+      <div aria-hidden="true"></div>
+    </div>
 
     <div class="form-group">
       <label>จำนวนที่ต้องการ</label>
@@ -4372,7 +4524,13 @@ if (typeof renderFloatingBar === "function") renderFloatingBar();
 
 function renderAdminLogin(){
   adminLoginSheet.innerHTML = `
-    <h3>Admin Login</h3>
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="cancelAdminLogin()"
+        aria-label="ปิดหน้าเข้าสู่ระบบ">×</button>
+      <h3>Admin Login</h3>
+      <div aria-hidden="true"></div>
+    </div>
 
     <div class="form-group">
       <input id="adminUser"
@@ -4387,19 +4545,19 @@ function renderAdminLogin(){
         onfocus="focusInput(this)">
     </div>
 
-    <button class="btn btn-primary"
-      id="adminLoginBtn"
-      style="width:100%;margin-top:12px"
-      onclick="handleAdminLogin(this)">
-      Login
-    </button>
+    <div class="sheet-action-footer">
+      <button class="btn btn-primary"
+        id="adminLoginBtn"
+        onclick="handleAdminLogin(this)">
+        Login
+      </button>
 
-    <button class="btn btn-outline"
-      id="adminCancelBtn"
-      style="width:100%;margin-top:8px"
-      onclick="cancelAdminLogin()">
-      ยกเลิก
-    </button>
+      <button class="btn btn-outline"
+        id="adminCancelBtn"
+        onclick="cancelAdminLogin()">
+        ยกเลิก
+      </button>
+    </div>
   `;
 
   // อนุญาตให้กด backdrop ปิดได้
@@ -4421,7 +4579,13 @@ function openChangePasswordSheet(){
   }
 
   adminLoginSheet.innerHTML = `
-    <h3>เปลี่ยนรหัสผ่าน</h3>
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeOverlay(adminLoginSheet)"
+        aria-label="ปิดหน้าเปลี่ยนรหัสผ่าน">×</button>
+      <h3>เปลี่ยนรหัสผ่าน</h3>
+      <div aria-hidden="true"></div>
+    </div>
 
     <div class="form-group">
       <label>รหัสผ่านปัจจุบัน</label>
@@ -4438,15 +4602,17 @@ function openChangePasswordSheet(){
       <input id="confirmNewPassword" type="password" placeholder="ยืนยันรหัสผ่านใหม่">
     </div>
 
-    <button class="btn btn-primary" style="width:100%;margin-top:12px"
-      onclick="submitChangePassword(this)">
-      บันทึกรหัสผ่านใหม่
-    </button>
+    <div class="sheet-action-footer">
+      <button class="btn btn-primary"
+        onclick="submitChangePassword(this)">
+        บันทึกรหัสผ่านใหม่
+      </button>
 
-    <button class="btn btn-outline" style="width:100%;margin-top:8px"
-      onclick="closeOverlay(adminLoginSheet)">
-      ยกเลิก
-    </button>
+      <button class="btn btn-outline"
+        onclick="closeOverlay(adminLoginSheet)">
+        ยกเลิก
+      </button>
+    </div>
   `;
 
   openOverlay(adminLoginSheet);
@@ -5656,17 +5822,15 @@ style="
 
      `).join("")}
 
-     <button
-       class="btn btn-primary"
-       style="
-         width:100%;
-         margin-top:16px;
-       "
-       onclick="
-         submitBulkPendingDelivery()
-       ">
-       สร้างรายการ
-     </button>
+     <div class="sheet-action-footer">
+       <button
+         class="btn btn-primary"
+         onclick="
+           submitBulkPendingDelivery()
+         ">
+         สร้างรายการ
+       </button>
+     </div>
 
    </div>
    `;
@@ -5966,15 +6130,13 @@ createPendingDeliverySheet.innerHTML = `
 
       </div>
 
-<button
-  onclick="createPendingDelivery()"
-  class="btn btn-primary"
-  style="
-    margin-top:16px;
-    width:100%;
-  ">
-  บันทึก
-</button>
+<div class="sheet-action-footer">
+  <button
+    onclick="createPendingDelivery()"
+    class="btn btn-primary">
+    บันทึก
+  </button>
+</div>
 
     </div>
   `;
@@ -6449,7 +6611,13 @@ function openStockAction(p){
   state.selectedProduct = p;
 
   adminStockActionSheet.innerHTML = `
-    <h3>จัดการสต๊อก</h3>
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeOverlay(adminStockActionSheet)"
+        aria-label="ปิดหน้าจัดการสต๊อก">×</button>
+      <h3>จัดการสต๊อก</h3>
+      <div aria-hidden="true"></div>
+    </div>
     <div>${esc(p.name)}</div>
     <div>คงเหลือ: ${Number(p.stock) || 0}</div>
 
@@ -6473,18 +6641,19 @@ function openStockAction(p){
       >
     </div>
 
-    <button
-      class="btn btn-secondary"
-      onclick="submitStockIn()">
-      ➕ รับเข้า (IN)
-    </button>
+    <div class="sheet-action-footer">
+      <button
+        class="btn btn-secondary"
+        onclick="submitStockIn()">
+        ➕ รับเข้า (IN)
+      </button>
 
-    <button
-      class="btn btn-primary"
-      style="margin-top:8px"
-      onclick="submitStockAdjust()">
-      ✏️ ปรับยอด
-    </button>
+      <button
+        class="btn btn-primary"
+        onclick="submitStockAdjust()">
+        ✏️ ปรับยอด
+      </button>
+    </div>
   `;
 
   // ✅ เปิดผ่าน Overlay Manager เท่านั้น
@@ -6957,7 +7126,12 @@ function openMainMenu(triggerEl){
 
   // ✅ STEP 2: Main Menu v1 = Login only (ถ้ายังไม่อยู่ admin mode)
   mainMenuSheet.innerHTML = `
-    <h3>Main Menu</h3>
+    <div class="side-menu-topbar">
+      <h3>Main Menu</h3>
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeMainMenu()"
+        aria-label="ปิดเมนูหลัก">×</button>
+    </div>
 
     <!-- 🔹 MAIN ACTIONS -->
     <div class="menu-group">
@@ -7087,7 +7261,13 @@ function openAddProduct(force = false){
   const safeNote = esc(draft.note || "");
  
   adminAddProductSheet.innerHTML = `
-    <h3>➕ เพิ่มสินค้าใหม่</h3>
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeAddProduct()"
+        aria-label="ปิดหน้าเพิ่มสินค้า">×</button>
+      <h3>➕ เพิ่มสินค้าใหม่</h3>
+      <div aria-hidden="true"></div>
+    </div>
 
     <div style="font-size:13px;color:#666;margin-bottom:12px">
       ℹ️ การเพิ่มสินค้าใหม่จะถูกบันทึกใน Stock Timeline
@@ -7168,17 +7348,17 @@ function openAddProduct(force = false){
       </label>
     </div>
 
-    <button class="btn btn-primary"
-      style="width:100%;margin-top:16px"
-      onclick="submitAddProduct(this)">
-      บันทึกสินค้า
-    </button>
+    <div class="sheet-action-footer">
+      <button class="btn btn-primary"
+        onclick="submitAddProduct(this)">
+        บันทึกสินค้า
+      </button>
 
-    <button class="btn btn-secondary"
-      style="width:100%;margin-top:8px"
-      onclick="closeAddProduct()">
-      ยกเลิก
-    </button>
+      <button class="btn btn-outline"
+        onclick="closeAddProduct()">
+        ยกเลิก
+      </button>
+    </div>
   `;
 
   openOverlay(adminAddProductSheet);
@@ -7522,7 +7702,13 @@ function openProductEdit(p){
   const safeEditDetailsText = esc(latestProduct.detailsText || "");
 
   adminProductEditSheet.innerHTML = `
-    <h3>แก้ไขสินค้า</h3>
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeProductEdit()"
+        aria-label="ปิดหน้าแก้ไขสินค้า">×</button>
+      <h3>แก้ไขสินค้า</h3>
+      <div aria-hidden="true"></div>
+    </div>
 
     <div class="form-group">
       <label>รหัสสินค้า (SKU)</label>
@@ -7655,18 +7841,6 @@ function openProductEdit(p){
         onchange="handleImagePreview(this)">
     </div>
 
-    <button class="btn btn-primary"
-      style="width:100%;margin-top:16px"
-      onclick="submitProductEdit()">
-      บันทึก
-    </button>
-
-    <button class="btn btn-secondary"
-      style="width:100%;margin-top:8px"
-      onclick="closeProductEdit()">
-      ยกเลิก
-    </button>
-
     <!-- 🔴 SOFT DELETE PRODUCT -->
 
  ${p.active === false ? `
@@ -7685,6 +7859,18 @@ function openProductEdit(p){
      🗑️ ลบสินค้า
    </button>
  `}
+
+    <div class="sheet-action-footer">
+      <button class="btn btn-primary"
+        onclick="submitProductEdit()">
+        บันทึก
+      </button>
+
+      <button class="btn btn-outline"
+        onclick="closeProductEdit()">
+        ยกเลิก
+      </button>
+    </div>
   `;
 
   openOverlay(adminProductEditSheet); // ✅ ใช้ Overlay Manager
