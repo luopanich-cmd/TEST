@@ -340,6 +340,28 @@ header.scrolled{
     gap:10px;
   }
 
+  .admin-product-summary{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+  }
+
+  .admin-product-summary-main{
+    flex:1;
+    min-width:0;
+    display:grid;
+    gap:6px;
+  }
+
+  .admin-product-summary-meta{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:6px 10px;
+    font-size:12px;
+    color:rgba(235,235,245,.68);
+  }
+
   .info-card{
     margin-top:12px;
     display:grid;
@@ -7448,25 +7470,57 @@ function openStockAction(p){
   if (state.mode !== "admin") return;
 
   state.selectedProduct = p;
+  const stockQty = Number(p.stock) || 0;
+  const statusKey = normalizeProductStatus(p.status || (stockQty <= 0 ? "out" : "ready"));
+  const statusLabelMap = {
+    ready: "พร้อมส่ง",
+    ready_plus: "พร้อมส่ง + เพิ่มได้",
+    shipping: "อยู่ระหว่างจัดส่ง",
+    warehouse: "อยู่โกดังไทย",
+    out: "หมด"
+  };
+  const statusBadgeClass = stockQty <= 0
+    ? "status-rejected"
+    : statusKey === "shipping"
+      ? "status-pending"
+      : statusKey === "warehouse"
+        ? "status-neutral"
+        : "status-approved";
 
   adminStockActionSheet.innerHTML = `
     <div class="sheet-topbar">
       <button class="btn btn-outline sheet-nav-btn"
         onclick="closeOverlay(adminStockActionSheet)"
-        aria-label="ปิดหน้าจัดการสต๊อก">×</button>
-      <h3 id="adminStockActionSheetTitle">จัดการสต๊อก</h3>
+        aria-label="ปิดหน้าจัดการสต็อก">×</button>
+      <h3 id="adminStockActionSheetTitle">จัดการสต็อก</h3>
       <div aria-hidden="true"></div>
     </div>
     <div class="admin-detail-section">
-      <div class="admin-detail-title">${esc(p.name)}</div>
-      <div class="summary-row">
-        <span>คงเหลือ</span>
-        <strong>${Number(p.stock) || 0}</strong>
+      <div class="admin-product-summary">
+        ${renderCartItemThumb({
+          productId: p.productId,
+          name: p.name || p.productId || "สินค้า",
+          image: p.image || ""
+        })}
+        <div class="admin-product-summary-main">
+          <div class="admin-detail-title">${esc(p.name || "-")}</div>
+          <div class="admin-product-summary-meta">
+            <span>SKU: ${esc(p.productId || "-")}</span>
+            <span>คงเหลือ ${stockQty} ชิ้น</span>
+            <span class="status-badge compact ${statusBadgeClass}">
+              ${esc(statusLabelMap[statusKey] || "พร้อมส่ง")}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
 
     <div class="form-group">
-      <label>จำนวน</label>
+      <label>จำนวน / ยอดคงเหลือใหม่</label>
+      <div class="helper-text" style="margin-bottom:8px">
+        รับสินค้าเข้า = เพิ่มจำนวนจากยอดเดิม<br>
+        ปรับยอดคงเหลือ = ตั้งค่ายอดใหม่แทนยอดเดิม
+      </div>
       <div class="qty-input">
         <input
           id="stockQty"
@@ -7481,7 +7535,7 @@ function openStockAction(p){
       <label>หมายเหตุ</label>
       <input
         id="stockReason"
-        placeholder="ถ้ามี"
+        placeholder="ระบุเหตุผล ถ้ามี"
       >
     </div>
 
@@ -7489,13 +7543,13 @@ function openStockAction(p){
       <button
         class="btn btn-success"
         onclick="submitStockIn()">
-        ➕ รับเข้า (IN)
+        รับสินค้าเข้า
       </button>
 
       <button
         class="btn btn-primary"
         onclick="submitStockAdjust()">
-        ✏️ ปรับยอด
+        ปรับยอดคงเหลือ
       </button>
     </div>
   `;
