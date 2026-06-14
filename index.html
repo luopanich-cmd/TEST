@@ -746,8 +746,8 @@ button:disabled {
   justify-content:space-between;
   align-items:flex-start;
   gap:12px;
-  padding:12px 0;
-  border-bottom:1px dashed rgba(0,0,0,.08);
+  padding:14px 0;
+  border-bottom:1px solid rgba(255,255,255,.08);
   }
 
  .cart-item > div:first-child {
@@ -780,6 +780,49 @@ button:disabled {
    display:flex;
    align-items:center;   /* 🔴 หัวใจ: align กับราคา */
    gap:8px;
+ }
+
+ .cart-line-total{
+   font-size:15px;
+   font-weight:700;
+   color:rgba(245,245,247,.96);
+   white-space:nowrap;
+ }
+
+ .cart-summary,
+ .order-success-card{
+   margin-top:14px;
+   padding:14px;
+   border-radius:16px;
+   background:rgba(255,255,255,.05);
+   border:1px solid rgba(255,255,255,.08);
+ }
+
+ .summary-row{
+   display:flex;
+   align-items:center;
+   justify-content:space-between;
+   gap:12px;
+   padding:6px 0;
+   font-size:14px;
+   color:rgba(235,235,245,.74);
+ }
+
+ .summary-row strong{
+   font-size:17px;
+   color:rgba(245,245,247,.96);
+ }
+
+ .order-success-card{
+   display:grid;
+   gap:8px;
+ }
+
+ .success-note{
+   margin-top:12px;
+   color:rgba(235,235,245,.74);
+   font-size:14px;
+   line-height:1.45;
  }
  
 
@@ -2726,14 +2769,40 @@ function renderLastOrderSheet() {
     return;
   }
 
+  const items = Array.isArray(order.items) ? order.items : [];
+  const itemCount = items.length;
+  const totalQty = items.reduce(
+    (sum, item) => sum + (Number(item.qty) || 0),
+    0
+  );
+  const total = Number(order.total) || 0;
+
   confirmSheet.innerHTML = `
-    <h3 id="confirmSheetTitle">บิลล่าสุด</h3>
-    <div style="margin-top:12px">
-      เลขที่ใบสั่งซื้อ: ${escapeHtml(order.orderId)}
+    <h3 id="confirmSheetTitle">สร้างใบสั่งซื้อสำเร็จ</h3>
+
+    <div class="order-success-card">
+      <div class="summary-row">
+        <span>เลขที่ใบสั่งซื้อ</span>
+        <strong>${escapeHtml(order.orderId)}</strong>
+      </div>
+      <div class="summary-row">
+        <span>PO</span>
+        <strong>${escapeHtml(order.poNumber || "-")}</strong>
+      </div>
+      <div class="summary-row">
+        <span>จำนวนรายการ</span>
+        <strong>${itemCount} รายการ / ${totalQty} ชิ้น</strong>
+      </div>
+      <div class="summary-row">
+        <span>ยอดรวม</span>
+        <strong>฿${total.toLocaleString("th-TH")}</strong>
+      </div>
     </div>
-    <div style="margin-top:6px;color:rgba(235,235,245,.72);font-size:14px">
-      PO: ${escapeHtml(order.poNumber || "-")}
+
+    <div class="success-note">
+      ระบบบันทึกใบสั่งซื้อแล้ว และกำลังรอแอดมินตรวจสอบ/อนุมัติคำสั่งซื้อ
     </div>
+
     <button class="btn btn-primary"
       style="margin-top:16px"
       onclick="exportOrderPrint()">
@@ -3997,7 +4066,11 @@ function renderCart(){
   `;
 
   if(state.cart.length===0){
-    cartSheet.innerHTML+=`<div class="empty-state">ยังไม่มีสินค้าในตะกร้า</div>
+    cartSheet.innerHTML+=`
+      <div class="empty-state">
+        ยังไม่มีสินค้าในตะกร้า<br>
+        <span class="helper-text">เลือกสินค้าแล้วกดเพิ่มลงตะกร้าเพื่อเริ่มสร้างใบสั่งซื้อ</span>
+      </div>
 `;
     return;
   }
@@ -4010,11 +4083,12 @@ function renderCart(){
         <div class="cart-meta">
           รหัส: ${esc(i.productId)}
         </div>
-        <div class="price">฿${Number(i.price) || 0}</div>
+        <div class="price">฿${Number(i.price) || 0} / ชิ้น</div>
       </div>
  <div class="cart-item-right">
-   <div class="cart-qty">
-     จำนวน: ${Number(i.qty) || 1}
+   <div>
+     <div class="cart-line-total">฿${(Number(i.price) || 0) * (Number(i.qty) || 0)}</div>
+     <div class="cart-qty">จำนวน ${Number(i.qty) || 1}</div>
    </div>
    <button class="btn-remove"
      onclick="removeItem(${idx})">
@@ -4030,7 +4104,16 @@ const total = state.cart.reduce(
  );
 
 cartSheet.innerHTML += `
-  <div class="total">Total: ฿${total}</div>
+  <div class="cart-summary">
+    <div class="summary-row">
+      <span>จำนวนรายการ</span>
+      <strong>${state.cart.length}</strong>
+    </div>
+    <div class="summary-row">
+      <span>ยอดรวม</span>
+      <strong>฿${total}</strong>
+    </div>
+  </div>
   <div class="sheet-action-footer">
     <button class="btn btn-primary"
       onclick="openConfirm()">
@@ -4078,13 +4161,22 @@ function renderConfirmSheet(){
           <div class="cart-meta">รหัส: ${esc(i.productId)}</div>
           <div class="cart-qty">จำนวน ${Number(i.qty) || 0}</div>
         </div>
-        <div>฿${Number(sum) || 0}</div>
+        <div class="cart-line-total">฿${Number(sum) || 0}</div>
       </div>
     `;
   });
 
   confirmSheet.innerHTML += `
-    <div class="total">ยอดรวม: ฿${total}</div>
+    <div class="cart-summary">
+      <div class="summary-row">
+        <span>จำนวนรายการ</span>
+        <strong>${state.cart.length}</strong>
+      </div>
+      <div class="summary-row">
+        <span>ยอดรวม</span>
+        <strong>฿${total}</strong>
+      </div>
+    </div>
 
     <div class="form-group">
      <label>เลข PO <span style="color:#ff3b30">*</span></label>
