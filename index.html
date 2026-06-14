@@ -227,6 +227,37 @@ header.scrolled{
   }
   .container{padding:16px;display:grid;gap:16px;}
 
+.section-title{
+  margin: 18px 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: .1px;
+  color: rgba(245,245,247,.94);
+}
+
+.text-muted,
+.helper-text{
+  color: rgba(235,235,245,.68);
+}
+
+.helper-text{
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.empty-state{
+  margin-top: 24px;
+  text-align: center;
+  color: rgba(235,235,245,.68);
+  line-height: 1.45;
+}
+
+.action-row{
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
 .pagination{
   display:flex;
   align-items:center;
@@ -249,9 +280,41 @@ header.scrolled{
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   border-radius:18px;
   padding:14px;
-  cursor:pointer;
+  cursor:default;
   box-shadow: var(--shadow-card);
   }
+
+  .card[role="button"]{
+    cursor:pointer;
+  }
+
+  .metric-card{
+    padding:16px;
+    border:1px solid rgba(255,255,255,.08);
+  }
+
+  .info-card{
+    margin-top:12px;
+    display:grid;
+    gap:12px;
+  }
+
+  .info-row{
+    display:grid;
+    gap:4px;
+  }
+
+  .info-label{
+    font-size:12px;
+    color:rgba(235,235,245,.62);
+  }
+
+  .info-value{
+    font-size:15px;
+    color:rgba(245,245,247,.94);
+    font-weight:600;
+  }
+
   .name{
   font-weight:600;
   line-height:1.35;
@@ -288,7 +351,7 @@ header.scrolled{
     0 0 12px rgba(77,163,255,.18);
 }
  
-  .stock{font-size:14px;color:rgba(235,235,245,.72);}
+  .stock{font-size:14px;color:rgba(235,235,245,.74);}
 
   .backdrop{
   position: fixed;
@@ -697,6 +760,18 @@ button:disabled {
    text-align: right;
  }
 
+ .cart-meta{
+   margin-top:3px;
+   font-size:12px;
+   color:rgba(235,235,245,.62);
+ }
+
+ .cart-qty{
+   font-size:14px;
+   color:rgba(235,235,245,.78);
+   white-space:nowrap;
+ }
+
  .cart-item .price{
    margin-top:2px;
  }
@@ -1098,12 +1173,13 @@ textarea:focus-visible {
   /* ================= PRODUCT CARD (HORIZONTAL) ================= */
 .product-card {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   background: rgba(28,28,30,.72);
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
-  border-radius: 16px;
-  padding: 12px;
+  border-radius: 18px;
+  padding: 13px;
+  border: 1px solid rgba(255,255,255,.07);
   box-shadow: var(--shadow-card);
   align-items: center;
   cursor: pointer;
@@ -1130,9 +1206,9 @@ textarea:focus-visible {
 }
 
 .product-card .thumb {
-  width: 80px;
-  height: 80px;
-  border-radius: 12px;
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
   object-fit: cover;
   background: #1c1c1e;
   flex-shrink: 0;
@@ -1142,29 +1218,34 @@ textarea:focus-visible {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width:0;
 }
 
 .product-card .name {
-  font-weight: 600;
-  font-size: 16px;
+  font-weight: 700;
+  font-size: 16.5px;
+  line-height: 1.28;
+  letter-spacing: .05px;
 }
 
 .product-card .sku {
   font-size: 12px;
-  color: rgba(235,235,245,.60);
+  color: rgba(235,235,245,.58);
 }
 
 .product-card .price {
-  color: #007aff;
+  color: #64b5ff;
   font-weight: 600;
+  font-size: 15px;
   margin-top: 2px;
 }
 
 .product-card .meta {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
   font-size: 13px;
   color: rgba(235,235,245,.72);
 }
@@ -3856,7 +3937,7 @@ function renderCart(){
   `;
 
   if(state.cart.length===0){
-    cartSheet.innerHTML+=`<div style="color:#888">ยังไม่มีสินค้าในตะกร้า</div>
+    cartSheet.innerHTML+=`<div class="empty-state">ยังไม่มีสินค้าในตะกร้า</div>
 `;
     return;
   }
@@ -3866,13 +3947,13 @@ function renderCart(){
     <div class="cart-item">
       <div>
         <div class="name">${esc(i.name)}</div>
-        <div style="font-size:12px;color:#888">
+        <div class="cart-meta">
           รหัส: ${esc(i.productId)}
         </div>
         <div class="price">฿${Number(i.price) || 0}</div>
       </div>
  <div class="cart-item-right">
-   <div style="font-size:14px;color:#555">
+   <div class="cart-qty">
      จำนวน: ${Number(i.qty) || 1}
    </div>
    <button class="btn-remove"
@@ -3934,8 +4015,8 @@ function renderConfirmSheet(){
       <div class="cart-item">
         <div>
           <div class="name">${esc(i.name)}</div>
-          <div style="font-size:12px;color:#888">รหัส: ${esc(i.productId)}</div>
-          <div style="font-size:13px">จำนวน ${Number(i.qty) || 0}</div>
+          <div class="cart-meta">รหัส: ${esc(i.productId)}</div>
+          <div class="cart-qty">จำนวน ${Number(i.qty) || 0}</div>
         </div>
         <div>฿${Number(sum) || 0}</div>
       </div>
@@ -3945,7 +4026,7 @@ function renderConfirmSheet(){
   confirmSheet.innerHTML += `
     <div class="total">ยอดรวม: ฿${total}</div>
 
-    <div class="form-group" style="margin-top:12px">
+    <div class="form-group">
      <label>เลข PO <span style="color:#ff3b30">*</span></label>
       <input
         id="poInput"
@@ -5100,7 +5181,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
                   onkeydown="handleKeyboardActivation(event, this)">
                   <div class="name">${esc(o.orderId)}</div>
                   <div class="status-badge status-pending">${esc(o.status)}</div>
-                  <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
+                  <div class="price">฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
  <div class="stock">
    วันที่:
    ${esc(
@@ -5112,7 +5193,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
                 </div>
               `).join("")
             : `
-              <div style="color:#888;text-align:center;margin-top:24px">
+              <div class="empty-state">
                 ไม่มีออเดอร์รอดำเนินการ
               </div>
             `
@@ -5145,7 +5226,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
         </div>
       </div>
 
-      <div style="display:flex;gap:8px;margin-bottom:14px">
+      <div class="action-row">
         <button class="btn btn-primary" onclick="applyAdminDashboardRange()">
           ดูสรุป
         </button>
@@ -5154,25 +5235,25 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
         </button>
       </div>
 
-      <div class="card">
+      <div class="card metric-card">
         <div class="name">ยอดขายรวม</div>
         <div class="price">฿${Number(summary.totalSales).toLocaleString("th-TH")}</div>
         <div class="stock">จำนวนออเดอร์: ${summary.orderCount}</div>
       </div>
 
-      <div class="card">
+      <div class="card metric-card">
         <div class="name">ต้นทุนรวม</div>
         <div class="price">฿${Number(summary.totalCost).toLocaleString("th-TH")}</div>
         <div class="stock">จำนวนสินค้าที่ขาย: ${summary.totalQty}</div>
       </div>
 
-      <div class="card">
+      <div class="card metric-card">
         <div class="name">กำไรรวม</div>
         <div class="price">฿${Number(summary.totalProfit).toLocaleString("th-TH")}</div>
         <div class="stock">Orders รอดำเนินการ: ${pendingCount}</div>
       </div>
 
-      <h3 style="margin-top:18px">รายการออเดอร์ APPROVED ที่นำมาคิด</h3>
+      <h3 class="section-title">รายการออเดอร์ APPROVED ที่นำมาคิด</h3>
 
 ${
   approvedOrders.length
@@ -5195,7 +5276,7 @@ ${
               onkeydown="handleKeyboardActivation(event, this)">
               <div class="name">${esc(o.orderId)}</div>
               <div class="status-badge status-approved">${esc(o.status)}</div>
-              <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
+              <div class="price">฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
 <div class="stock">
   วันที่:
   ${esc(
@@ -5207,7 +5288,7 @@ ${
             </div>
           `).join("")
           : `
-            <div style="color:#888;text-align:center;margin-top:24px">
+            <div class="empty-state">
               ไม่มีออเดอร์สถานะ APPROVED ในช่วงวันที่ที่เลือก
             </div>
           `
@@ -5683,7 +5764,8 @@ adminOrderSheet.innerHTML = `
     ${items.map(i => `
       <div class="cart-item">
    <div>
-     <div>${esc(i.name)} x ${Number(i.qty) || 0}</div>
+     <div class="name">${esc(i.name)}</div>
+     <div class="cart-qty">จำนวน ${Number(i.qty) || 0}</div>
 
      ${
        order.status !== "PENDING" &&
@@ -5712,7 +5794,7 @@ adminOrderSheet.innerHTML = `
      }
 
    </div>
- <div>
+ <div class="price">
    ฿${(Number(i.price) || 0) * (Number(i.qty) || 0)}
  </div>
       </div>
@@ -6206,19 +6288,19 @@ createPendingDeliverySheet.innerHTML = `
 
     </div>
 
-      <div class="card" style="margin-top:12px;">
+      <div class="card info-card">
 
-      <div>
-        <b>สินค้า:</b>
-        ${esc(productId)}
+      <div class="info-row">
+        <span class="info-label">สินค้า</span>
+        <span class="info-value">${esc(productId)}</span>
       </div>
 
-      <div style="margin-top:8px;">
-        <b>จำนวนใน PO:</b>
-        ${orderedQty}
+      <div class="info-row">
+        <span class="info-label">จำนวนใน PO</span>
+        <span class="info-value">${orderedQty}</span>
       </div>
 
-      <div style="margin-top:16px;">
+      <div class="form-group">
 
 <label class="stock">
   จำนวนค้างส่ง
@@ -6236,7 +6318,7 @@ createPendingDeliverySheet.innerHTML = `
 
       </div>
 
-      <div style="margin-top:12px;">
+      <div class="form-group">
 
         <label>
           หมายเหตุ
@@ -6744,8 +6826,8 @@ function openStockAction(p){
       <h3 id="adminStockActionSheetTitle">จัดการสต๊อก</h3>
       <div aria-hidden="true"></div>
     </div>
-    <div>${esc(p.name)}</div>
-    <div>คงเหลือ: ${Number(p.stock) || 0}</div>
+    <div class="name">${esc(p.name)}</div>
+    <div class="stock">คงเหลือ: ${Number(p.stock) || 0}</div>
 
     <div class="form-group">
       <label>จำนวน</label>
@@ -7402,7 +7484,7 @@ function openAddProduct(force = false){
       <div aria-hidden="true"></div>
     </div>
 
-    <div style="font-size:13px;color:#666;margin-bottom:12px">
+    <div class="helper-text" style="margin-bottom:12px">
       ℹ️ การเพิ่มสินค้าใหม่จะถูกบันทึกใน Stock Timeline
     </div>
 
@@ -8647,19 +8729,11 @@ function openAdminProductAction(p){
   adminProductActionSheet.innerHTML = `
     <h3 id="adminProductActionSheetTitle">จัดการสินค้า</h3>
 
-    <div style="
-      font-weight:600;
-      font-size:16px;
-      margin-bottom:4px
-    ">
+    <div class="name">
       ${esc(p.name)}
     </div>
 
-    <div style="
-      font-size:12px;
-      color:#888;
-      margin-bottom:16px
-    ">
+    <div class="cart-meta" style="margin-bottom:16px">
       รหัสสินค้า: ${esc(p.productId)}
     </div>
 
