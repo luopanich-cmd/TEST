@@ -10389,6 +10389,32 @@ function exportOrderPrint() {
   const total = Number(order.total || 0).toLocaleString();
   const safeOrderId = esc(order.orderId);
   const safePo = esc(po);
+  const printItemThumb = item => {
+    const imageUrl = getCartItemImageUrl(item);
+    const placeholder = `<span class="print-thumb-placeholder" aria-hidden="true">รูป</span>`;
+    if (!imageUrl) {
+      return `<div class="print-thumb">${placeholder}</div>`;
+    }
+    return `
+      <div class="print-thumb">
+        <img
+          src="${escAttr(imageUrl)}"
+          alt="${escAttr(item?.name || "สินค้า")}"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';">
+        <span class="print-thumb-placeholder" aria-hidden="true" style="display:none">รูป</span>
+      </div>
+    `;
+  };
+  const printItemRows = items.map((i, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td class="thumb-col">${printItemThumb(i)}</td>
+      <td class="item-name-cell">[${esc(i.productId)}] ${esc(i.name)}</td>
+      <td>${Number(i.qty) || 0}</td>
+      <td>฿${Number(i.price).toLocaleString()}</td>
+      <td>฿${(i.price * i.qty).toLocaleString()}</td>
+    </tr>
+  `).join("");
 
   const printWindow = window.open("", "_blank");
 
@@ -10446,6 +10472,46 @@ function exportOrderPrint() {
           font-weight: 600;
           background: #F9FAFB; /* very soft header tint */
           color: #1E3A8A; /* Navy Blue */
+        }
+
+        .thumb-col {
+          width: 52px;
+          text-align: center;
+        }
+
+        .print-thumb {
+          width: 44px;
+          height: 44px;
+          aspect-ratio: 1 / 1;
+          box-sizing: border-box;
+          overflow: hidden;
+          display: grid;
+          place-items: center;
+          border: 1px solid #E5E7EB;
+          border-radius: 8px;
+          background: #F9FAFB;
+        }
+
+        .print-thumb img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          object-position: center;
+          display: block;
+        }
+
+        .print-thumb-placeholder {
+          width: 100%;
+          height: 100%;
+          display: grid;
+          place-items: center;
+          font-size: 11px;
+          color: #9CA3AF;
+        }
+
+        .item-name-cell {
+          word-break: break-word;
+          line-height: 1.35;
         }
 
         .total {
@@ -10515,6 +10581,7 @@ function exportOrderPrint() {
         <thead>
           <tr>
             <th>#</th>
+            <th class="thumb-col">รูป</th>
             <th>รายการ</th>
             <th>จำนวน</th>
             <th>ราคา</th>
@@ -10522,15 +10589,7 @@ function exportOrderPrint() {
           </tr>
         </thead>
         <tbody>
-          ${items.map((i, index) => `
-            <tr>
-              <td>${index + 1}</td>
-              <td>[${esc(i.productId)}] ${esc(i.name)}</td>
-              <td>${Number(i.qty) || 0}</td>
-              <td>฿${Number(i.price).toLocaleString()}</td>
-              <td>฿${(i.price * i.qty).toLocaleString()}</td>
-            </tr>
-          `).join("")}
+          ${printItemRows}
         </tbody>
       </table>
 
