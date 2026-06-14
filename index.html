@@ -293,6 +293,46 @@ header.scrolled{
     border:1px solid rgba(255,255,255,.08);
   }
 
+  .metric-card .price{
+    font-size:20px;
+    margin-top:6px;
+  }
+
+  .admin-card{
+    display:grid;
+    gap:8px;
+    border:1px solid rgba(255,255,255,.08);
+  }
+
+  .admin-card-meta{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px 10px;
+    align-items:center;
+    color:rgba(235,235,245,.68);
+    font-size:13px;
+  }
+
+  .admin-detail-section{
+    margin-top:14px;
+    padding:14px;
+    border-radius:16px;
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.08);
+  }
+
+  .admin-detail-title{
+    margin:0 0 10px;
+    color:rgba(245,245,247,.94);
+    font-size:15px;
+    font-weight:700;
+  }
+
+  .admin-item-list{
+    display:grid;
+    gap:10px;
+  }
+
   .info-card{
     margin-top:12px;
     display:grid;
@@ -1453,6 +1493,12 @@ textarea:focus-visible {
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: .1px;
+}
+
+.status-badge.compact{
+  min-height:22px;
+  padding:3px 8px;
+  font-size:11.5px;
 }
 
 .status-pending,
@@ -5326,22 +5372,20 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
         ${
           pendingOrders.length
             ? pendingOrders.map(o => `
-                <div class="card"
+                <div class="card admin-card"
                   role="button"
                   tabindex="0"
                   onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})"
                   onkeydown="handleKeyboardActivation(event, this)">
                   <div class="name">${esc(o.orderId)}</div>
-                  <div class="status-badge status-pending">${esc(o.status)}</div>
+                  <div class="admin-card-meta">
+                    <span class="status-badge compact status-pending">${esc(o.status)}</span>
+                    <span>รวม ฿${Number(o.total || 0).toLocaleString("th-TH")}</span>
+                  </div>
                   <div class="price">฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
- <div class="stock">
-   วันที่:
-   ${esc(
-     formatThaiDate(
-       getOrderDateValue(o)
-     )
-   )}
- </div>
+                  <div class="stock">
+                    วันที่: ${esc(formatThaiDate(getOrderDateValue(o)))}
+                  </div>
                 </div>
               `).join("")
             : `
@@ -5421,22 +5465,20 @@ ${
             )
         )
         .map(o => `
-            <div class="card"
+            <div class="card admin-card"
               role="button"
               tabindex="0"
               onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})"
               onkeydown="handleKeyboardActivation(event, this)">
               <div class="name">${esc(o.orderId)}</div>
-              <div class="status-badge status-approved">${esc(o.status)}</div>
+              <div class="admin-card-meta">
+                <span class="status-badge compact status-approved">${esc(o.status)}</span>
+                <span>รวม ฿${Number(o.total || 0).toLocaleString("th-TH")}</span>
+              </div>
               <div class="price">฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
-<div class="stock">
-  วันที่:
-  ${esc(
-    formatThaiDate(
-      getOrderDateValue(o)
-    )
-  )}
-</div>
+              <div class="stock">
+                วันที่: ${esc(formatThaiDate(getOrderDateValue(o)))}
+              </div>
             </div>
           `).join("")
           : `
@@ -5913,10 +5955,14 @@ adminOrderSheet.innerHTML = `
    : ""
  }
 
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">รายการสินค้า</div>
+      <div class="admin-item-list">
     ${items.map(i => `
       <div class="cart-item">
    <div>
      <div class="name">${esc(i.name)}</div>
+     <div class="cart-meta">SKU: ${esc(i.productId || "-")}</div>
      <div class="cart-qty">จำนวน ${Number(i.qty) || 0}</div>
 
      ${
@@ -5951,12 +5997,24 @@ adminOrderSheet.innerHTML = `
  </div>
       </div>
     `).join("")}
+      </div>
+    </div>
 
-    <div class="total">Total: ฿${Number(order.total) || 0}</div>
-    <div style="margin-top:8px">
-      <span class="status-badge ${orderStatusClass}">
-        ${esc(order.status)}
-      </span>
+    <div class="cart-summary">
+      <div class="summary-row">
+        <span>สถานะ</span>
+        <span class="status-badge ${orderStatusClass}">
+          ${esc(order.status)}
+        </span>
+      </div>
+      <div class="summary-row">
+        <span>จำนวนรายการ</span>
+        <strong>${items.length}</strong>
+      </div>
+      <div class="summary-row">
+        <span>ยอดรวม</span>
+        <strong>฿${Number(order.total) || 0}</strong>
+      </div>
     </div>
 
     ${
@@ -6978,8 +7036,13 @@ function openStockAction(p){
       <h3 id="adminStockActionSheetTitle">จัดการสต๊อก</h3>
       <div aria-hidden="true"></div>
     </div>
-    <div class="name">${esc(p.name)}</div>
-    <div class="stock">คงเหลือ: ${Number(p.stock) || 0}</div>
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">${esc(p.name)}</div>
+      <div class="summary-row">
+        <span>คงเหลือ</span>
+        <strong>${Number(p.stock) || 0}</strong>
+      </div>
+    </div>
 
     <div class="form-group">
       <label>จำนวน</label>
@@ -7136,7 +7199,7 @@ function renderPendingDeliveries(list) {
 
   if (!Array.isArray(list) || !list.length) {
     container.innerHTML = `
-      <div class="card">
+      <div class="card admin-card">
         <div class="name">
           ไม่มีรายการค้างส่ง
         </div>
@@ -7178,7 +7241,7 @@ container.innerHTML =
   Object.entries(grouped)
     .map(([po, items]) => `
 
-<div class="card">
+<div class="card admin-card">
 
 <div
   class="name"
@@ -7268,24 +7331,11 @@ ${
             rgba(255,255,255,.08);
         ">
 
-        <div class="stock">
-          สินค้า:
-          ${esc(item.productId || "-")}
+        <div class="admin-card-meta">
+          <span>SKU: ${esc(item.productId || "-")}</span>
+          <span>ใน PO: ${Number(item.orderedQty || 0)}</span>
+          <span>ค้างส่ง: ${Number(item.qty || 0)}</span>
         </div>
-
-        <div class="stock">
-          จำนวนใน PO :
-          ${Number(
-            item.orderedQty || 0
-          )}
-        </div>
-
-<div class="stock">
-  ค้างส่ง :
-  ${Number(
-    item.qty || 0
-  )}
-</div>
 
  ${
    item.status === "OPEN"
