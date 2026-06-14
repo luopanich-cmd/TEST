@@ -1029,37 +1029,30 @@ function enforceInvalidCanonicalOrderRateLimit(
 function recordInvalidCanonicalOrderAttempt(
   requestedQtyByProduct
 ) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(5000);
+  const attempt =
+    getInvalidCanonicalOrderAttemptState(requestedQtyByProduct);
+  const now = Date.now();
+  let state = attempt.state;
 
-  try {
-    const attempt =
-      getInvalidCanonicalOrderAttemptState(requestedQtyByProduct);
-    const now = Date.now();
-    let state = attempt.state;
-
-    if (
-      !state ||
-      !Number.isFinite(Number(state.startedAt)) ||
-      !Number.isInteger(Number(state.count)) ||
-      now - Number(state.startedAt) >=
-        INVALID_CANONICAL_ORDER_WINDOW_MS
-    ) {
-      state = {
-        count: 0,
-        startedAt: now
-      };
-    }
-
-    state.count = Number(state.count) + 1;
-    attempt.cache.put(
-      attempt.key,
-      JSON.stringify(state),
-      Math.ceil(INVALID_CANONICAL_ORDER_WINDOW_MS / 1000)
-    );
-  } finally {
-    lock.releaseLock();
+  if (
+    !state ||
+    !Number.isFinite(Number(state.startedAt)) ||
+    !Number.isInteger(Number(state.count)) ||
+    now - Number(state.startedAt) >=
+      INVALID_CANONICAL_ORDER_WINDOW_MS
+  ) {
+    state = {
+      count: 0,
+      startedAt: now
+    };
   }
+
+  state.count = Number(state.count) + 1;
+  attempt.cache.put(
+    attempt.key,
+    JSON.stringify(state),
+    Math.ceil(INVALID_CANONICAL_ORDER_WINDOW_MS / 1000)
+  );
 }
 
 function clearInvalidCanonicalOrderAttempts(
@@ -1227,10 +1220,6 @@ function getCreateOrderRateLimitBucketKey(data) {
 }
 
 function enforceCreateOrderRateLimit(data) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(5000);
-
-  try {
     const properties = PropertiesService.getScriptProperties();
     const rawState = properties.getProperty(CREATE_ORDER_RATE_LIMIT_KEY);
     const now = Date.now();
@@ -1314,21 +1303,10 @@ function enforceCreateOrderRateLimit(data) {
       CREATE_ORDER_RATE_LIMIT_KEY,
       JSON.stringify(state)
     );
-  } finally {
-    lock.releaseLock();
-  }
 }
 
 function createOrder(data) {
   // 🔒 FIX: Web App ต้องอ้างอิง Spreadsheet แบบชัดเจน
-  const SPREADSHEET_ID = "1xeNVv2yLADoxuZQwYBEZNvlZnt9CKvJ40RLTwNOrQfU";
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName("Orders");
-  
-  if (!sheet) {
-    throw new Error("Orders sheet not found");
-  }
-
   /* ================= VALIDATE ROOT ================= */
   if (!data || !Array.isArray(data.items)) {
     throw new Error("Invalid order items");
@@ -1389,6 +1367,17 @@ function createOrder(data) {
 
     requestedQtyByProduct.set(productId, mergedQty);
   });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName("Orders");
+
+  if (!sheet) {
+    throw new Error("Orders sheet not found");
+  }
 
   /* ================= LOAD AUTHORITATIVE PRODUCTS ================= */
   const productSheet = ss.getSheetByName("Products");
@@ -1476,6 +1465,9 @@ function createOrder(data) {
     total,
     items: cleanItems
   };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 
