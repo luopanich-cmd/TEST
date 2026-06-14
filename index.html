@@ -849,15 +849,15 @@ button:disabled {
  }
 
  .cart-with-thumb > .cart-thumb{
-   flex:0 0 56px;
+   flex:0 0 64px;
  }
 
  .cart-thumb{
-   width:56px;
-   height:56px;
+   width:64px;
+   height:64px;
    border-radius:14px;
    overflow:hidden;
-   background:rgba(255,255,255,.06);
+   background:#1c1c1e;
    border:1px solid rgba(255,255,255,.08);
    display:grid;
    place-items:center;
@@ -866,7 +866,8 @@ button:disabled {
  .cart-thumb img{
    width:100%;
    height:100%;
-   object-fit:cover;
+   object-fit:contain;
+   object-position:center;
    display:block;
  }
 
