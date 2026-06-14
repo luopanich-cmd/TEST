@@ -1074,6 +1074,9 @@ button:disabled {
 .sheet-close-btn:focus-visible,
 .filter-item:focus-visible,
 .search-input:focus-visible,
+.product-card:focus-visible,
+.card[role="button"]:focus-visible,
+.name[role="button"]:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
@@ -1589,6 +1592,7 @@ textarea {
   color: #fff;
   font-size: 14px;
   font-weight: 500;
+  white-space: pre-line;
 
   box-shadow: var(--shadow-float);              /* 🔴 ใช้ token เดียวกับระบบ */
 
@@ -2286,31 +2290,33 @@ textarea.input{
  ></div>
 
 <!-- ================= VIEWER SHEETS ================= -->
- <div id="productSheet" class="sheet sheet-product" role="dialog" aria-modal="true" tabindex="-1"></div>
- <div id="qtySheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
- <div id="cartSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
- <div id="confirmSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
- <div id="stockSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
+ <div id="productSheet" class="sheet sheet-product" role="dialog" aria-modal="true" aria-labelledby="productSheetTitle" tabindex="-1"></div>
+ <div id="qtySheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="qtySheetTitle" tabindex="-1"></div>
+ <div id="cartSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="cartSheetTitle" tabindex="-1"></div>
+ <div id="confirmSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="confirmSheetTitle" tabindex="-1"></div>
+ <div id="stockSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="stockSheetTitle" tabindex="-1"></div>
 
 <!-- 🖼️ IMAGE VIEWER (FULLSCREEN) -->
-<div id="imageViewerSheet" class="sheet image-viewer-sheet" role="dialog" aria-modal="true" tabindex="-1">
+<div id="imageViewerSheet" class="sheet image-viewer-sheet" role="dialog" aria-modal="true" aria-label="ตัวอย่างรูปภาพ" tabindex="-1">
 </div>
 
 <!-- ================= ADMIN SHEETS ================= -->
- <div id="adminLoginSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
- <div id="adminDashboardSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
- <div id="adminOrderSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
- <div id="adminStockSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
+ <div id="adminLoginSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminLoginSheetTitle" tabindex="-1"></div>
+ <div id="adminDashboardSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminDashboardSheetTitle" tabindex="-1"></div>
+ <div id="adminOrderSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminOrderSheetTitle" tabindex="-1"></div>
+ <div id="adminStockSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminStockSheetTitle" tabindex="-1"></div>
  <div id="pendingDeliverySheet"
       class="sheet"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="pendingDeliverySheetTitle"
       tabindex="-1"></div>
 <div
   id="createPendingDeliverySheet"
   class="sheet"
   role="dialog"
   aria-modal="true"
+  aria-labelledby="createPendingDeliverySheetTitle"
   tabindex="-1">
 </div>
 
@@ -2319,16 +2325,17 @@ textarea.input{
    class="sheet"
    role="dialog"
    aria-modal="true"
+   aria-labelledby="bulkPendingDeliverySheetTitle"
    tabindex="-1">
  </div>
  
 <!-- 🔹 Main Menu (Side Sheet Right) -->
-<div id="mainMenuSheet" class="side-menu" role="dialog" aria-modal="true" tabindex="-1"></div>
+<div id="mainMenuSheet" class="side-menu" role="dialog" aria-modal="true" aria-labelledby="mainMenuSheetTitle" tabindex="-1"></div>
 
- <div id="adminProductActionSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
- <div id="adminProductEditSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
- <div id="adminStockActionSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
- <div id="adminAddProductSheet" class="sheet" role="dialog" aria-modal="true" tabindex="-1"></div>
+ <div id="adminProductActionSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminProductActionSheetTitle" tabindex="-1"></div>
+ <div id="adminProductEditSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminProductEditSheetTitle" tabindex="-1"></div>
+ <div id="adminStockActionSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminStockActionSheetTitle" tabindex="-1"></div>
+ <div id="adminAddProductSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminAddProductSheetTitle" tabindex="-1"></div>
 
   
 <script>
@@ -2518,7 +2525,7 @@ function renderLastOrderSheet() {
   }
 
   confirmSheet.innerHTML = `
-    <h3>บิลล่าสุด</h3>
+    <h3 id="confirmSheetTitle">บิลล่าสุด</h3>
     <div style="margin-top:12px">
       เลขที่ใบสั่งซื้อ: ${escapeHtml(order.orderId)}
     </div>
@@ -2649,6 +2656,8 @@ function showToast(message, type = 'info', timeout = 2500) {
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
   toast.textContent = message;
+  toast.setAttribute("role", type === "error" ? "alert" : "status");
+  toast.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
 
   container.appendChild(toast);
 
@@ -2675,6 +2684,8 @@ function showLoading(message, timeoutMs = 60000) {
 
   text.textContent = message;
   overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+  overlay.setAttribute("aria-busy", "true");
 
   // บังคับ render
   overlay.offsetHeight;
@@ -2706,7 +2717,11 @@ function safeHideLoading(fromTimeout = false) {
 
   setTimeout(() => {
     try {
-      if (overlay) overlay.classList.add("hidden");
+      if (overlay) {
+        overlay.classList.add("hidden");
+        overlay.setAttribute("aria-hidden", "true");
+        overlay.setAttribute("aria-busy", "false");
+      }
 
       // 🔥 หัวใจ: เคลียร์ timer ของ showLoading
       if (_loadingTimer) {
@@ -2952,7 +2967,7 @@ async function refreshProducts() {
     console.error("refreshProducts failed:", err);
     if (app) {
       app.innerHTML = `
-        <div style="
+        <div role="alert" style="
           text-align:center;
           color:#d93025;
           margin-top:40px;
@@ -3273,6 +3288,13 @@ function toInlineJsStringLiteral(value) {
     .replace(/\u2029/g, "\\u2029") + "'";
 }
 
+function handleKeyboardActivation(event, element) {
+  if (!event || !element) return;
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  element.click();
+}
+
 
 // 🔴 CHANGED: ADD renderFloatingBar() (fix: cart added but bar never appears because function was missing)
 function renderFloatingBar(){
@@ -3383,7 +3405,7 @@ function closeImageViewer(ev){
      : [];
 
    const html = `
-     <h3>${esc(p.name)}</h3>
+     <h3 id="productInfoSheetTitle">${esc(p.name)}</h3>
 
      ${
        images.length
@@ -3428,6 +3450,7 @@ function closeImageViewer(ev){
    sheet.className = "sheet";
    sheet.setAttribute("role", "dialog");
    sheet.setAttribute("aria-modal", "true");
+   sheet.setAttribute("aria-labelledby", "productInfoSheetTitle");
    sheet.setAttribute("tabindex", "-1");  
    document.body.appendChild(sheet);
  }
@@ -3457,7 +3480,7 @@ function renderProducts(){
   if (!Array.isArray(state.products)) {
     console.error("renderProducts: products is not array", state.products);
     app.innerHTML = `
-      <div style="
+      <div role="alert" style="
         text-align:center;
         color:#d93025;
         margin-top:40px;
@@ -3551,6 +3574,8 @@ if (
     /* ================= CARD ================= */
     const card = document.createElement("div");
     card.className = "product-card";
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
 
     card.onclick = () => {
       if (state.mode === "admin") {
@@ -3559,6 +3584,7 @@ if (
         openProduct(p);
       }
     };
+    card.onkeydown = event => handleKeyboardActivation(event, card);
 
     card.innerHTML = `
       <img class="thumb"
@@ -3586,14 +3612,25 @@ if (
 
   // ❌ ไม่พบสินค้า
   if (!found) {
+    const hasSearch = String(state.search || "").trim().length > 0;
+    const activeFilter = state.mode === "admin"
+      ? state.admin?.filters?.status
+      : state.viewerFilter?.status;
+    const hasFilter = activeFilter && activeFilter !== "all";
+    const emptyMessage = hasSearch
+      ? "ไม่พบสินค้าที่ค้นหา"
+      : hasFilter
+        ? "ไม่มีสินค้าที่ตรงกับตัวกรอง"
+        : "ยังไม่มีสินค้าให้แสดง";
+
     app.innerHTML = `
-      <div style="
+      <div role="status" style="
         text-align:center;
         color:#888;
         margin-top:40px;
         font-size:15px;
       ">
-        ไม่พบสินค้าที่ค้นหา
+        ${emptyMessage}
       </div>
     `;
     return;   
@@ -3685,7 +3722,7 @@ function renderProductSheet(){
       ×
     </button>
 
-    <h3 class="product-title">${esc(p.name)}</h3>
+    <h3 id="productSheetTitle" class="product-title">${esc(p.name)}</h3>
 
     <div class="product-sku">
       รหัสสินค้า: ${esc(p.productId)}
@@ -3752,7 +3789,7 @@ function renderCart(){
       <button class="btn btn-outline sheet-nav-btn"
         onclick="closeCart()"
         aria-label="ปิดตะกร้า">×</button>
-      <h3>ตะกร้า</h3>
+      <h3 id="cartSheetTitle">ตะกร้า</h3>
       <div aria-hidden="true"></div>
     </div>
   `;
@@ -3826,7 +3863,7 @@ function renderConfirmSheet(){
   if (!confirmSheet) return;
   let total = 0;
 
-  confirmSheet.innerHTML = "<h3>ยืนยันใบสั่งซื้อ</h3>";
+  confirmSheet.innerHTML = '<h3 id="confirmSheetTitle">ยืนยันใบสั่งซื้อ</h3>';
 
   state.cart.forEach(i=>{
     const sum = i.price * i.qty;
@@ -4328,7 +4365,7 @@ function closeTopSheet(){
 
 function showStockError(message){
   stockSheet.innerHTML = `
-    <h3 style="color:#ff3b30">สต๊อกไม่เพียงพอ</h3>
+    <h3 id="stockSheetTitle" style="color:#ff3b30">สต๊อกไม่เพียงพอ</h3>
 
     <div style="
       font-size:15px;
@@ -4399,7 +4436,7 @@ function openQtySheet(){
       <button class="btn btn-outline sheet-nav-btn"
         onclick="closeQty()"
         aria-label="ปิดหน้าระบุจำนวน">×</button>
-      <h3>ระบุจำนวน</h3>
+      <h3 id="qtySheetTitle">ระบุจำนวน</h3>
       <div aria-hidden="true"></div>
     </div>
 
@@ -4528,17 +4565,19 @@ function renderAdminLogin(){
       <button class="btn btn-outline sheet-nav-btn"
         onclick="cancelAdminLogin()"
         aria-label="ปิดหน้าเข้าสู่ระบบ">×</button>
-      <h3>Admin Login</h3>
+      <h3 id="adminLoginSheetTitle">Admin Login</h3>
       <div aria-hidden="true"></div>
     </div>
 
     <div class="form-group">
+      <label for="adminUser">Username</label>
       <input id="adminUser"
         placeholder="Username"
         onfocus="focusInput(this)">
     </div>
 
     <div class="form-group">
+      <label for="adminPass">Password</label>
       <input id="adminPass"
         type="password"
         placeholder="Password"
@@ -4583,7 +4622,7 @@ function openChangePasswordSheet(){
       <button class="btn btn-outline sheet-nav-btn"
         onclick="closeOverlay(adminLoginSheet)"
         aria-label="ปิดหน้าเปลี่ยนรหัสผ่าน">×</button>
-      <h3>เปลี่ยนรหัสผ่าน</h3>
+      <h3 id="adminLoginSheetTitle">เปลี่ยนรหัสผ่าน</h3>
       <div aria-hidden="true"></div>
     </div>
 
@@ -4935,7 +4974,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
   }
 
   adminDashboardSheet.innerHTML = `
-    <h3>📊 Admin Dashboard</h3>
+    <h3 id="adminDashboardSheetTitle">📊 Admin Dashboard</h3>
     <div class="loading">กำลังโหลดข้อมูล</div>
   `;
 
@@ -4987,13 +5026,17 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
             onclick="backToAdminMainMenu()">
             ← กลับเมนู
           </button>
-          <h3>📦 Pending Orders</h3>
+          <h3 id="adminDashboardSheetTitle">📦 Pending Orders</h3>
         </div>
 
         ${
           pendingOrders.length
             ? pendingOrders.map(o => `
-                <div class="card" onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})">
+                <div class="card"
+                  role="button"
+                  tabindex="0"
+                  onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})"
+                  onkeydown="handleKeyboardActivation(event, this)">
                   <div class="name">${esc(o.orderId)}</div>
                   <div>Status: ${esc(o.status)}</div>
                   <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
@@ -5023,7 +5066,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
           onclick="backToAdminMainMenu()">
           ← กลับเมนู
         </button>
-        <h3>
+        <h3 id="adminDashboardSheetTitle">
           <span class="dashboard-title-main">📊 Admin Dashboard</span>
           <span class="dashboard-title-sub">(เฉพาะ APPROVED)</span>
         </h3>
@@ -5084,7 +5127,11 @@ ${
             )
         )
         .map(o => `
-            <div class="card" onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})">
+            <div class="card"
+              role="button"
+              tabindex="0"
+              onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})"
+              onkeydown="handleKeyboardActivation(event, this)">
               <div class="name">${esc(o.orderId)}</div>
               <div>Status: ${esc(o.status)}</div>
               <div>Total: ฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
@@ -5118,7 +5165,7 @@ ${
     }
 
     adminDashboardSheet.innerHTML = `
-      <h3>📊 Admin Dashboard</h3>
+      <h3 id="adminDashboardSheetTitle">📊 Admin Dashboard</h3>
 
       <div style="text-align:center;color:#d93025;margin-top:32px">
         ไม่สามารถโหลดข้อมูลแดชบอร์ดได้
@@ -5197,7 +5244,7 @@ async function openStockTimeline(force = false) {
   closeOverlay(adminDashboardSheet);
 
   adminStockSheet.innerHTML = `
-    <h3>📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
+    <h3 id="adminStockSheetTitle">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
     <div class="loading">กำลังโหลด...</div>
   `;
 
@@ -5338,7 +5385,7 @@ async function openStockTimeline(force = false) {
 
     /* ================= RENDER ================= */
     adminStockSheet.innerHTML = `
-      <h3>📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
+      <h3 id="adminStockSheetTitle">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
 
       <button class="btn btn-secondary"
         style="width:100%;margin-bottom:12px"
@@ -5506,7 +5553,7 @@ async function openStockTimeline(force = false) {
     console.error(err);
 
     adminStockSheet.innerHTML = `
-      <h3>📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
+      <h3 id="adminStockSheetTitle">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
       <div style="text-align:center;color:#d93025;margin-top:32px">
         ไม่สามารถโหลดข้อมูลได้
       </div>
@@ -5550,7 +5597,7 @@ adminOrderSheet.innerHTML = `
     ×
   </button>
 
-  <h3>${esc(order.orderId)}</h3>
+  <h3 id="adminOrderSheetTitle">${esc(order.orderId)}</h3>
 
  ${
    order.status !== "PENDING" &&
@@ -5723,7 +5770,7 @@ function closeAdminOrderSheet() {
     ✕
   </button>
 
-<h3
+<h3 id="bulkPendingDeliverySheetTitle"
   style="
     margin:0;
     text-align:center;
@@ -5994,8 +6041,10 @@ style="
          )
          .join("\n");
 
-       alert(
-         `สร้างสำเร็จ:\n${successText}\n\nสร้างไม่สำเร็จ:\n${failureText}`
+       showToast(
+         `สร้างสำเร็จ:\n${successText}\n\nสร้างไม่สำเร็จ:\n${failureText}`,
+         "warning",
+         7000
        );
 
        closeOverlay(
@@ -6006,13 +6055,15 @@ style="
        return;
      }
 
-     alert(
+     showToast(
        "สร้างรายการไม่สำเร็จ\n" +
-       failedItems
-         .map(({ item, error }) =>
-           `- ${item.name || item.productId}: ${error}`
-         )
-         .join("\n")
+         failedItems
+           .map(({ item, error }) =>
+             `- ${item.name || item.productId}: ${error}`
+           )
+           .join("\n"),
+       "error",
+       7000
      );
 
    } finally {
@@ -6082,7 +6133,7 @@ createPendingDeliverySheet.innerHTML = `
         ← กลับ
       </button>
 
-      <h3>📦 เพิ่มรายการค้างส่ง</h3>
+      <h3 id="createPendingDeliverySheetTitle">📦 เพิ่มรายการค้างส่ง</h3>
 
     </div>
 
@@ -6298,9 +6349,11 @@ async function createPendingDelivery() {
 
     console.error(err);
 
-    alert(
+    showToast(
       err.message ||
-      "ไม่สามารถสร้างรายการค้างส่งได้"
+        "ไม่สามารถสร้างรายการค้างส่งได้",
+      "error",
+      5000
     );
 } finally {
 
@@ -6400,21 +6453,25 @@ async function createPendingDelivery() {
          )
          .join("\n");
 
-       alert(
-         `สร้างสำเร็จ:\n${successText}\n\nสร้างไม่สำเร็จ:\n${failureText}`
+       showToast(
+         `สร้างสำเร็จ:\n${successText}\n\nสร้างไม่สำเร็จ:\n${failureText}`,
+         "warning",
+         7000
        );
 
        openPendingDeliverySheet();
        return;
      }
 
-     alert(
+     showToast(
        "ไม่สามารถสร้างรายการค้างส่งได้\n" +
-       failedItems
-         .map(({ item, error }) =>
-           `- ${item.name || item.productId}: ${error}`
-         )
-         .join("\n")
+         failedItems
+           .map(({ item, error }) =>
+             `- ${item.name || item.productId}: ${error}`
+           )
+           .join("\n"),
+       "error",
+       7000
      );
 
    } finally {
@@ -6615,7 +6672,7 @@ function openStockAction(p){
       <button class="btn btn-outline sheet-nav-btn"
         onclick="closeOverlay(adminStockActionSheet)"
         aria-label="ปิดหน้าจัดการสต๊อก">×</button>
-      <h3>จัดการสต๊อก</h3>
+      <h3 id="adminStockActionSheetTitle">จัดการสต๊อก</h3>
       <div aria-hidden="true"></div>
     </div>
     <div>${esc(p.name)}</div>
@@ -6691,7 +6748,7 @@ async function refreshProductsWithFeedback({
     if (!silent) {
       showToast("ไม่สามารถโหลดข้อมูลสินค้าได้", "error");
       confirmSheet.innerHTML = `
-        <h3>โหลดข้อมูลไม่สำเร็จ</h3>
+        <h3 id="confirmSheetTitle">โหลดข้อมูลไม่สำเร็จ</h3>
         <div style="margin-top:12px;color:rgba(235,235,245,.78)">
           กรุณาลองใหม่อีกครั้ง
         </div>
@@ -6718,7 +6775,7 @@ function openPendingDeliverySheet() {
         ← กลับ
       </button>
 
-      <h3>
+      <h3 id="pendingDeliverySheetTitle">
         <span class="dashboard-title-main">
           📦 ค้างส่ง
         </span>
@@ -6822,6 +6879,14 @@ container.innerHTML =
 
 <div
   class="name"
+ role="button"
+ tabindex="0"
+ aria-expanded="${
+   state.admin.pendingDeliveryExpanded[po]
+     ? "true"
+     : "false"
+ }"
+ onkeydown="handleKeyboardActivation(event, this)"
  onclick="
    state.admin.pendingDeliveryExpanded[
      ${toInlineJsStringLiteral(po)}
@@ -6980,12 +7045,12 @@ async function markPendingDelivered(
 
  <div class="confirm-complete-sheet">
 
+   <h3 id="confirmSheetTitle" class="confirm-complete-title">
+     ยืนยันการส่งครบ
+   </h3>
+
    <div class="confirm-complete-icon">
      ✅
-   </div>
-
-   <div class="confirm-complete-title">
-     ยืนยันการส่งครบ
    </div>
 
    <div class="confirm-complete-desc">
@@ -7127,7 +7192,7 @@ function openMainMenu(triggerEl){
   // ✅ STEP 2: Main Menu v1 = Login only (ถ้ายังไม่อยู่ admin mode)
   mainMenuSheet.innerHTML = `
     <div class="side-menu-topbar">
-      <h3>Main Menu</h3>
+      <h3 id="mainMenuSheetTitle">Main Menu</h3>
       <button class="btn btn-outline sheet-nav-btn"
         onclick="closeMainMenu()"
         aria-label="ปิดเมนูหลัก">×</button>
@@ -7241,7 +7306,7 @@ function openAddProduct(force = false){
     !state.admin.token ||
     isAdminSessionExpired()
   ) {
-    alert("Session หมดอายุ กรุณา login ใหม่");
+    showToast("Session หมดอายุ กรุณา login ใหม่", "warning");
     exitAdmin();
     return;
   }
@@ -7265,7 +7330,7 @@ function openAddProduct(force = false){
       <button class="btn btn-outline sheet-nav-btn"
         onclick="closeAddProduct()"
         aria-label="ปิดหน้าเพิ่มสินค้า">×</button>
-      <h3>➕ เพิ่มสินค้าใหม่</h3>
+      <h3 id="adminAddProductSheetTitle">➕ เพิ่มสินค้าใหม่</h3>
       <div aria-hidden="true"></div>
     </div>
 
@@ -7706,7 +7771,7 @@ function openProductEdit(p){
       <button class="btn btn-outline sheet-nav-btn"
         onclick="closeProductEdit()"
         aria-label="ปิดหน้าแก้ไขสินค้า">×</button>
-      <h3>แก้ไขสินค้า</h3>
+      <h3 id="adminProductEditSheetTitle">แก้ไขสินค้า</h3>
       <div aria-hidden="true"></div>
     </div>
 
@@ -8255,7 +8320,7 @@ function confirmDeleteProduct() {
   closeOverlay(adminProductEditSheet);
 
   confirmSheet.innerHTML = `
-    <h3>ลบสินค้าแบบถาวร</h3>
+    <h3 id="confirmSheetTitle">ลบสินค้าแบบถาวร</h3>
     <div style="margin-top:12px">
       สินค้า: "${esc(p.name)}"<br>
       รหัส: ${esc(p.productId)}<br><br>
@@ -8512,7 +8577,7 @@ function openAdminProductAction(p){
   state.selectedProduct = p;
 
   adminProductActionSheet.innerHTML = `
-    <h3>จัดการสินค้า</h3>
+    <h3 id="adminProductActionSheetTitle">จัดการสินค้า</h3>
 
     <div style="
       font-weight:600;
@@ -9703,7 +9768,8 @@ window.testBarHide = function testBarHide(){
 </script>
   
 <!-- Toast Container -->
-<div id="toast-container"></div>
+<div id="toast-container"
+  aria-atomic="false"></div>
 
 <!-- Floating Bottom Bar -->
 <div id="floatingBar"></div> 
@@ -9714,7 +9780,12 @@ window.testBarHide = function testBarHide(){
 </button>  
 
 <!-- Loading Overlay -->
-<div id="loading-overlay" class="hidden">
+<div id="loading-overlay"
+  class="hidden"
+  role="status"
+  aria-live="polite"
+  aria-busy="false"
+  aria-hidden="true">
   <div class="loading-box">
     <div class="spinner"></div>
     <div id="loading-text">กำลังดำเนินการ...</div>
