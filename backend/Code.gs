@@ -270,8 +270,7 @@ function closePendingDelivery(pendingId, by) {
   if (
     pendingIdCol === -1 ||
     statusCol === -1 ||
-    closedAtCol === -1 ||
-    closedByCol === -1
+    closedAtCol === -1
   ) {
     throw new Error(
       "pending_delivery schema mismatch"
@@ -298,17 +297,17 @@ function closePendingDelivery(pendingId, by) {
     );
   }
 
-  sheet
-    .getRange(rowIndex + 1, statusCol + 1)
-    .setValue("CLOSED");
+  const updatedRow = rows[rowIndex].slice();
+  updatedRow[statusCol] = "CLOSED";
+  updatedRow[closedAtCol] = new Date();
+
+  if (closedByCol !== -1) {
+    updatedRow[closedByCol] = by || "";
+  }
 
   sheet
-    .getRange(rowIndex + 1, closedAtCol + 1)
-    .setValue(new Date());
-
-  sheet
-    .getRange(rowIndex + 1, closedByCol + 1)
-    .setValue(by || "");
+    .getRange(rowIndex + 1, 1, 1, updatedRow.length)
+    .setValues([updatedRow]);
 
   return {
     success: true,
