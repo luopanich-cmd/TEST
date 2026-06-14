@@ -635,6 +635,12 @@ button:disabled {
   box-shadow: var(--shadow-card-pressed);
 }
 
+.btn.is-submitting{
+  filter: saturate(.9) brightness(.92);
+  cursor: wait;
+  box-shadow: var(--shadow-card-pressed);
+}
+
 .admin-sheet-topbar{
   position: sticky;
   top: -16px;
@@ -873,6 +879,21 @@ button:disabled {
    display:grid;
    gap:8px;
  }
+
+ .order-success-card.success-enter{
+   animation: success-card-enter var(--motion-duration-normal) var(--motion-ease-standard);
+ }
+
+@keyframes success-card-enter{
+  from{
+    opacity:0;
+    transform:translateY(8px) scale(.985);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0) scale(1);
+  }
+}
 
  .success-note{
    margin-top:12px;
@@ -2406,9 +2427,17 @@ border: 1px solid rgba(255,255,255,.16);
 #floatingBar.bounce-in{
   animation: float-bounce .65s cubic-bezier(.34,1.56,.64,1);
 }
+#floatingBar.cart-added-pulse{
+  animation: cart-added-pulse var(--motion-duration-normal) var(--motion-ease-emphasized);
+}
 @keyframes float-bounce{
   0%   { transform:translateY(120%) scale(.94); }
   60%  { transform:translateY(-6px) scale(1.02); }
+  100% { transform:translateY(0) scale(1); }
+}
+@keyframes cart-added-pulse{
+  0%   { transform:translateY(0) scale(1); }
+  45%  { transform:translateY(-2px) scale(1.018); }
   100% { transform:translateY(0) scale(1); }
 }
 
@@ -2477,7 +2506,8 @@ border: 1px solid rgba(255,255,255,.16);
 
    /* 🔴 Disable floating bar animations */
    #floatingBar,
-   #floatingBar.bounce-in{
+   #floatingBar.bounce-in,
+   #floatingBar.cart-added-pulse{
      transition: none !important;
      animation: none !important;
    }
@@ -2825,6 +2855,14 @@ function isReducedMotion() {
   );
 }
 
+function replayMotionClass(el, className, duration = MOTION.DURATION_NORMAL_MS) {
+  if (!el || !className || isReducedMotion()) return;
+  el.classList.remove(className);
+  void el.offsetWidth;
+  el.classList.add(className);
+  window.setTimeout(() => el.classList.remove(className), duration + 80);
+}
+
 function escapeHtml(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -2880,7 +2918,7 @@ function renderLastOrderSheet() {
   confirmSheet.innerHTML = `
     <h3 id="confirmSheetTitle">สร้างใบสั่งซื้อสำเร็จ</h3>
 
-    <div class="order-success-card">
+    <div class="order-success-card success-enter">
       <div class="summary-row">
         <span>เลขที่ใบสั่งซื้อ</span>
         <strong>${escapeHtml(order.orderId)}</strong>
@@ -3719,6 +3757,12 @@ bar.style.cursor = "pointer";
   bar.classList.add("show","bounce-in");
   setTimeout(()=> bar.classList.remove("bounce-in"), 650);
 }  
+
+function triggerCartAddedFeedback() {
+  if (typeof renderFloatingBar === "function") renderFloatingBar();
+  const bar = document.getElementById("floatingBar");
+  replayMotionClass(bar, "cart-added-pulse");
+}
   
 function openImageViewer(url){
   if (!url) return;
@@ -4291,9 +4335,10 @@ function renderConfirmSheet(){
 
 
 <div class="sheet-action-footer">
-  <button class="btn btn-primary"
+  <button class="btn btn-primary ${state.isSubmitting ? "is-submitting" : ""}"
     id="submitBtn"
     ${state.isSubmitting ? "disabled" : ""}
+    aria-busy="${state.isSubmitting ? "true" : "false"}"
     onclick="submitOrder()">
     ยืนยันสร้างใบสั่งซื้อ
   </button>
@@ -4925,6 +4970,7 @@ function confirmAddToCart(){
   );
 
   resetToHome();
+  requestAnimationFrame(triggerCartAddedFeedback);
 }
   
 function resetToHome(){
@@ -8016,6 +8062,12 @@ async function submitOrder(){
 
   state.isSubmitting = true;
   state.ui.backdropLocked = true;
+  const submitBtn = document.getElementById("submitBtn");
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.add("is-submitting");
+    submitBtn.setAttribute("aria-busy", "true");
+  }
 
   try {
     // ================= STEP 1: CHECK STOCK =================
@@ -8100,6 +8152,11 @@ async function submitOrder(){
   } finally {
     safeHideLoading();
     state.isSubmitting = false;
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove("is-submitting");
+      submitBtn.setAttribute("aria-busy", "false");
+    }
     // 🔒 ปลด lock เฉพาะเมื่อไม่มี sheet เปิดอยู่ (กัน race condition)
     if (state.ui.overlayCount === 0) {
       state.ui.backdropLocked = false;
