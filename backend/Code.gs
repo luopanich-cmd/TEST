@@ -2119,8 +2119,6 @@ function adminLogin(username, password) {
   );
 
   if (!found) {
-    recordFailedLoginAttempt(username);
-
     return {
       success: false,
       message: "Username หรือ Password ไม่ถูกต้อง"
@@ -2412,7 +2410,7 @@ function cleanupExpiredSessions() {
 // ================= LOGIN RATE LIMIT =================
 const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5;
 const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
-const LOGIN_RATE_LIMIT_VERIFY_COOLDOWN_MS = 30 * 1000;
+const LOGIN_RATE_LIMIT_LOCKOUT_MS = 30 * 1000;
 
 function getLoginAttemptKey(username) {
   const normalizedUsername =
@@ -2458,7 +2456,12 @@ function isLoginRateLimited(username) {
     return false;
   }
 
-  return count >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS;
+  if (count < LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
+    return false;
+  }
+
+  const lockedUntil = Number(state.lockedUntil);
+  return Number.isFinite(lockedUntil) && Date.now() < lockedUntil;
 }
 
 function reserveLoginVerificationAttempt(username) {
@@ -2470,63 +2473,6 @@ function reserveLoginVerificationAttempt(username) {
     const properties = PropertiesService.getScriptProperties();
     const rawState = properties.getProperty(key);
 
-    if (!rawState) {
-      return true;
-    }
-
-    let state;
-
-    try {
-      state = JSON.parse(rawState);
-    } catch (err) {
-      properties.deleteProperty(key);
-      return true;
-    }
-
-    const now = Date.now();
-    const firstFailedAt = Number(state.firstFailedAt);
-    const count = Number(state.count);
-
-    if (
-      !Number.isFinite(firstFailedAt) ||
-      !Number.isInteger(count) ||
-      count < 0 ||
-      now - firstFailedAt >= LOGIN_RATE_LIMIT_WINDOW_MS
-    ) {
-      properties.deleteProperty(key);
-      return true;
-    }
-
-    if (count < LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
-      return true;
-    }
-
-    const nextVerificationAt = Number(state.nextVerificationAt);
-
-    if (
-      Number.isFinite(nextVerificationAt) &&
-      now < nextVerificationAt
-    ) {
-      return false;
-    }
-
-    state.nextVerificationAt =
-      now + LOGIN_RATE_LIMIT_VERIFY_COOLDOWN_MS;
-    properties.setProperty(key, JSON.stringify(state));
-    return true;
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function recordFailedLoginAttempt(username) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(5000);
-
-  try {
-    const key = getLoginAttemptKey(username);
-    const properties = PropertiesService.getScriptProperties();
-    const rawState = properties.getProperty(key);
     const now = Date.now();
     let state = null;
 
@@ -2551,8 +2497,30 @@ function recordFailedLoginAttempt(username) {
       };
     }
 
+    if (state.count >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
+      const lockedUntil = Number(state.lockedUntil);
+
+      if (
+        Number.isFinite(lockedUntil) &&
+        now < lockedUntil
+      ) {
+        return false;
+      }
+
+      state = {
+        count: 0,
+        firstFailedAt: now
+      };
+    }
+
     state.count = Number(state.count) + 1;
+
+    if (state.count >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS) {
+      state.lockedUntil = now + LOGIN_RATE_LIMIT_LOCKOUT_MS;
+    }
+
     properties.setProperty(key, JSON.stringify(state));
+    return true;
   } finally {
     lock.releaseLock();
   }
