@@ -3210,6 +3210,47 @@ textarea.input{
   font-size:14px;
 }
 
+.cute-mascot{
+  position: fixed;
+  right: max(14px, env(safe-area-inset-right, 0px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  width: 58px;
+  height: 58px;
+  border-radius: 22px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,249,252,.92);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-fab), inset 0 1px 0 var(--inner-highlight);
+  color: var(--text);
+  font-size: 30px;
+  line-height: 1;
+  z-index: 44;
+  pointer-events: none;
+  user-select: none;
+  display: none;
+}
+
+body[data-theme="cute"] .cute-mascot{
+  display: flex;
+}
+
+body[data-theme="dark"] .cute-mascot,
+body:has(.sheet.show) .cute-mascot,
+body:has(.side-menu.show) .cute-mascot{
+  display: none;
+}
+
+@media (min-width: 768px){
+  .cute-mascot{
+    width: 76px;
+    height: 76px;
+    border-radius: 28px;
+    font-size: 40px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  }
+}
+
 </style>
 </head>
 <body>
@@ -3219,6 +3260,7 @@ textarea.input{
 
 
 <div id="app" class="container"></div>
+<div id="cuteMascot" class="cute-mascot" aria-hidden="true">🐰</div>
 
 <!-- ✅ GLOBAL BACKDROP (มีตัวเดียวพอ) -->
  <div
