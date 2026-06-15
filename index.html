@@ -1778,6 +1778,16 @@ textarea:focus-visible {
   opacity: 1;
 }
 
+.side-menu.admin-child-flow {
+  width: min(100vw, 430px);
+}
+
+@media (max-width: 480px) {
+  .side-menu.admin-child-flow {
+    width: 100vw;
+  }
+}
+
 .side-menu-topbar{
   position:sticky;
   top:calc(-16px - env(safe-area-inset-top, 0px));
@@ -6013,6 +6023,12 @@ function closeStockTimelineToAdminMenu() {
   if (!ensureAdminUiContext()) return;
   openMainMenu();
 }
+
+function renderAdminMenuDirect() {
+  if (!ensureAdminUiContext()) return;
+  state.admin.ui.activeSheet = null;
+  openMainMenu();
+}
  
 function handleOpenDashboard() {
   allowOpenOrders = true;
@@ -6035,12 +6051,20 @@ function handleOpenStockTimeline(){
   openStockTimeline();
 }
 
+function openStockTimelineInsideAdminMenu(){
+  allowOpenStockTimeline = true;
+  openStockTimeline(false, {
+    target: mainMenuSheet,
+    insideAdminMenu: true
+  });
+}
+
 function handleOpenAddProduct(){
   allowOpenAddProduct = true;
   openAddProduct();
 }  
 
-async function openStockTimeline(force = false) {
+async function openStockTimeline(force = false, options = {}) {
   // ❌ ต้องมี intent จริง
   if (!force && !allowOpenStockTimeline) return;
 
@@ -6060,14 +6084,30 @@ async function openStockTimeline(force = false) {
   // 🔒 ใช้แล้วปิดทันที (กันเด้งซ้ำ)
   allowOpenStockTimeline = false;
 
-  closeOverlay(adminDashboardSheet);
+  const targetSheet = options.target || adminStockSheet;
+  const insideAdminMenu = options.insideAdminMenu === true;
+  const backAction = insideAdminMenu
+    ? "renderAdminMenuDirect()"
+    : "closeStockTimelineToAdminMenu()";
+  const stockTimelineTitleId = insideAdminMenu
+    ? "mainMenuSheetTitle"
+    : "adminStockSheetTitle";
 
-  adminStockSheet.innerHTML = `
-    <h3 id="adminStockSheetTitle">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
+  if (insideAdminMenu) {
+    state.admin.ui.activeSheet = "stockTimeline";
+    mainMenuSheet.classList.add("admin-child-flow");
+  } else {
+    closeOverlay(adminDashboardSheet);
+  }
+
+  targetSheet.innerHTML = `
+    <h3 id="${stockTimelineTitleId}">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
     <div class="loading">กำลังโหลด...</div>
   `;
 
-  openOverlay(adminStockSheet);
+  if (!insideAdminMenu) {
+    openOverlay(targetSheet);
+  }
 
   try {
     const logs = await fetchStockLogs();
@@ -6205,12 +6245,12 @@ async function openStockTimeline(force = false) {
     timeline.sort((a, b) => b.time.getTime() - a.time.getTime());
 
     /* ================= RENDER ================= */
-    adminStockSheet.innerHTML = `
-      <h3 id="adminStockSheetTitle">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
+    targetSheet.innerHTML = `
+      <h3 id="${stockTimelineTitleId}">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
 
       <button class="btn btn-outline"
         style="width:100%;margin-bottom:12px"
-        onclick="closeStockTimelineToAdminMenu()">
+        onclick="${backAction}">
         ← กลับ
       </button>
 
@@ -6403,15 +6443,15 @@ async function openStockTimeline(force = false) {
   } catch (err) {
     console.error(err);
 
-    adminStockSheet.innerHTML = `
-      <h3 id="adminStockSheetTitle">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
+    targetSheet.innerHTML = `
+      <h3 id="${stockTimelineTitleId}">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
       <div style="text-align:center;color:#d93025;margin-top:32px">
         ไม่สามารถโหลดข้อมูลได้
       </div>
 
       <button class="btn btn-outline"
         style="width:100%;margin-top:16px"
-        onclick="closeStockTimelineToAdminMenu()">
+        onclick="${backAction}">
         ← กลับ
       </button>
     `;
@@ -8137,7 +8177,7 @@ function openMainMenu(triggerEl){
                 </button>
 
                 <button class="btn btn-secondary"
-                  onclick="closeMainMenu(); handleOpenStockTimeline();">
+                  onclick="openStockTimelineInsideAdminMenu();">
                   📦 Stock Timeline
                 </button>
 
@@ -8443,7 +8483,16 @@ function closeAddProduct(){
 }
   
 function closeMainMenu(){
+  if (
+    mainMenuSheet.classList.contains("admin-child-flow") &&
+    state.admin.ui.activeSheet === "stockTimeline"
+  ) {
+    renderAdminMenuDirect();
+    return;
+  }
+
   state.admin.ui.activeSheet = null;
+   mainMenuSheet.classList.remove("admin-child-flow");
    closeOverlay(mainMenuSheet);
    document.querySelectorAll(".menu-btn[aria-expanded='true']")
      .forEach(b => syncExpanded(b, false));
