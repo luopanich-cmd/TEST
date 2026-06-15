@@ -719,6 +719,23 @@ button:disabled {
   overflow-wrap:anywhere;
 }
 
+.stock-menu-return .sheet-topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.stock-menu-return .sheet-topbar h3{
+  flex:1 1 auto;
+  text-align:left;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  overflow-wrap:normal;
+  word-break:normal;
+}
+
 .sheet-nav-btn{
   width:44px !important;
   min-width:44px;
@@ -6011,19 +6028,108 @@ function ensureAdminUiContext() {
 }
 
 function closeStockTimelineToAdminMenu() {
-  returnFromStockTimelineToMainMenu();
+  renderAdminMenuInStockSheet();
 }
 
-function returnFromStockTimelineToMainMenu() {
-  if (!ensureAdminUiContext()) return;
-  openMainMenu();
+function closeStockMenuSheetThen(action) {
   state.admin.ui.activeSheet = null;
   closeOverlay(adminStockSheet);
+
+  if (typeof action === "function") action();
+}
+
+function renderAdminMenuInStockSheet() {
+  if (!ensureAdminUiContext()) return;
+  state.admin.ui.activeSheet = "stockTimelineMenu";
+  const pendingCount = getPendingOrdersCount();
+  const hasLastOrder = !!(state.lastOrder && state.lastOrder.orderId);
+
+  adminStockSheet.innerHTML = `
+    <div class="stock-menu-return">
+    <div class="sheet-topbar">
+      <h3 id="adminStockSheetTitle">เมนูแอดมิน</h3>
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeStockMenuSheetThen()"
+        aria-label="ปิดเมนูแอดมิน">×</button>
+    </div>
+
+    <div class="menu-group">
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(leaveAdminMode)">
+        👁 กลับสู่ Viewer
+      </button>
+
+      ${
+        hasLastOrder
+          ? `
+              <button class="btn btn-secondary"
+                onclick="closeStockMenuSheetThen(reopenLastOrderSheet)">
+                🧾 บิลล่าสุด
+              </button>
+            `
+          : ``
+      }
+
+      <button class="btn btn-primary"
+        onclick="closeStockMenuSheetThen(handleOpenDashboard)">
+        📊 Dashboard
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(handleOpenPendingOrders)">
+        📦 Pending Orders ${pendingCount > 0 ? `<span class="badge badge-count">${pendingCount}</span>` : ``}
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="openStockTimelineInsideAdminMenu()">
+        📦 Stock Timeline
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(openPendingDeliverySheet)">
+        📦 ค้างส่ง
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(handleOpenAddProduct)">
+        ➕ เพิ่มสินค้าใหม่
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(openBulkProductImportSheet)">
+        นำเข้าสินค้าหลายรายการ
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(openBulkProductUpdateSheet)">
+        อัปเดตราคา/สถานะหลายรายการ
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(openChangePasswordSheet)">
+        🔐 เปลี่ยนรหัสผ่าน
+      </button>
+    </div>
+
+    <hr>
+
+    <div class="menu-group danger">
+      <button class="btn btn-danger"
+        onclick="closeStockMenuSheetThen(handleAdminLogout)">
+        🚪 Logout
+      </button>
+    </div>
+    </div>
+  `;
+
+  if (!adminStockSheet.classList.contains("show")) {
+    openOverlay(adminStockSheet);
+  }
 }
 
 function closeStockTimelineSheet() {
   if (state.admin.ui.activeSheet === "stockTimelineReturnToMenu") {
-    returnFromStockTimelineToMainMenu();
+    renderAdminMenuInStockSheet();
     return;
   }
 
