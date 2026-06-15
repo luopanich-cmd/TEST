@@ -10,9 +10,41 @@
 <!-- ================= UI STYLE ================= -->
 <style>
   :root {
+  /* ================= THEME TOKENS ================= */
+  --bg: #0f0f12;
+  --bg-soft: #161618;
+  --surface: rgba(28,28,30,.72);
+  --surface-2: rgba(44,44,46,.90);
+  --surface-3: rgba(72,72,74,.92);
+  --surface-glass: rgba(28,28,30,.72);
+  --header-bg: rgba(28,28,30,.55);
+  --header-bg-scrolled: rgba(28,28,30,.75);
+  --sheet-bg: rgba(28,28,30,.88);
+  --side-bg: rgba(28,28,30,.82);
+  --text: rgba(255,255,255,.92);
+  --text-soft: rgba(235,235,245,.75);
+  --muted: rgba(235,235,245,.68);
+  --border: rgba(255,255,255,.08);
+  --border-strong: rgba(255,255,255,.16);
+  --primary: #0066cc;
+  --primary-strong: #0052a3;
+  --primary-text: #ffffff;
+  --secondary: rgba(72,72,74,.92);
+  --secondary-strong: rgba(88,88,92,.96);
+  --success: #1f7a35;
+  --warning: #ff9f0a;
+  --danger: #d70015;
+  --focus-color: #4da3ff;
+  --focus-ring: 0 0 0 3px rgba(0,122,255,.18);
+  --placeholder: #999;
+  --header-border: rgba(255,255,255,.06);
+  --header-border-strong: rgba(255,255,255,.08);
+  --inner-highlight: rgba(255,255,255,.10);
+  --theme-color-scheme: dark;
+
   /* ================= PHASE 3: TYPOGRAPHY / HIERARCHY ================= */
-  --text-primary:   rgba(255,255,255,.92);
-  --text-secondary: rgba(235,235,245,.75);
+  --text-primary:   var(--text);
+  --text-secondary: var(--text-soft);
   --title-size:     22px;
   --subtitle-size:  12.5px;
   --title-weight:   700;
@@ -56,6 +88,81 @@
    --ease-out:   var(--motion-ease-standard);
    --ease-chrome:var(--motion-ease-standard);
  }
+
+body[data-theme="dark"] {
+  --bg: #0f0f12;
+  --bg-soft: #161618;
+  --surface: rgba(28,28,30,.72);
+  --surface-2: rgba(44,44,46,.90);
+  --surface-3: rgba(72,72,74,.92);
+  --surface-glass: rgba(28,28,30,.72);
+  --header-bg: rgba(28,28,30,.55);
+  --header-bg-scrolled: rgba(28,28,30,.75);
+  --sheet-bg: rgba(28,28,30,.88);
+  --side-bg: rgba(28,28,30,.82);
+  --text: rgba(255,255,255,.92);
+  --text-soft: rgba(235,235,245,.75);
+  --muted: rgba(235,235,245,.68);
+  --border: rgba(255,255,255,.08);
+  --border-strong: rgba(255,255,255,.16);
+  --primary: #0066cc;
+  --primary-strong: #0052a3;
+  --primary-text: #ffffff;
+  --secondary: rgba(72,72,74,.92);
+  --secondary-strong: rgba(88,88,92,.96);
+  --success: #1f7a35;
+  --warning: #ff9f0a;
+  --danger: #d70015;
+  --focus-color: #4da3ff;
+  --focus-ring: 0 0 0 3px rgba(0,122,255,.18);
+  --placeholder: #999;
+  --header-border: rgba(255,255,255,.06);
+  --header-border-strong: rgba(255,255,255,.08);
+  --inner-highlight: rgba(255,255,255,.10);
+  --theme-color-scheme: dark;
+}
+
+body[data-theme="cute"] {
+  --bg: #fff1f7;
+  --bg-soft: #fff5fa;
+  --surface: #fff9fc;
+  --surface-2: #f8e8f0;
+  --surface-3: #f4dce8;
+  --surface-glass: rgba(255,249,252,.84);
+  --header-bg: rgba(255,245,250,.86);
+  --header-bg-scrolled: rgba(255,245,250,.94);
+  --sheet-bg: rgba(255,249,252,.96);
+  --side-bg: rgba(255,249,252,.96);
+  --text: #5d4b59;
+  --text-soft: #8b7885;
+  --muted: #9c8c97;
+  --border: #ebc8d8;
+  --border-strong: #dfa9c0;
+  --primary: #f28bb6;
+  --primary-strong: #ea6fa4;
+  --primary-text: #ffffff;
+  --secondary: #8ddaf0;
+  --secondary-strong: #5ccae6;
+  --success: #3f9f70;
+  --warning: #b8741e;
+  --danger: #cf3e67;
+  --focus-color: #5ccae6;
+  --focus-ring: 0 0 0 3px rgba(141, 218, 240, 0.35);
+  --placeholder: #a48f9b;
+  --header-border: rgba(235,200,216,.72);
+  --header-border-strong: rgba(223,169,192,.78);
+  --inner-highlight: rgba(255,255,255,.82);
+  --shadow-card: 0 12px 30px rgba(218, 123, 164, .18);
+  --shadow-control: 0 8px 20px rgba(218, 123, 164, .14);
+  --shadow-image: 0 8px 18px rgba(218, 123, 164, .18);
+  --shadow-header: 0 8px 28px rgba(218, 123, 164, .16);
+  --shadow-header-scrolled: 0 14px 36px rgba(218, 123, 164, .20);
+  --shadow-card-pressed: 0 6px 18px rgba(218, 123, 164, .16);
+  --shadow-side: -6px 0 24px rgba(218, 123, 164, .18);
+  --shadow-floating: 0 12px 34px rgba(218, 123, 164, .18);
+  --shadow-fab: 0 12px 30px rgba(218, 123, 164, .20);
+  --theme-color-scheme: light;
+}
   
  html, body {
    margin: 0;
@@ -64,9 +171,9 @@
    max-width: 100%;
    overflow-x: hidden;
    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-   background: #0f0f12;
-   color: #f5f5f7;
-   color-scheme: dark;
+   background: var(--bg);
+   color: var(--text);
+   color-scheme: var(--theme-color-scheme);
    height: 100%;
    min-height: 100%;
  }
@@ -85,14 +192,14 @@
   font-weight: inherit;
 
   /* 🔹 Visual */
-  background: rgba(28,28,30,.55); /* 🔴 CHANGED: dark glass */
+  background: var(--header-bg); /* 🔴 CHANGED: dark glass */
   backdrop-filter: blur(30px) saturate(180%);
   -webkit-backdrop-filter: blur(30px) saturate(180%);
-  border-bottom: 1px solid rgba(255,255,255,.06); /* 🔴 CHANGED: subtle dark divider */
+  border-bottom: 1px solid var(--header-border); /* 🔴 CHANGED: subtle dark divider */
 
   box-shadow:
     var(--shadow-header),
-    inset 0 -1px 0 rgba(255,255,255,.06); /* 🔴 CHANGED: reduce white glow */
+    inset 0 -1px 0 var(--header-border); /* 🔴 CHANGED: reduce white glow */
 
   /* 🔹 Position */
   position: sticky;
@@ -122,10 +229,10 @@ header.scrolled{
     8px
     calc(env(safe-area-inset-left, 0px) + 16px);
   min-height: 64px;
-  background: rgba(28,28,30,.75); /* 🔴 CHANGED: darker when scrolled */
+  background: var(--header-bg-scrolled); /* 🔴 CHANGED: darker when scrolled */
   box-shadow:
     var(--shadow-header-scrolled),
-    inset 0 -1px 0 rgba(255,255,255,.08); /* 🔴 CHANGED: subtle inner edge */
+    inset 0 -1px 0 var(--header-border-strong); /* 🔴 CHANGED: subtle inner edge */
 }
   
 /* ================= SHOP TITLE GLOW ================= */
@@ -146,7 +253,7 @@ header.scrolled{
 
   /* 🔴 CHANGED: dark glass base */
   background: rgba(28,28,30,.72);
-  border: 1px solid rgba(255,255,255,.10);
+  border: 1px solid var(--border);
   backdrop-filter: blur(16px) saturate(170%);
   -webkit-backdrop-filter: blur(16px) saturate(170%);
 
@@ -278,11 +385,11 @@ header.scrolled{
   flex:1;
   text-align:center;
   font-size:14px;
-  color:rgba(245,245,247,.92);
+  color:var(--text);
   line-height:1.35;
 }
   .card{
-  background: rgba(28,28,30,.72);
+  background: var(--surface-glass);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   border-radius:18px;
@@ -297,7 +404,7 @@ header.scrolled{
 
   .metric-card{
     padding:16px;
-    border:1px solid rgba(255,255,255,.08);
+    border:1px solid var(--border);
   }
 
   .metric-card .price{
@@ -308,7 +415,7 @@ header.scrolled{
   .admin-card{
     display:grid;
     gap:8px;
-    border:1px solid rgba(255,255,255,.08);
+    border:1px solid var(--border);
   }
 
   .admin-card-meta{
@@ -316,7 +423,7 @@ header.scrolled{
     flex-wrap:wrap;
     gap:6px 10px;
     align-items:center;
-    color:rgba(235,235,245,.68);
+    color:var(--muted);
     font-size:13px;
   }
 
@@ -324,13 +431,13 @@ header.scrolled{
     margin-top:14px;
     padding:14px;
     border-radius:16px;
-    background:rgba(255,255,255,.04);
-    border:1px solid rgba(255,255,255,.08);
+    background:var(--bg-soft);
+    border:1px solid var(--border);
   }
 
   .admin-detail-title{
     margin:0 0 10px;
-    color:rgba(245,245,247,.94);
+    color:var(--text);
     font-size:15px;
     font-weight:700;
   }
@@ -359,7 +466,7 @@ header.scrolled{
     align-items:center;
     gap:6px 10px;
     font-size:12px;
-    color:rgba(235,235,245,.68);
+    color:var(--muted);
   }
 
   .info-card{
@@ -375,12 +482,12 @@ header.scrolled{
 
   .info-label{
     font-size:12px;
-    color:rgba(235,235,245,.62);
+    color:var(--muted);
   }
 
   .info-value{
     font-size:15px;
-    color:rgba(245,245,247,.94);
+    color:var(--text);
     font-weight:600;
   }
 
@@ -420,7 +527,7 @@ header.scrolled{
     0 0 12px rgba(77,163,255,.18);
 }
  
-  .stock{font-size:14px;color:rgba(235,235,245,.74);}
+  .stock{font-size:14px;color:var(--text-soft);}
 
   .backdrop{
   position: fixed;
@@ -437,7 +544,7 @@ header.scrolled{
   right: 0;
   bottom: 0;
 
-  background: rgba(28,28,30,.88);
+  background: var(--sheet-bg);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   border-radius: 22px 22px 0 0;
@@ -494,9 +601,9 @@ select {
   box-sizing: border-box;
   outline: none;
   font-family: inherit;
-  background: rgba(44,44,46,.90);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,.08);
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 /* 🔴 NEW: textarea base style (Light mode fix) */
@@ -504,20 +611,20 @@ textarea {
   width: 100%;
   box-sizing: border-box;
   font-family: inherit;
-  background: rgba(44,44,46,.90);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,.08);
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
   
 input::placeholder,
 textarea::placeholder {
-  color: #999;                 /* 🔴 FIX: placeholder ไม่จางเกินไป */
+  color: var(--placeholder);                 /* 🔴 FIX: placeholder ไม่จางเกินไป */
 }  
 
 input:focus,
 select:focus {
-  border-color: #007aff;
+  border-color: var(--focus-color);
 }
 
 /* ================= STEP 3: FORM CONSISTENT ================= */
@@ -547,10 +654,10 @@ select:focus {
   line-height: 1.2;
 
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid var(--border);
   box-sizing: border-box;
-  background: rgba(44,44,46,.90);
-  color: #fff;
+  background: var(--surface-2);
+  color: var(--text);
   font-family: inherit;
 }
 
@@ -563,7 +670,7 @@ select:focus {
 /* focus state */
 .form-group input:focus,
 .form-group select:focus {
-  border-color: #007aff;
+  border-color: var(--focus-color);
   outline: none;
 }
 
@@ -617,34 +724,34 @@ button:disabled {
 
 /* Primary */
 .btn-primary {
-  background: #0066cc;
-  color: #fff;
+  background: var(--primary);
+  color: var(--primary-text);
 }
 
 /* Secondary / neutral utility */
 .btn-secondary {
-  background: rgba(72,72,74,.92);
-  color: #f5f5f7;
-  border: 1px solid rgba(255,255,255,.10);
+  background: var(--secondary);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 /* Success / completed action */
 .btn-success {
-  background: #1f7a35;
-  color: #fff;
+  background: var(--success);
+  color: var(--primary-text);
 }
 
 /* Outline / low-emphasis action */
 .btn-outline {
-  background: rgba(44,44,46,.58);
-  color: #f5f5f7;
-  border: 1px solid rgba(255,255,255,.16);
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
 }
 
 /* Danger (logout / destructive) */
 .btn-danger{
-  background:#d70015;
-  color:#fff;
+  background:var(--danger);
+  color:var(--primary-text);
 }
 .btn-danger:active{
   transform: scale(var(--tap-scale-primary));
@@ -678,10 +785,10 @@ button:disabled {
     max(16px, env(safe-area-inset-left, 0px));
   width:100%;
   box-sizing:border-box;
-  background:rgba(28,28,30,.94);
+  background:var(--sheet-bg);
   backdrop-filter:blur(24px) saturate(160%);
   -webkit-backdrop-filter:blur(24px) saturate(160%);
-  border-bottom:1px solid rgba(255,255,255,.08);
+  border-bottom:1px solid var(--border);
 }
 
 .admin-sheet-topbar .back-btn{
@@ -706,10 +813,10 @@ button:disabled {
     max(16px, env(safe-area-inset-right, 0px))
     12px
     max(16px, env(safe-area-inset-left, 0px));
-  background:rgba(28,28,30,.94);
+  background:var(--sheet-bg);
   backdrop-filter:blur(24px) saturate(160%);
   -webkit-backdrop-filter:blur(24px) saturate(160%);
-  border-bottom:1px solid rgba(255,255,255,.08);
+  border-bottom:1px solid var(--border);
 }
 
 .sheet-topbar h3{
@@ -762,10 +869,10 @@ button:disabled {
     max(16px, env(safe-area-inset-right, 0px))
     calc(12px + env(safe-area-inset-bottom, 0px))
     max(16px, env(safe-area-inset-left, 0px));
-  background:rgba(28,28,30,.96);
+  background:var(--sheet-bg);
   backdrop-filter:blur(24px) saturate(160%);
   -webkit-backdrop-filter:blur(24px) saturate(160%);
-  border-top:1px solid rgba(255,255,255,.08);
+  border-top:1px solid var(--border);
 }
 
 .sheet-action-footer .btn + .btn{
@@ -798,7 +905,7 @@ button:disabled {
   margin-top:4px;
   font-size:16px;
   font-weight:600;
-  color:rgba(235,235,245,.82);
+  color:var(--text-soft);
 }
 
 .dashboard-filter-wrap{
@@ -1064,13 +1171,13 @@ button:disabled {
   overflow: hidden;
 
   /* ✅ Match filter/menu: Apple-nimble glass */
-  background: rgba(28,28,30,.72);
+  background: var(--surface-glass);
   backdrop-filter: blur(16px) saturate(170%);
   -webkit-backdrop-filter: blur(16px) saturate(170%);
 
   box-shadow: var(--shadow-control);
   cursor: pointer;
-  color: rgba(255,255,255,.92);
+  color: var(--text);
   -webkit-tap-highlight-color: transparent;
 
   transition:
@@ -1123,8 +1230,8 @@ button:disabled {
    border-radius: 12px;
    border: 0;
 
-   background: rgba(44,44,46,.90);
-   color: #fff;
+   background: var(--surface-2);
+   color: var(--text);
    backdrop-filter: blur(14px);
 
   pointer-events: none;
@@ -1148,14 +1255,14 @@ button:disabled {
   width: min(210px, calc(100vw - 176px)); /* compact mobile width without pushing filter+menu */
   margin-left: 6px;
   padding: 8px 12px;
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid var(--border);
 }
 
 /* 🔹 subtle focus glow (iOS feel) */
 .search-input:focus {
-  border-color: #007aff;
+  border-color: var(--focus-color);
   box-shadow:
-    0 0 0 3px rgba(0,122,255,.18);
+    var(--focus-ring);
   outline: none;
 }
 
@@ -1183,11 +1290,11 @@ button:disabled {
    overflow: hidden;            /* ✅ clip highlight rim */
    
    /* ✅ Apple-nimble glass (less "3D") */
-  background: rgba(28,28,30,.72);
+  background: var(--surface-glass);
   backdrop-filter: blur(16px) saturate(170%);
   -webkit-backdrop-filter: blur(16px) saturate(170%);
    cursor:pointer;
-   color: rgba(255,255,255,.92);
+   color: var(--text);
    display:flex;
    align-items:center;
    justify-content:center;
@@ -1198,13 +1305,13 @@ button:disabled {
      box-shadow var(--dur-tap) ease;
 
    /* ✅ Token shadow (unified depth) */
-  border: 1px solid rgba(255,255,255,.10);
+  border: 1px solid var(--border);
   box-shadow: var(--shadow-control);
  }
 
 .filter-btn.has-active-filter{
-  border-color: rgba(100,181,255,.45);
-  background: rgba(0,102,204,.26);
+  border-color: var(--border-strong);
+  background: var(--primary);
 }
 
  /* ✅ Glass highlight (top-left glare) */
@@ -1437,7 +1544,7 @@ button:disabled {
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #4da3ff;
+  outline: 2px solid var(--focus-color);
   outline-offset: 2px;
 } 
   
@@ -1445,12 +1552,12 @@ textarea:focus-visible {
 .product-card {
   display: flex;
   gap: 14px;
-  background: rgba(28,28,30,.72);
+  background: var(--surface-glass);
   backdrop-filter: blur(24px) saturate(160%);
   -webkit-backdrop-filter: blur(24px) saturate(160%);
   border-radius: 18px;
   padding: 13px;
-  border: 1px solid rgba(255,255,255,.07);
+  border: 1px solid var(--border);
   box-shadow: var(--shadow-card);
   align-items: center;
   cursor: pointer;
@@ -1472,7 +1579,7 @@ textarea:focus-visible {
       var(--shadow-floating);
 
     background:
-      rgba(32,32,36,.78);
+      var(--surface-glass);
   }
 }
 
@@ -1481,7 +1588,7 @@ textarea:focus-visible {
   height: 84px;
   border-radius: 14px;
   object-fit: cover;
-  background: #1c1c1e;
+  background: var(--surface-2);
   flex-shrink: 0;
 }
 
@@ -1502,11 +1609,11 @@ textarea:focus-visible {
 
 .product-card .sku {
   font-size: 12px;
-  color: rgba(235,235,245,.58);
+  color: var(--muted);
 }
 
 .product-card .price {
-  color: #64b5ff;
+  color: var(--secondary-strong);
   font-weight: 600;
   font-size: 15px;
   margin-top: 2px;
@@ -1518,7 +1625,7 @@ textarea:focus-visible {
   align-items: center;
   flex-wrap: wrap;
   font-size: 13px;
-  color: rgba(235,235,245,.72);
+  color: var(--text-soft);
 }
 
 .product-card:active {
@@ -1549,15 +1656,15 @@ textarea:focus-visible {
 }
 
 .product-info-block {
-  background: rgba(28,28,30,.72);
+  background: var(--surface-glass);
   backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
   border-radius: 14px;
   padding: 14px;
 
   /* ✅ iOS readability */
-  color: rgba(255,255,255,.92);
-  border: 1px solid rgba(255,255,255,.08);
+  color: var(--text);
+  border: 1px solid var(--border);
   font-size: 15px;
   line-height: 1.58;
   letter-spacing: .1px;
@@ -1582,7 +1689,7 @@ textarea:focus-visible {
 }
 
 .product-info-block a{
-  color: #4da3ff;
+  color: var(--focus-color);
   text-decoration: none;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -1765,7 +1872,7 @@ textarea:focus-visible {
   height: 100dvh;
   max-height: 100dvh;
 
-  background: rgba(28,28,30,.82);
+  background: var(--side-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   box-shadow: var(--shadow-side);
@@ -1809,7 +1916,7 @@ textarea:focus-visible {
     max(16px, env(safe-area-inset-right, 0px))
     calc(env(safe-area-inset-bottom, 0px) + 24px)
     16px;
-  background: rgba(28,28,30,.82);
+  background: var(--side-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   box-shadow: var(--shadow-side);
@@ -1850,10 +1957,10 @@ textarea:focus-visible {
     calc(env(safe-area-inset-top, 0px) + 12px)
     16px
     12px;
-  background:rgba(28,28,30,.94);
+  background:var(--side-bg);
   backdrop-filter:blur(24px) saturate(160%);
   -webkit-backdrop-filter:blur(24px) saturate(160%);
-  border-bottom:1px solid rgba(255,255,255,.08);
+  border-bottom:1px solid var(--border);
 }
 
 .side-menu .side-menu-topbar h3{
@@ -1874,7 +1981,7 @@ textarea:focus-visible {
 .loading {
   text-align: center;
   padding: 32px 16px;
-  color: rgba(235,235,245,.72);
+  color: var(--text-soft);
   font-size: 14px;
 }
 
@@ -1994,8 +2101,8 @@ textarea {
   border:none;
   border-radius:12px;
   padding:10px 12px;
-  background:rgba(44,44,46,.90);
-  color:#fff;
+  background:var(--surface-2);
+  color:var(--text);
   font-size:13px;
   font-weight:600;
   text-align:left;
@@ -2007,8 +2114,8 @@ textarea {
   margin-top:8px;
   padding:12px;
   border-radius:12px;
-  background:rgba(44,44,46,.72);
-  border:1px solid rgba(255,255,255,.08);
+  background:var(--surface-2);
+  border:1px solid var(--border);
 }
 
 .timeline-detail-panel.show{
@@ -2022,7 +2129,7 @@ textarea {
 
 .timeline-detail-meta{
   font-size:13px;
-  color:rgba(235,235,245,.82);
+  color:var(--text-soft);
   line-height:1.5;
 }
  
@@ -2036,18 +2143,18 @@ textarea {
 .form-group select,
 #adminLoginSheet input,
 #adminLoginSheet select {
-  background: rgba(44,44,46,.90);
-  border: 1px solid rgba(255,255,255,.08);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   box-shadow: inset 0 1px 2px rgba(0,0,0,.04);
-  color: #fff;
+  color: var(--text);
 }
 
 .form-group input:focus,
 #adminLoginSheet input:focus {
-  background: rgba(44,44,46,.96);
-  border-color: #007aff;
+  background: var(--surface-2);
+  border-color: var(--focus-color);
   box-shadow:
-    0 0 0 2px rgba(0,122,255,.15),
+    var(--focus-ring),
     inset 0 1px 2px rgba(0,0,0,.04);
 } 
 
@@ -2460,7 +2567,7 @@ textarea {
 }
 
 .product-sku {
-   color: rgba(235,235,245,.60);
+   color: var(--muted);
    font-size: 13px;
    margin-bottom: 8px;
  }
@@ -2471,7 +2578,7 @@ textarea {
 
  .product-info-close-btn{
    font-size:16px;
-   color:#fff;
+   color:var(--text);
  }
    
 /* 🖼️ รูปสินค้า (มาตรฐาน) */
@@ -2484,7 +2591,7 @@ textarea {
   border-radius: 14px;
   margin: 12px 0;
 
-  background: rgba(44,44,46,.80);
+  background: var(--surface-2);
 }
 
 /* 📝 หมายเหตุสินค้า (Note) */
@@ -2494,9 +2601,9 @@ textarea {
 
   font-size: 14px;
   line-height: 1.45;
-  color: rgba(235,235,245,.78);
-  background: rgba(44,44,46,.80);
-  border: 1px dashed rgba(255,255,255,.08);
+  color: var(--text-soft);
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
 }
 
 /* 🔹 Action Zone (ปุ่มล่างสุด) */
@@ -2508,7 +2615,7 @@ textarea {
 /* 🔧 ข้อความโหมดแอดมิน */
 .product-admin-hint {
   margin-top: 16px;
-  color: rgba(235,235,245,.72);
+  color: var(--text-soft);
   font-size: 14px;
 }
 
@@ -2538,15 +2645,15 @@ textarea {
   align-items: center;
   border-radius: 18px;
 
-  background: rgba(22,22,24,.78);
+  background: var(--sheet-bg);
 backdrop-filter: blur(36px) saturate(220%);
 -webkit-backdrop-filter: blur(36px);
 
-border: 1px solid rgba(255,255,255,.16);
+border: 1px solid var(--border-strong);
   box-shadow:
     var(--shadow-floating),
-    inset 0 1px 0 rgba(255,255,255,.10);
-  color: #f5f5f7;
+    inset 0 1px 0 var(--inner-highlight);
+  color: var(--text);
 
   z-index: 999;
 
@@ -2568,7 +2675,7 @@ border: 1px solid rgba(255,255,255,.16);
 }
 #floatingBar .bar-subtext{
   font-size: 13px;
-  color: rgba(245,245,247,.82);
+  color: var(--text-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3127,7 +3234,11 @@ Object.assign(window, {
   closeMainMenu,
   closeAddProduct,
   closeProduct,
-  reopenLastOrderSheet
+  reopenLastOrderSheet,
+  initTheme,
+  setTheme,
+  toggleTheme,
+  getCurrentTheme
 });
 
 // 🔒 Intent guards (STEP 2)
@@ -3223,6 +3334,44 @@ const state = {
 
 const CART_KEY = "luopanich_cart";
 const LAST_ORDER_KEY = "luopanich_last_order"; 
+const THEME_KEY = "appTheme";
+
+function getCurrentTheme() {
+  const theme = document.body?.dataset?.theme;
+  return theme === "cute" ? "cute" : "dark";
+}
+
+function setTheme(theme) {
+  const safeTheme = theme === "cute" ? "cute" : "dark";
+  if (document.body) {
+    document.body.dataset.theme = safeTheme;
+  }
+
+  try {
+    localStorage.setItem(THEME_KEY, safeTheme);
+  } catch (err) {
+    console.warn("setTheme: localStorage unavailable", err);
+  }
+}
+
+function initTheme() {
+  let savedTheme = "dark";
+  try {
+    const rawTheme = localStorage.getItem(THEME_KEY);
+    savedTheme = rawTheme === "cute" || rawTheme === "dark" ? rawTheme : "dark";
+  } catch (err) {
+    console.warn("initTheme: localStorage unavailable", err);
+  }
+  setTheme(savedTheme);
+}
+
+function toggleTheme() {
+  const nextTheme = getCurrentTheme() === "cute" ? "dark" : "cute";
+  setTheme(nextTheme);
+  openMainMenu();
+}
+
+initTheme();
 
 const MOTION = Object.freeze({
   CARD_ENTRANCE_LIMIT: 24,
@@ -8280,6 +8429,9 @@ function openMainMenu(triggerEl){
   const isAuthed = !!adminValid;
   const hasLastOrder = !!(state.lastOrder && state.lastOrder.orderId);
   const pendingCount = getPendingOrdersCount();
+  const themeToggleLabel = getCurrentTheme() === "cute"
+    ? "🌙 โหมดเข้ม"
+    : "🌸 โหมดน่ารัก";
 
   // ✅ STEP 2: Main Menu v1 = Login only (ถ้ายังไม่อยู่ admin mode)
   mainMenuSheet.innerHTML = `
@@ -8292,6 +8444,11 @@ function openMainMenu(triggerEl){
 
     <!-- 🔹 MAIN ACTIONS -->
     <div class="menu-group">
+      <button class="btn btn-outline" type="button"
+        onclick="toggleTheme()">
+        ${themeToggleLabel}
+      </button>
+
       ${
         (isAuthed)
           ? (state.mode === "admin")
