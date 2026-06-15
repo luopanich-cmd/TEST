@@ -3430,6 +3430,7 @@ Object.assign(window, {
   previewBulkProductUpdate,
   submitBulkProductUpdate,
   resetBulkProductUpdate,
+  backToAdminMenuFromBulkProductUpdate,
   setBulkProductUpdatePickerSearch,
   setBulkProductUpdatePickerStatus,
   toggleBulkProductUpdateProduct,
@@ -5556,6 +5557,7 @@ function closeTopSheet(){
     document.getElementById("pendingDeliverySheet"),
     document.getElementById("adminAddProductSheet"),
     document.getElementById("adminBulkProductImportSheet"),
+    document.getElementById("adminBulkProductUpdateSheet"),
     document.getElementById("adminProductActionSheet"),
     document.getElementById("adminProductEditSheet"),
     document.getElementById("adminStockActionSheet"),
@@ -10844,6 +10846,9 @@ function openBulkProductUpdateSheet() {
   if (!ensureAdminSessionForBulkUpdate()) return;
 
   const bulkState = state.admin.bulkProductUpdate;
+  if (bulkState.summary) {
+    clearBulkProductUpdateWorkingState();
+  }
   bulkState.backendErrors = [];
   bulkState.summary = "";
   bulkState.updatedCount = 0;
@@ -10877,6 +10882,21 @@ function resetBulkProductUpdateResultState() {
   bulkState.backendErrors = [];
   bulkState.summary = "";
   bulkState.updatedCount = 0;
+}
+
+function clearBulkProductUpdateWorkingState(options = {}) {
+  const bulkState = state.admin.bulkProductUpdate;
+  const keepSuccess = options.keepSuccess === true;
+  const preservedSummary = keepSuccess ? bulkState.summary : "";
+  const preservedUpdatedCount = keepSuccess ? bulkState.updatedCount : 0;
+
+  bulkState.skuText = "";
+  bulkState.selectedSkus = [];
+  bulkState.items = [];
+  bulkState.errors = [];
+  bulkState.backendErrors = [];
+  bulkState.summary = preservedSummary;
+  bulkState.updatedCount = preservedUpdatedCount;
 }
 
 function getBulkProductUpdateSelectedSkus() {
@@ -10967,6 +10987,12 @@ function clearBulkProductUpdateSelection() {
   state.admin.bulkProductUpdate.selectedSkus = [];
   resetBulkProductUpdateResultState();
   renderBulkProductUpdateSheet();
+}
+
+function backToAdminMenuFromBulkProductUpdate() {
+  clearBulkProductUpdateWorkingState();
+  closeBulkProductUpdateSheet();
+  openMainMenu();
 }
 
 function getBulkProductUpdateFieldLabel(field) {
@@ -11241,7 +11267,7 @@ function renderBulkProductUpdateSuccessCard() {
       <strong>อัปเดตสินค้าสำเร็จ</strong>
       <div>อัปเดตสำเร็จ ${updated} รายการ</div>
       <div class="bulk-import-success-actions">
-        <button class="btn btn-secondary" type="button" onclick="closeBulkProductUpdateSheet(); openMainMenu();">
+        <button class="btn btn-secondary" type="button" onclick="backToAdminMenuFromBulkProductUpdate()">
           กลับเมนูแอดมิน
         </button>
       </div>
@@ -11595,13 +11621,9 @@ async function submitBulkProductUpdate(btn) {
     if (json?.success === true) {
       const updated = Number(json.updated || json.data?.updated || 0);
       const successSummary = `อัปเดตสินค้าสำเร็จ ${updated} รายการ`;
-      bulkState.skuText = "";
-      bulkState.selectedSkus = [];
-      bulkState.items = [];
-      bulkState.errors = [];
-      bulkState.backendErrors = [];
-      bulkState.updatedCount = updated;
       bulkState.summary = successSummary;
+      bulkState.updatedCount = updated;
+      clearBulkProductUpdateWorkingState({ keepSuccess: true });
       showToast(bulkState.summary, "success");
       await refreshProducts();
       renderBulkProductUpdateSheet();
