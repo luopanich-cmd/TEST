@@ -184,14 +184,14 @@ body[data-theme="cute"] {
   --surface: #fff9fc;
   --surface-2: #f8e8f0;
   --surface-3: #f4dce8;
-  --surface-glass: rgba(255,249,252,.84);
+  --surface-glass: rgba(255,249,252,.94);
   --header-bg: rgba(255,245,250,.86);
   --header-bg-scrolled: rgba(255,245,250,.94);
   --sheet-bg: rgba(255,249,252,.96);
   --side-bg: rgba(255,249,252,.96);
-  --text: #5d4b59;
-  --text-soft: #8b7885;
-  --muted: #9c8c97;
+  --text: #514351;
+  --text-soft: #6d5b68;
+  --muted: #756675;
   --border: #ebc8d8;
   --border-strong: #dfa9c0;
   --primary: #f28bb6;
@@ -204,7 +204,7 @@ body[data-theme="cute"] {
   --danger: #cf3e67;
   --focus-color: #5ccae6;
   --focus-ring: 0 0 0 3px rgba(141, 218, 240, 0.35);
-  --placeholder: #a48f9b;
+  --placeholder: #806f7b;
   --header-border: rgba(235,200,216,.72);
   --header-border-strong: rgba(223,169,192,.78);
   --inner-highlight: rgba(255,255,255,.82);
@@ -369,6 +369,20 @@ header.scrolled{
   opacity:.55;
   pointer-events:none;
   mix-blend-mode: screen;
+}
+
+body[data-theme="cute"] .shop-title,
+body[data-theme="cute"] .admin-title{
+  color: var(--text);
+  text-shadow: none;
+  background: var(--surface-glass);
+  border-color: var(--border-strong);
+}
+
+body[data-theme="cute"] .shop-title::before,
+body[data-theme="cute"] .admin-title::before{
+  opacity:.28;
+  mix-blend-mode: normal;
 }
 
 /* PHASE 3: Supporting line under title */
@@ -1561,6 +1575,35 @@ button:disabled {
 @media (hover:hover){
   .menu-btn:hover{
     background: rgba(0,0,0,.06);
+  }
+}
+
+body[data-theme="cute"] .search-btn,
+body[data-theme="cute"] .filter-btn,
+body[data-theme="cute"] .menu-btn{
+  background: var(--surface-glass);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+body[data-theme="cute"] .search-btn::before,
+body[data-theme="cute"] .filter-btn::before,
+body[data-theme="cute"] .menu-btn::before{
+  opacity:.24;
+  mix-blend-mode: normal;
+}
+
+body[data-theme="cute"] .search-btn:active,
+body[data-theme="cute"] .filter-btn:active,
+body[data-theme="cute"] .menu-btn:active{
+  background: var(--surface-3);
+}
+
+@media (hover:hover){
+  body[data-theme="cute"] .search-btn:hover,
+  body[data-theme="cute"] .filter-btn:hover,
+  body[data-theme="cute"] .menu-btn:hover{
+    background: var(--surface-2);
   }
 }
 
