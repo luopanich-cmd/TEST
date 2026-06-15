@@ -41,6 +41,34 @@
   --header-border-strong: rgba(255,255,255,.08);
   --inner-highlight: rgba(255,255,255,.10);
   --theme-color-scheme: dark;
+  --status-ready-bg: rgba(52,199,89,.16);
+  --status-ready-text: #63d471;
+  --status-ready-border: rgba(52,199,89,.24);
+  --status-ready-dot: #34c759;
+  --status-ready-plus-bg: rgba(52,199,89,.22);
+  --status-ready-plus-text: #7ee787;
+  --status-ready-plus-border: rgba(52,199,89,.32);
+  --status-shipping-bg: rgba(0,122,255,.15);
+  --status-shipping-text: #64b5ff;
+  --status-shipping-border: rgba(10,132,255,.26);
+  --status-warehouse-bg: rgba(90,140,255,.18);
+  --status-warehouse-text: #a9c3ff;
+  --status-warehouse-border: rgba(90,140,255,.28);
+  --status-out-bg: rgba(255,59,48,.15);
+  --status-out-text: #ff6961;
+  --status-out-border: rgba(255,59,48,.28);
+  --status-pending-bg: rgba(255,214,10,.14);
+  --status-pending-text: #ffd60a;
+  --status-pending-border: rgba(255,214,10,.28);
+  --status-approved-bg: rgba(52,199,89,.14);
+  --status-approved-text: #63d471;
+  --status-approved-border: rgba(52,199,89,.26);
+  --status-rejected-bg: rgba(255,59,48,.14);
+  --status-rejected-text: #ff6961;
+  --status-rejected-border: rgba(255,59,48,.28);
+  --status-neutral-bg: rgba(142,142,147,.14);
+  --status-neutral-text: rgba(245,245,247,.82);
+  --status-neutral-border: rgba(142,142,147,.24);
 
   /* ================= PHASE 3: TYPOGRAPHY / HIERARCHY ================= */
   --text-primary:   var(--text);
@@ -120,6 +148,34 @@ body[data-theme="dark"] {
   --header-border-strong: rgba(255,255,255,.08);
   --inner-highlight: rgba(255,255,255,.10);
   --theme-color-scheme: dark;
+  --status-ready-bg: rgba(52,199,89,.16);
+  --status-ready-text: #63d471;
+  --status-ready-border: rgba(52,199,89,.24);
+  --status-ready-dot: #34c759;
+  --status-ready-plus-bg: rgba(52,199,89,.22);
+  --status-ready-plus-text: #7ee787;
+  --status-ready-plus-border: rgba(52,199,89,.32);
+  --status-shipping-bg: rgba(0,122,255,.15);
+  --status-shipping-text: #64b5ff;
+  --status-shipping-border: rgba(10,132,255,.26);
+  --status-warehouse-bg: rgba(90,140,255,.18);
+  --status-warehouse-text: #a9c3ff;
+  --status-warehouse-border: rgba(90,140,255,.28);
+  --status-out-bg: rgba(255,59,48,.15);
+  --status-out-text: #ff6961;
+  --status-out-border: rgba(255,59,48,.28);
+  --status-pending-bg: rgba(255,214,10,.14);
+  --status-pending-text: #ffd60a;
+  --status-pending-border: rgba(255,214,10,.28);
+  --status-approved-bg: rgba(52,199,89,.14);
+  --status-approved-text: #63d471;
+  --status-approved-border: rgba(52,199,89,.26);
+  --status-rejected-bg: rgba(255,59,48,.14);
+  --status-rejected-text: #ff6961;
+  --status-rejected-border: rgba(255,59,48,.28);
+  --status-neutral-bg: rgba(142,142,147,.14);
+  --status-neutral-text: rgba(245,245,247,.82);
+  --status-neutral-border: rgba(142,142,147,.24);
 }
 
 body[data-theme="cute"] {
@@ -162,6 +218,34 @@ body[data-theme="cute"] {
   --shadow-floating: 0 12px 34px rgba(218, 123, 164, .18);
   --shadow-fab: 0 12px 30px rgba(218, 123, 164, .20);
   --theme-color-scheme: light;
+  --status-ready-bg: rgba(123,207,163,.22);
+  --status-ready-text: #2f7d55;
+  --status-ready-border: rgba(63,159,112,.34);
+  --status-ready-dot: #3f9f70;
+  --status-ready-plus-bg: rgba(141,218,240,.26);
+  --status-ready-plus-text: #1d7488;
+  --status-ready-plus-border: rgba(92,202,230,.38);
+  --status-shipping-bg: rgba(141,218,240,.24);
+  --status-shipping-text: #245f8f;
+  --status-shipping-border: rgba(92,202,230,.35);
+  --status-warehouse-bg: rgba(214,194,244,.30);
+  --status-warehouse-text: #6a4c8f;
+  --status-warehouse-border: rgba(174,139,221,.34);
+  --status-out-bg: rgba(240,107,141,.18);
+  --status-out-text: #a83355;
+  --status-out-border: rgba(207,62,103,.34);
+  --status-pending-bg: rgba(242,185,109,.24);
+  --status-pending-text: #8a5a12;
+  --status-pending-border: rgba(184,116,30,.32);
+  --status-approved-bg: rgba(123,207,163,.22);
+  --status-approved-text: #2f7d55;
+  --status-approved-border: rgba(63,159,112,.34);
+  --status-rejected-bg: rgba(240,107,141,.18);
+  --status-rejected-text: #a83355;
+  --status-rejected-border: rgba(207,62,103,.34);
+  --status-neutral-bg: rgba(156,140,151,.16);
+  --status-neutral-text: #6f5a68;
+  --status-neutral-border: rgba(156,140,151,.28);
 }
   
  html, body {
@@ -1738,34 +1822,34 @@ textarea:focus-visible {
 
 .status-pending,
 .status-open {
-  color: #ffd60a;
-  background: rgba(255,214,10,.14);
-  border-color: rgba(255,214,10,.28);
+  color: var(--status-pending-text);
+  background: var(--status-pending-bg);
+  border-color: var(--status-pending-border);
 }
 
 .status-approved,
 .status-closed {
-  color: #63d471;
-  background: rgba(52,199,89,.14);
-  border-color: rgba(52,199,89,.26);
+  color: var(--status-approved-text);
+  background: var(--status-approved-bg);
+  border-color: var(--status-approved-border);
 }
 
 .status-rejected {
-  color: #ff6961;
-  background: rgba(255,59,48,.14);
-  border-color: rgba(255,59,48,.28);
+  color: var(--status-rejected-text);
+  background: var(--status-rejected-bg);
+  border-color: var(--status-rejected-border);
 }
 
 .status-neutral {
-  color: rgba(245,245,247,.82);
-  background: rgba(142,142,147,.14);
-  border-color: rgba(142,142,147,.24);
+  color: var(--status-neutral-text);
+  background: var(--status-neutral-bg);
+  border-color: var(--status-neutral-border);
 }
 
  .status.ready{
-  background: rgba(52,199,89,.16);
-  color:#63d471;
-  border: 1px solid rgba(52,199,89,.24);
+  background: var(--status-ready-bg);
+  color: var(--status-ready-text);
+  border: 1px solid var(--status-ready-border);
 }
 /* พร้อมส่ง */
 .status.ready::before{
@@ -1780,10 +1864,10 @@ textarea:focus-visible {
 
   border-radius:50%;
 
-  background:#34c759;
+  background: var(--status-ready-dot);
 
   box-shadow:
-    0 0 8px rgba(52,199,89,.45);
+    0 0 8px var(--status-ready-border);
 
   animation:pulse 2.5s infinite;
 }
@@ -1806,30 +1890,30 @@ textarea:focus-visible {
 }
  
  .status.ready_plus {
-   background: rgba(52,199,89,.22);
-   color: #7ee787;
-   border: 1px solid rgba(52,199,89,.32);
+   background: var(--status-ready-plus-bg);
+   color: var(--status-ready-plus-text);
+   border: 1px solid var(--status-ready-plus-border);
  }
  
 /* อยู่ระหว่างจัดส่ง */
 .status.shipping {
-  background: rgba(0,122,255,.15);
-  color: #64b5ff;
-  border: 1px solid rgba(10,132,255,.26);
+  background: var(--status-shipping-bg);
+  color: var(--status-shipping-text);
+  border: 1px solid var(--status-shipping-border);
 }
 
 /* อยู่โกดังไทย */
 .status.warehouse {
-  background: rgba(90,140,255,.18);
-  color: #a9c3ff;
-  border: 1px solid rgba(90,140,255,.28);
+  background: var(--status-warehouse-bg);
+  color: var(--status-warehouse-text);
+  border: 1px solid var(--status-warehouse-border);
 }
 
 /* หมด */
 .status.out {
-  background: rgba(255,59,48,.15);
-  color: #ff6961;
-  border: 1px solid rgba(255,59,48,.28);
+  background: var(--status-out-bg);
+  color: var(--status-out-text);
+  border: 1px solid var(--status-out-border);
 }
 
 
@@ -2026,28 +2110,28 @@ textarea {
 
 /* สีตามประเภท */
 .tag-in {
-  background: rgba(52,199,89,.16);
-  color: #7ee2a0;
+  background: var(--status-approved-bg);
+  color: var(--status-approved-text);
 }
 
 .tag-out {
-  background: rgba(255,59,48,.16);
-  color: #ff8a84;
+  background: var(--status-out-bg);
+  color: var(--status-out-text);
 }
 
 .tag-create {
-  background: rgba(90,140,255,.18);
-  color: #8fb2ff;
+  background: var(--status-shipping-bg);
+  color: var(--status-shipping-text);
 }
 
 .tag-adjust {
-  background: rgba(255,159,10,.16);
-  color: #ffbf66;
+  background: var(--status-pending-bg);
+  color: var(--status-pending-text);
 }
 
 .tag-cancel {
-  background: rgba(142,142,147,.18);
-  color: rgba(235,235,245,.78);
+  background: var(--status-neutral-bg);
+  color: var(--status-neutral-text);
 }
 
 /* ===== STOCK TIMELINE EXPAND DETAIL ===== */
@@ -8215,7 +8299,7 @@ ${
           padding:12px 0;
           border-top:
             1px solid
-            rgba(255,255,255,.08);
+            var(--border);
         ">
 
         <div class="admin-card-meta">
