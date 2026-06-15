@@ -10949,7 +10949,7 @@ function toggleBulkProductUpdateProduct(productId, checked) {
   }
   state.admin.bulkProductUpdate.selectedSkus = Array.from(selected);
   resetBulkProductUpdateResultState();
-  renderBulkProductUpdateSheet();
+  renderBulkProductUpdateSheetPreservingPickerScroll();
 }
 
 function selectVisibleBulkProductUpdateProducts() {
@@ -11335,6 +11335,18 @@ function updateBulkProductUpdatePickerList() {
   }
 }
 
+function renderBulkProductUpdateSheetPreservingPickerScroll() {
+  const picker = document.getElementById("bulkProductUpdatePickerList");
+  const scrollTop = picker ? picker.scrollTop : 0;
+  renderBulkProductUpdateSheet();
+  requestAnimationFrame(() => {
+    const nextPicker = document.getElementById("bulkProductUpdatePickerList");
+    if (nextPicker) {
+      nextPicker.scrollTop = scrollTop;
+    }
+  });
+}
+
 function renderBulkProductUpdatePicker() {
   const bulkState = state.admin.bulkProductUpdate;
   const selectedCount = getBulkProductUpdateSelectedSkus().length;
@@ -11582,9 +11594,14 @@ async function submitBulkProductUpdate(btn) {
 
     if (json?.success === true) {
       const updated = Number(json.updated || json.data?.updated || 0);
+      const successSummary = `อัปเดตสินค้าสำเร็จ ${updated} รายการ`;
+      bulkState.skuText = "";
+      bulkState.selectedSkus = [];
+      bulkState.items = [];
+      bulkState.errors = [];
       bulkState.backendErrors = [];
       bulkState.updatedCount = updated;
-      bulkState.summary = `อัปเดตสินค้าสำเร็จ ${updated} รายการ`;
+      bulkState.summary = successSummary;
       showToast(bulkState.summary, "success");
       await refreshProducts();
       renderBulkProductUpdateSheet();
