@@ -5990,6 +5990,11 @@ function backToAdminMainMenu() {
   closeOverlay(adminDashboardSheet);
   openMainMenu(document.querySelector(".menu-btn"));
 } 
+
+function closeStockTimelineToAdminMenu() {
+  closeOverlay(adminStockSheet);
+  openMainMenu(document.querySelector(".menu-btn"));
+}
  
 function handleOpenDashboard() {
   allowOpenOrders = true;
@@ -6185,7 +6190,7 @@ async function openStockTimeline(force = false) {
 
       <button class="btn btn-outline"
         style="width:100%;margin-bottom:12px"
-        onclick="finishAdminAction({ refresh:false })">
+        onclick="closeStockTimelineToAdminMenu()">
         ← กลับ
       </button>
 
@@ -6383,6 +6388,12 @@ async function openStockTimeline(force = false) {
       <div style="text-align:center;color:#d93025;margin-top:32px">
         ไม่สามารถโหลดข้อมูลได้
       </div>
+
+      <button class="btn btn-outline"
+        style="width:100%;margin-top:16px"
+        onclick="closeStockTimelineToAdminMenu()">
+        ← กลับ
+      </button>
     `;
   }
 }
