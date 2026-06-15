@@ -6011,18 +6011,110 @@ function ensureAdminUiContext() {
 }
 
 function closeStockTimelineToAdminMenu() {
-  closeOverlay(adminStockSheet);
+  renderAdminMenuInStockSheet();
+}
+
+function closeStockMenuSheetThen(action) {
   state.admin.ui.activeSheet = null;
+  closeOverlay(adminStockSheet);
+
+  if (typeof action === "function") action();
+}
+
+function renderAdminMenuInStockSheet() {
   if (!ensureAdminUiContext()) return;
-  openMainMenu();
+  state.admin.ui.activeSheet = "stockTimelineMenu";
+  const pendingCount = getPendingOrdersCount();
+  const hasLastOrder = !!(state.lastOrder && state.lastOrder.orderId);
+
+  adminStockSheet.innerHTML = `
+    <div class="sheet-topbar">
+      <h3 id="adminStockSheetTitle">เมนูแอดมิน</h3>
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeStockMenuSheetThen()"
+        aria-label="ปิดเมนูแอดมิน">×</button>
+    </div>
+
+    <div class="menu-group">
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(leaveAdminMode)">
+        👁 กลับสู่ Viewer
+      </button>
+
+      ${
+        hasLastOrder
+          ? `
+              <button class="btn btn-secondary"
+                onclick="closeStockMenuSheetThen(reopenLastOrderSheet)">
+                🧾 บิลล่าสุด
+              </button>
+            `
+          : ``
+      }
+
+      <button class="btn btn-primary"
+        onclick="closeStockMenuSheetThen(handleOpenDashboard)">
+        📊 Dashboard
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(handleOpenPendingOrders)">
+        📦 Pending Orders ${pendingCount > 0 ? `<span class="badge badge-count">${pendingCount}</span>` : ``}
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="openStockTimelineInsideAdminMenu()">
+        📦 Stock Timeline
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(openPendingDeliverySheet)">
+        📦 ค้างส่ง
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(handleOpenAddProduct)">
+        ➕ เพิ่มสินค้าใหม่
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(openBulkProductImportSheet)">
+        นำเข้าสินค้าหลายรายการ
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(openBulkProductUpdateSheet)">
+        อัปเดตราคา/สถานะหลายรายการ
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(openChangePasswordSheet)">
+        🔐 เปลี่ยนรหัสผ่าน
+      </button>
+    </div>
+
+    <hr>
+
+    <div class="menu-group danger">
+      <button class="btn btn-danger"
+        onclick="closeStockMenuSheetThen(handleAdminLogout)">
+        🚪 Logout
+      </button>
+    </div>
+  `;
+
+  if (!adminStockSheet.classList.contains("show")) {
+    openOverlay(adminStockSheet);
+  }
 }
 
 function closeStockTimelineSheet() {
   if (state.admin.ui.activeSheet === "stockTimelineReturnToMenu") {
-    closeStockTimelineToAdminMenu();
+    renderAdminMenuInStockSheet();
     return;
   }
 
+  state.admin.ui.activeSheet = null;
   closeOverlay(adminStockSheet);
 }
  
@@ -6050,9 +6142,13 @@ function handleOpenStockTimeline(){
 function openStockTimelineInsideAdminMenu(){
   allowOpenStockTimeline = true;
   state.admin.ui.activeSheet = "stockTimelineReturnToMenu";
-  closeOverlay(mainMenuSheet);
-  document.querySelectorAll(".menu-btn[aria-expanded='true']")
-    .forEach(b => syncExpanded(b, false));
+
+  if (mainMenuSheet.classList.contains("show")) {
+    closeOverlay(mainMenuSheet);
+    document.querySelectorAll(".menu-btn[aria-expanded='true']")
+      .forEach(b => syncExpanded(b, false));
+  }
+
   openStockTimeline(false, {
     returnToAdminMenu: true
   });
