@@ -5993,7 +5993,17 @@ function backToAdminMainMenu() {
 
 function closeStockTimelineToAdminMenu() {
   closeOverlay(adminStockSheet);
-  openMainMenu(document.querySelector(".menu-btn"));
+
+  if (
+    state.admin.loggedIn &&
+    state.admin.token &&
+    !isAdminSessionExpired()
+  ) {
+    state.mode = "admin";
+    renderHeader();
+  }
+
+  openMainMenu();
 }
  
 function handleOpenDashboard() {
