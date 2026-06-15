@@ -1778,16 +1778,6 @@ textarea:focus-visible {
   opacity: 1;
 }
 
-.side-menu.admin-child-flow {
-  width: min(100vw, 430px);
-}
-
-@media (max-width: 480px) {
-  .side-menu.admin-child-flow {
-    width: 100vw;
-  }
-}
-
 .side-menu-topbar{
   position:sticky;
   top:calc(-16px - env(safe-area-inset-top, 0px));
@@ -5161,6 +5151,8 @@ function closeTopSheet(){
       // ✅ ใช้ Overlay Manager เท่านั้น
       if (sheet === adminOrderSheet) {
         closeAdminOrderSheet();
+      } else if (sheet === adminStockSheet) {
+        closeStockTimelineSheet();
       } else {
         closeOverlay(sheet);
       }
@@ -6020,14 +6012,18 @@ function ensureAdminUiContext() {
 
 function closeStockTimelineToAdminMenu() {
   closeOverlay(adminStockSheet);
+  state.admin.ui.activeSheet = null;
   if (!ensureAdminUiContext()) return;
   openMainMenu();
 }
 
-function renderAdminMenuDirect() {
-  if (!ensureAdminUiContext()) return;
-  state.admin.ui.activeSheet = null;
-  openMainMenu();
+function closeStockTimelineSheet() {
+  if (state.admin.ui.activeSheet === "stockTimelineReturnToMenu") {
+    closeStockTimelineToAdminMenu();
+    return;
+  }
+
+  closeOverlay(adminStockSheet);
 }
  
 function handleOpenDashboard() {
@@ -6053,9 +6049,12 @@ function handleOpenStockTimeline(){
 
 function openStockTimelineInsideAdminMenu(){
   allowOpenStockTimeline = true;
+  state.admin.ui.activeSheet = "stockTimelineReturnToMenu";
+  closeOverlay(mainMenuSheet);
+  document.querySelectorAll(".menu-btn[aria-expanded='true']")
+    .forEach(b => syncExpanded(b, false));
   openStockTimeline(false, {
-    target: mainMenuSheet,
-    insideAdminMenu: true
+    returnToAdminMenu: true
   });
 }
 
@@ -6084,30 +6083,21 @@ async function openStockTimeline(force = false, options = {}) {
   // 🔒 ใช้แล้วปิดทันที (กันเด้งซ้ำ)
   allowOpenStockTimeline = false;
 
-  const targetSheet = options.target || adminStockSheet;
-  const insideAdminMenu = options.insideAdminMenu === true;
-  const backAction = insideAdminMenu
-    ? "renderAdminMenuDirect()"
-    : "closeStockTimelineToAdminMenu()";
-  const stockTimelineTitleId = insideAdminMenu
-    ? "mainMenuSheetTitle"
-    : "adminStockSheetTitle";
+  const targetSheet = adminStockSheet;
+  const returnToAdminMenu = options.returnToAdminMenu === true;
+  const backAction = returnToAdminMenu
+    ? "closeStockTimelineToAdminMenu()"
+    : "closeStockTimelineSheet()";
+  const stockTimelineTitleId = "adminStockSheetTitle";
 
-  if (insideAdminMenu) {
-    state.admin.ui.activeSheet = "stockTimeline";
-    mainMenuSheet.classList.add("admin-child-flow");
-  } else {
-    closeOverlay(adminDashboardSheet);
-  }
+  closeOverlay(adminDashboardSheet);
 
   targetSheet.innerHTML = `
     <h3 id="${stockTimelineTitleId}">📦 ประวัติความเคลื่อนไหวสต๊อก</h3>
     <div class="loading">กำลังโหลด...</div>
   `;
 
-  if (!insideAdminMenu) {
-    openOverlay(targetSheet);
-  }
+  openOverlay(targetSheet);
 
   try {
     const logs = await fetchStockLogs();
@@ -8483,16 +8473,7 @@ function closeAddProduct(){
 }
   
 function closeMainMenu(){
-  if (
-    mainMenuSheet.classList.contains("admin-child-flow") &&
-    state.admin.ui.activeSheet === "stockTimeline"
-  ) {
-    renderAdminMenuDirect();
-    return;
-  }
-
   state.admin.ui.activeSheet = null;
-   mainMenuSheet.classList.remove("admin-child-flow");
    closeOverlay(mainMenuSheet);
    document.querySelectorAll(".menu-btn[aria-expanded='true']")
      .forEach(b => syncExpanded(b, false));
@@ -8525,10 +8506,11 @@ function closeMainMenu(){
        return;
      }
 
-     if (activeOverlay && !state.ui.backdropLocked) {
-       if (activeOverlay === mainMenuSheet) return closeMainMenu();
-       return closeOverlay(activeOverlay);
-     }
+    if (activeOverlay && !state.ui.backdropLocked) {
+      if (activeOverlay === mainMenuSheet) return closeMainMenu();
+      if (activeOverlay === adminStockSheet) return closeStockTimelineSheet();
+      return closeOverlay(activeOverlay);
+    }
    }
 
    if (e.key === "Tab" && activeOverlay) {
