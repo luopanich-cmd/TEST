@@ -5991,18 +5991,26 @@ function backToAdminMainMenu() {
   openMainMenu(document.querySelector(".menu-btn"));
 } 
 
-function closeStockTimelineToAdminMenu() {
-  closeOverlay(adminStockSheet);
-
+function ensureAdminUiContext() {
   if (
-    state.admin.loggedIn &&
-    state.admin.token &&
-    !isAdminSessionExpired()
+    !state.admin.loggedIn ||
+    !state.admin.token ||
+    isAdminSessionExpired()
   ) {
-    state.mode = "admin";
-    renderHeader();
+    exitAdmin();
+    return false;
   }
 
+  state.mode = "admin";
+  state.search = "";
+  renderHeader();
+  renderProducts();
+  return true;
+}
+
+function closeStockTimelineToAdminMenu() {
+  closeOverlay(adminStockSheet);
+  if (!ensureAdminUiContext()) return;
   openMainMenu();
 }
  
@@ -6046,6 +6054,8 @@ async function openStockTimeline(force = false) {
     exitAdmin();
     return;
   }
+
+  if (!ensureAdminUiContext()) return;
 
   // 🔒 ใช้แล้วปิดทันที (กันเด้งซ้ำ)
   allowOpenStockTimeline = false;
