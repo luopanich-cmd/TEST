@@ -719,6 +719,23 @@ button:disabled {
   overflow-wrap:anywhere;
 }
 
+.stock-menu-return .sheet-topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.stock-menu-return .sheet-topbar h3{
+  flex:1 1 auto;
+  text-align:left;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  overflow-wrap:normal;
+  word-break:normal;
+}
+
 .sheet-nav-btn{
   width:44px !important;
   min-width:44px;
@@ -6028,6 +6045,7 @@ function renderAdminMenuInStockSheet() {
   const hasLastOrder = !!(state.lastOrder && state.lastOrder.orderId);
 
   adminStockSheet.innerHTML = `
+    <div class="stock-menu-return">
     <div class="sheet-topbar">
       <h3 id="adminStockSheetTitle">เมนูแอดมิน</h3>
       <button class="btn btn-outline sheet-nav-btn"
@@ -6100,6 +6118,7 @@ function renderAdminMenuInStockSheet() {
         onclick="closeStockMenuSheetThen(handleAdminLogout)">
         🚪 Logout
       </button>
+    </div>
     </div>
   `;
 
