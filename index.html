@@ -3210,6 +3210,87 @@ textarea.input{
   font-size:14px;
 }
 
+.bulk-product-picker{
+  margin:12px 0 14px;
+  padding:12px;
+  border-radius:16px;
+  background:var(--bg-soft);
+  border:1px solid var(--border);
+}
+
+.bulk-product-picker-controls{
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+}
+
+.bulk-product-picker-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:10px;
+}
+
+.bulk-product-picker-list{
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+  max-height:360px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-right:2px;
+}
+
+.bulk-product-picker-row{
+  display:grid;
+  grid-template-columns:24px 56px minmax(0,1fr);
+  gap:10px;
+  align-items:flex-start;
+  padding:10px;
+  border-radius:14px;
+  background:var(--surface);
+  border:1px solid var(--border);
+}
+
+.bulk-product-picker-row.is-selected{
+  border-color:var(--primary);
+  background:var(--surface-glass);
+}
+
+.bulk-product-picker-row input[type="checkbox"]{
+  width:20px !important;
+  height:20px !important;
+  margin:18px 0 0;
+  flex:0 0 20px;
+  accent-color:var(--primary);
+}
+
+.bulk-product-picker-main{
+  min-width:0;
+  display:grid;
+  gap:6px;
+}
+
+.bulk-product-picker-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  align-items:center;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.35;
+}
+
+.bulk-product-picker-empty{
+  padding:12px;
+  border-radius:14px;
+  color:var(--muted);
+  background:var(--surface);
+  border:1px dashed var(--border);
+  text-align:center;
+  line-height:1.45;
+}
+
 </style>
 </head>
 <body>
@@ -3349,6 +3430,11 @@ Object.assign(window, {
   previewBulkProductUpdate,
   submitBulkProductUpdate,
   resetBulkProductUpdate,
+  setBulkProductUpdatePickerSearch,
+  setBulkProductUpdatePickerStatus,
+  toggleBulkProductUpdateProduct,
+  selectVisibleBulkProductUpdateProducts,
+  clearBulkProductUpdateSelection,
   downloadBulkProductTemplate,
   handleBulkProductFileUpload,
   copyBulkProductHeader,
@@ -3430,6 +3516,9 @@ const state = {
     },
     bulkProductUpdate: {
       skuText: "",
+      selectedSkus: [],
+      pickerSearch: "",
+      pickerStatus: "all",
       field: "price",
       value: "",
       items: [],
@@ -10770,6 +10859,9 @@ function closeBulkProductUpdateSheet() {
 function resetBulkProductUpdate() {
   const bulkState = state.admin.bulkProductUpdate;
   bulkState.skuText = "";
+  bulkState.selectedSkus = [];
+  bulkState.pickerSearch = "";
+  bulkState.pickerStatus = "all";
   bulkState.field = "price";
   bulkState.value = "";
   bulkState.items = [];
@@ -10777,6 +10869,103 @@ function resetBulkProductUpdate() {
   bulkState.backendErrors = [];
   bulkState.summary = "";
   bulkState.updatedCount = 0;
+  renderBulkProductUpdateSheet();
+}
+
+function resetBulkProductUpdateResultState() {
+  const bulkState = state.admin.bulkProductUpdate;
+  bulkState.backendErrors = [];
+  bulkState.summary = "";
+  bulkState.updatedCount = 0;
+}
+
+function getBulkProductUpdateSelectedSkus() {
+  const selectedSkus = Array.isArray(state.admin.bulkProductUpdate.selectedSkus)
+    ? state.admin.bulkProductUpdate.selectedSkus
+    : [];
+  const seen = new Set();
+  return selectedSkus
+    .map(normalizeProductId)
+    .filter(productId => {
+      if (!productId || seen.has(productId)) return false;
+      seen.add(productId);
+      return true;
+    });
+}
+
+function getBulkProductUpdateManualSkus() {
+  return String(state.admin.bulkProductUpdate.skuText || "")
+    .split(/[\s,]+/)
+    .map(normalizeProductId)
+    .filter(Boolean);
+}
+
+function getBulkProductUpdateCombinedSkus() {
+  return getBulkProductUpdateSelectedSkus().concat(getBulkProductUpdateManualSkus());
+}
+
+function getBulkProductUpdatePickerProducts() {
+  const bulkState = state.admin.bulkProductUpdate;
+  const searchText = String(bulkState.pickerSearch || "").trim().toLowerCase();
+  const rawStatusFilter = String(bulkState.pickerStatus || "all").trim().toLowerCase();
+  const statusFilter = rawStatusFilter === "all" ? "all" : normalizeProductStatus(rawStatusFilter);
+  const products = Array.isArray(state.products) ? state.products : [];
+
+  return products.filter(product => {
+    const productId = normalizeProductId(product.productId);
+    const name = String(product.name || "").toLowerCase();
+    const status = normalizeProductStatus(product.status);
+    const matchesSearch = !searchText ||
+      productId.toLowerCase().includes(searchText) ||
+      name.includes(searchText);
+    const matchesStatus = !statusFilter ||
+      statusFilter === "all" ||
+      status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+}
+
+function setBulkProductUpdatePickerSearch(value) {
+  state.admin.bulkProductUpdate.pickerSearch = value || "";
+  resetBulkProductUpdateResultState();
+  updateBulkProductUpdatePickerList();
+}
+
+function setBulkProductUpdatePickerStatus(value) {
+  state.admin.bulkProductUpdate.pickerStatus = value || "all";
+  resetBulkProductUpdateResultState();
+  updateBulkProductUpdatePickerList();
+}
+
+function toggleBulkProductUpdateProduct(productId, checked) {
+  const normalizedId = normalizeProductId(productId);
+  if (!normalizedId) return;
+
+  const selected = new Set(getBulkProductUpdateSelectedSkus());
+  if (checked) {
+    selected.add(normalizedId);
+  } else {
+    selected.delete(normalizedId);
+  }
+  state.admin.bulkProductUpdate.selectedSkus = Array.from(selected);
+  resetBulkProductUpdateResultState();
+  renderBulkProductUpdateSheet();
+}
+
+function selectVisibleBulkProductUpdateProducts() {
+  const selected = new Set(getBulkProductUpdateSelectedSkus());
+  getBulkProductUpdatePickerProducts().forEach(product => {
+    const productId = normalizeProductId(product.productId);
+    if (productId) selected.add(productId);
+  });
+  state.admin.bulkProductUpdate.selectedSkus = Array.from(selected);
+  resetBulkProductUpdateResultState();
+  renderBulkProductUpdateSheet();
+}
+
+function clearBulkProductUpdateSelection() {
+  state.admin.bulkProductUpdate.selectedSkus = [];
+  resetBulkProductUpdateResultState();
   renderBulkProductUpdateSheet();
 }
 
@@ -10904,7 +11093,7 @@ function parseBulkProductUpdateInput() {
   const bulkState = state.admin.bulkProductUpdate;
   const field = bulkState.field || "price";
   const valueResult = parseBulkProductUpdateValue(field, bulkState.value);
-  const skuText = String(bulkState.skuText || "").trim();
+  const skus = getBulkProductUpdateCombinedSkus();
   const errors = [];
   const items = [];
   const seenSkus = new Set();
@@ -10916,19 +11105,14 @@ function parseBulkProductUpdateInput() {
     ])
   );
 
-  if (!skuText && !String(bulkState.value ?? "").trim()) {
+  if (!skus.length && !String(bulkState.value ?? "").trim()) {
     return { items, errors };
   }
 
-  if (!skuText) {
+  if (!skus.length) {
     errors.push(bulkImportError(1, "", "productId", "กรุณาระบุ SKU อย่างน้อย 1 รายการ"));
     return { items, errors };
   }
-
-  const skus = skuText
-    .split(/[\s,]+/)
-    .map(normalizeProductId)
-    .filter(Boolean);
 
   if (skus.length > 100) {
     errors.push(bulkImportError(0, "", "items", "อัปเดตได้สูงสุด 100 รายการต่อครั้ง"));
@@ -11102,6 +11286,103 @@ function renderBulkProductUpdateValueInput(bulkState) {
   `;
 }
 
+function renderBulkProductUpdatePickerRows() {
+  const products = getBulkProductUpdatePickerProducts();
+  const selectedSkus = new Set(getBulkProductUpdateSelectedSkus());
+
+  return products.length
+    ? products.map(product => {
+        const productId = normalizeProductId(product.productId);
+        const selected = selectedSkus.has(productId);
+        const isActive = product.active !== false;
+        return `
+          <label class="bulk-product-picker-row ${selected ? "is-selected" : ""}">
+            <input
+              type="checkbox"
+              ${selected ? "checked" : ""}
+              onchange="toggleBulkProductUpdateProduct(${toInlineJsStringLiteral(productId)}, this.checked)">
+            ${renderCartItemThumb({
+              productId,
+              name: product.name || productId || "สินค้า",
+              image: product.image || ""
+            })}
+            <div class="bulk-product-picker-main">
+              <div class="name">${esc(product.name || productId || "-")}</div>
+              <div class="bulk-product-picker-meta">
+                <span>SKU: ${esc(productId || "-")}</span>
+                <span>ราคา: ${esc(formatBulkProductUpdateValue("price", product.price))}</span>
+                <span>ต้นทุน: ${esc(formatBulkProductUpdateValue("costPrice", product.costPrice))}</span>
+              </div>
+              <div class="bulk-product-picker-meta">
+                ${renderBulkProductUpdateValueDisplay("status", product.status)}
+                ${renderBulkProductUpdateValueDisplay("active", isActive)}
+              </div>
+            </div>
+          </label>
+        `;
+      }).join("")
+    : `<div class="bulk-product-picker-empty">ไม่พบสินค้าตามเงื่อนไขที่ค้นหา</div>`;
+}
+
+function updateBulkProductUpdatePickerList() {
+  const list = document.getElementById("bulkProductUpdatePickerList");
+  const count = document.getElementById("bulkProductUpdatePickerCount");
+  if (list) {
+    list.innerHTML = renderBulkProductUpdatePickerRows();
+  }
+  if (count) {
+    count.textContent = String(getBulkProductUpdateSelectedSkus().length);
+  }
+}
+
+function renderBulkProductUpdatePicker() {
+  const bulkState = state.admin.bulkProductUpdate;
+  const selectedCount = getBulkProductUpdateSelectedSkus().length;
+  const searchValue = bulkState.pickerSearch || "";
+  const statusValue = bulkState.pickerStatus || "all";
+
+  return `
+    <div class="bulk-product-picker">
+      <div class="admin-detail-title">เลือกสินค้าจากรายการ</div>
+      <div class="helper-text">
+        เลือกสินค้าด้วย checkbox หรือใช้ช่อง SKU ด้านล่างแบบเดิมก็ได้ เลือกแล้ว <span id="bulkProductUpdatePickerCount">${selectedCount}</span> รายการ
+      </div>
+
+      <div class="bulk-product-picker-controls">
+        <input
+          id="bulkProductUpdatePickerSearch"
+          type="search"
+          value="${escAttr(searchValue)}"
+          placeholder="ค้นหา SKU หรือชื่อสินค้า"
+          oninput="setBulkProductUpdatePickerSearch(this.value)">
+        <select
+          id="bulkProductUpdatePickerStatus"
+          onchange="setBulkProductUpdatePickerStatus(this.value)">
+          <option value="all" ${statusValue === "all" ? "selected" : ""}>ทุกสถานะ</option>
+          <option value="ready" ${statusValue === "ready" ? "selected" : ""}>พร้อมส่ง</option>
+          <option value="ready_plus" ${statusValue === "ready_plus" ? "selected" : ""}>พร้อมส่ง + เพิ่มได้</option>
+          <option value="shipping" ${statusValue === "shipping" ? "selected" : ""}>อยู่ระหว่างจัดส่ง</option>
+          <option value="warehouse" ${statusValue === "warehouse" ? "selected" : ""}>อยู่โกดังไทย</option>
+          <option value="out" ${statusValue === "out" ? "selected" : ""}>หมด</option>
+        </select>
+      </div>
+
+      <div class="bulk-product-picker-actions">
+        <button class="btn btn-outline" type="button" onclick="selectVisibleBulkProductUpdateProducts()">
+          เลือกทั้งหมดที่แสดง
+        </button>
+        <button class="btn btn-outline" type="button" onclick="clearBulkProductUpdateSelection()">
+          ล้างที่เลือก
+        </button>
+      </div>
+
+      <div id="bulkProductUpdatePickerList" class="bulk-product-picker-list">
+        ${renderBulkProductUpdatePickerRows()}
+      </div>
+    </div>
+  `;
+}
+
 function renderBulkProductUpdatePreview(items, errors) {
   if (!items.length && !errors.length) {
     return `
@@ -11201,8 +11482,10 @@ function renderBulkProductUpdateSheet() {
       โดยไม่เปลี่ยน SKU และไม่เปลี่ยนจำนวนสต็อก
     </div>
 
+    ${renderBulkProductUpdatePicker()}
+
     <div class="form-group">
-      <label for="bulkProductUpdateSkus">รายการ SKU</label>
+      <label for="bulkProductUpdateSkus">รายการ SKU แบบพิมพ์เอง</label>
       <textarea
         id="bulkProductUpdateSkus"
         class="input"
