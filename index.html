@@ -11714,8 +11714,10 @@ async function submitBulkProductUpdate(btn) {
     showToast("อัปเดตสินค้าไม่สำเร็จ กรุณาลองใหม่อีกครั้ง", "error");
   } finally {
     safeHideLoading();
+    state.ui.backdropLocked = false;
     state.admin.isSubmitting = false;
     renderBulkProductUpdateSheet();
+    requestAnimationFrame(syncOverlayBackdropState);
   }
 }
 
