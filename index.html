@@ -3526,7 +3526,9 @@ const state = {
       errors: [],
       backendErrors: [],
       summary: "",
-      updatedCount: 0
+      updatedCount: 0,
+      hasPreview: false,
+      previewValid: false
     },
     ui: {
       activeSheet: null
@@ -10845,14 +10847,7 @@ function ensureAdminSessionForBulkUpdate() {
 function openBulkProductUpdateSheet() {
   if (!ensureAdminSessionForBulkUpdate()) return;
 
-  const bulkState = state.admin.bulkProductUpdate;
-  if (bulkState.summary) {
-    clearBulkProductUpdateWorkingState();
-  }
-  bulkState.backendErrors = [];
-  bulkState.summary = "";
-  bulkState.updatedCount = 0;
-
+  clearBulkProductUpdateWorkingState();
   renderBulkProductUpdateSheet();
   openOverlay(adminBulkProductUpdateSheet);
 }
@@ -10874,14 +10869,20 @@ function resetBulkProductUpdate() {
   bulkState.backendErrors = [];
   bulkState.summary = "";
   bulkState.updatedCount = 0;
+  bulkState.hasPreview = false;
+  bulkState.previewValid = false;
   renderBulkProductUpdateSheet();
 }
 
-function resetBulkProductUpdateResultState() {
+function invalidateBulkProductUpdatePreview() {
   const bulkState = state.admin.bulkProductUpdate;
+  bulkState.items = [];
+  bulkState.errors = [];
   bulkState.backendErrors = [];
   bulkState.summary = "";
   bulkState.updatedCount = 0;
+  bulkState.hasPreview = false;
+  bulkState.previewValid = false;
 }
 
 function clearBulkProductUpdateWorkingState(options = {}) {
@@ -10892,11 +10893,14 @@ function clearBulkProductUpdateWorkingState(options = {}) {
 
   bulkState.skuText = "";
   bulkState.selectedSkus = [];
+  bulkState.value = "";
   bulkState.items = [];
   bulkState.errors = [];
   bulkState.backendErrors = [];
   bulkState.summary = preservedSummary;
   bulkState.updatedCount = preservedUpdatedCount;
+  bulkState.hasPreview = false;
+  bulkState.previewValid = false;
 }
 
 function getBulkProductUpdateSelectedSkus() {
@@ -10947,14 +10951,16 @@ function getBulkProductUpdatePickerProducts() {
 
 function setBulkProductUpdatePickerSearch(value) {
   state.admin.bulkProductUpdate.pickerSearch = value || "";
-  resetBulkProductUpdateResultState();
+  invalidateBulkProductUpdatePreview();
   updateBulkProductUpdatePickerList();
+  syncBulkProductUpdatePreviewGateUi();
 }
 
 function setBulkProductUpdatePickerStatus(value) {
   state.admin.bulkProductUpdate.pickerStatus = value || "all";
-  resetBulkProductUpdateResultState();
+  invalidateBulkProductUpdatePreview();
   updateBulkProductUpdatePickerList();
+  syncBulkProductUpdatePreviewGateUi();
 }
 
 function toggleBulkProductUpdateProduct(productId, checked) {
@@ -10968,7 +10974,7 @@ function toggleBulkProductUpdateProduct(productId, checked) {
     selected.delete(normalizedId);
   }
   state.admin.bulkProductUpdate.selectedSkus = Array.from(selected);
-  resetBulkProductUpdateResultState();
+  invalidateBulkProductUpdatePreview();
   renderBulkProductUpdateSheetPreservingPickerScroll();
 }
 
@@ -10979,13 +10985,13 @@ function selectVisibleBulkProductUpdateProducts() {
     if (productId) selected.add(productId);
   });
   state.admin.bulkProductUpdate.selectedSkus = Array.from(selected);
-  resetBulkProductUpdateResultState();
+  invalidateBulkProductUpdatePreview();
   renderBulkProductUpdateSheet();
 }
 
 function clearBulkProductUpdateSelection() {
   state.admin.bulkProductUpdate.selectedSkus = [];
-  resetBulkProductUpdateResultState();
+  invalidateBulkProductUpdatePreview();
   renderBulkProductUpdateSheet();
 }
 
@@ -11279,7 +11285,7 @@ function renderBulkProductUpdateValueInput(bulkState) {
   const field = bulkState.field || "price";
   if (field === "status") {
     return `
-      <select id="bulkProductUpdateValue" onchange="state.admin.bulkProductUpdate.value = this.value; state.admin.bulkProductUpdate.backendErrors = []; state.admin.bulkProductUpdate.summary = ''; state.admin.bulkProductUpdate.updatedCount = 0; renderBulkProductUpdateSheet();">
+      <select id="bulkProductUpdateValue" onchange="state.admin.bulkProductUpdate.value = this.value; invalidateBulkProductUpdatePreview(); renderBulkProductUpdateSheet();">
         <option value="">เลือกสถานะสินค้า</option>
         <option value="ready" ${bulkState.value === "ready" ? "selected" : ""}>พร้อมส่ง</option>
         <option value="ready_plus" ${bulkState.value === "ready_plus" ? "selected" : ""}>พร้อมส่ง + เพิ่มได้</option>
@@ -11292,7 +11298,7 @@ function renderBulkProductUpdateValueInput(bulkState) {
 
   if (field === "active") {
     return `
-      <select id="bulkProductUpdateValue" onchange="state.admin.bulkProductUpdate.value = this.value; state.admin.bulkProductUpdate.backendErrors = []; state.admin.bulkProductUpdate.summary = ''; state.admin.bulkProductUpdate.updatedCount = 0; renderBulkProductUpdateSheet();">
+      <select id="bulkProductUpdateValue" onchange="state.admin.bulkProductUpdate.value = this.value; invalidateBulkProductUpdatePreview(); renderBulkProductUpdateSheet();">
         <option value="">เลือกสถานะการขาย</option>
         <option value="true" ${String(bulkState.value) === "true" ? "selected" : ""}>เปิดขาย</option>
         <option value="false" ${String(bulkState.value) === "false" ? "selected" : ""}>ปิดขาย</option>
@@ -11308,7 +11314,7 @@ function renderBulkProductUpdateValueInput(bulkState) {
       step="1"
       value="${escAttr(bulkState.value || "")}"
       placeholder="ระบุ${escAttr(getBulkProductUpdateFieldLabel(field))}"
-      oninput="state.admin.bulkProductUpdate.value = this.value; state.admin.bulkProductUpdate.backendErrors = []; state.admin.bulkProductUpdate.summary = ''; state.admin.bulkProductUpdate.updatedCount = 0;">
+      oninput="state.admin.bulkProductUpdate.value = this.value; invalidateBulkProductUpdatePreview(); syncBulkProductUpdatePreviewGateUi();">
   `;
 }
 
@@ -11358,6 +11364,28 @@ function updateBulkProductUpdatePickerList() {
   }
   if (count) {
     count.textContent = String(getBulkProductUpdateSelectedSkus().length);
+  }
+}
+
+function syncBulkProductUpdatePreviewGateUi() {
+  const submitButton = document.getElementById("bulkProductUpdateSubmitButton");
+  if (submitButton) {
+    submitButton.disabled = true;
+  }
+
+  const status = document.getElementById("bulkProductUpdateStatusHost");
+  if (status) {
+    status.innerHTML = renderBulkProductUpdateStatus([], []);
+  }
+
+  const success = document.getElementById("bulkProductUpdateSuccessHost");
+  if (success) {
+    success.innerHTML = "";
+  }
+
+  const preview = document.getElementById("bulkProductUpdatePreviewHost");
+  if (preview) {
+    preview.innerHTML = renderBulkProductUpdatePreview([], []);
   }
 }
 
@@ -11490,7 +11518,10 @@ function renderBulkProductUpdatePreview(items, errors) {
 
 function renderBulkProductUpdateSheet() {
   const bulkState = state.admin.bulkProductUpdate;
-  const parsed = parseBulkProductUpdateInput();
+  const shouldParsePreview = bulkState.hasPreview || state.admin.isSubmitting;
+  const parsed = shouldParsePreview
+    ? parseBulkProductUpdateInput()
+    : { items: [], errors: [] };
   bulkState.items = parsed.items;
   bulkState.errors = parsed.errors;
 
@@ -11501,7 +11532,13 @@ function renderBulkProductUpdateSheet() {
       }))
     : [];
   const allErrors = parsed.errors.concat(backendErrors);
-  const canSubmit = parsed.items.length > 0 &&
+  bulkState.previewValid = Boolean(
+    bulkState.hasPreview &&
+    parsed.items.length > 0 &&
+    allErrors.length === 0
+  );
+  const canSubmit = bulkState.hasPreview &&
+    bulkState.previewValid &&
     allErrors.length === 0 &&
     !state.admin.isSubmitting &&
     !bulkState.summary;
@@ -11529,14 +11566,14 @@ function renderBulkProductUpdateSheet() {
         class="input"
         rows="5"
         placeholder="เช่น BN007, BN008 หรือวางหนึ่ง SKU ต่อบรรทัด"
-        oninput="state.admin.bulkProductUpdate.skuText = this.value; state.admin.bulkProductUpdate.backendErrors = []; state.admin.bulkProductUpdate.summary = ''; state.admin.bulkProductUpdate.updatedCount = 0;">${esc(bulkState.skuText || "")}</textarea>
+        oninput="state.admin.bulkProductUpdate.skuText = this.value; invalidateBulkProductUpdatePreview(); syncBulkProductUpdatePreviewGateUi();">${esc(bulkState.skuText || "")}</textarea>
       <div class="helper-text">รองรับการคั่นด้วยบรรทัดใหม่ เครื่องหมายจุลภาค หรือช่องว่าง สูงสุด 100 รายการ</div>
     </div>
 
     <div class="form-group">
       <label for="bulkProductUpdateField">ข้อมูลที่ต้องการอัปเดต</label>
       <select id="bulkProductUpdateField"
-        onchange="state.admin.bulkProductUpdate.field = this.value; state.admin.bulkProductUpdate.value = ''; state.admin.bulkProductUpdate.backendErrors = []; state.admin.bulkProductUpdate.summary = ''; state.admin.bulkProductUpdate.updatedCount = 0; renderBulkProductUpdateSheet();">
+        onchange="state.admin.bulkProductUpdate.field = this.value; state.admin.bulkProductUpdate.value = ''; invalidateBulkProductUpdatePreview(); renderBulkProductUpdateSheet();">
         <option value="price" ${bulkState.field === "price" ? "selected" : ""}>ตั้งราคาขาย</option>
         <option value="costPrice" ${bulkState.field === "costPrice" ? "selected" : ""}>ตั้งต้นทุน</option>
         <option value="status" ${bulkState.field === "status" ? "selected" : ""}>เปลี่ยนสถานะ</option>
@@ -11553,12 +11590,18 @@ function renderBulkProductUpdateSheet() {
       ตรวจสอบข้อมูล
     </button>
 
-    ${renderBulkProductUpdateStatus(parsed.items, allErrors)}
-    ${renderBulkProductUpdateSuccessCard()}
-    ${renderBulkProductUpdatePreview(parsed.items, allErrors)}
+    <div id="bulkProductUpdateStatusHost">
+      ${renderBulkProductUpdateStatus(parsed.items, allErrors)}
+    </div>
+    <div id="bulkProductUpdateSuccessHost">
+      ${renderBulkProductUpdateSuccessCard()}
+    </div>
+    <div id="bulkProductUpdatePreviewHost">
+      ${renderBulkProductUpdatePreview(parsed.items, allErrors)}
+    </div>
 
     <div class="sheet-action-footer">
-      <button class="btn btn-primary"
+      <button id="bulkProductUpdateSubmitButton" class="btn btn-primary"
         ${canSubmit ? "" : "disabled"}
         onclick="submitBulkProductUpdate(this)">
         ${state.admin.isSubmitting ? "กำลังอัปเดต..." : "อัปเดตสินค้า"}
@@ -11582,6 +11625,8 @@ function previewBulkProductUpdate() {
   state.admin.bulkProductUpdate.backendErrors = [];
   state.admin.bulkProductUpdate.summary = "";
   state.admin.bulkProductUpdate.updatedCount = 0;
+  state.admin.bulkProductUpdate.hasPreview = true;
+  state.admin.bulkProductUpdate.previewValid = false;
   renderBulkProductUpdateSheet();
 }
 
@@ -11589,10 +11634,14 @@ async function submitBulkProductUpdate(btn) {
   if (!ensureAdminSessionForBulkUpdate()) return;
   if (state.admin.isSubmitting) return;
 
-  previewBulkProductUpdate();
-
   const bulkState = state.admin.bulkProductUpdate;
-  if (!bulkState.items.length || bulkState.errors.length) {
+  if (
+    !bulkState.hasPreview ||
+    !bulkState.previewValid ||
+    !bulkState.items.length ||
+    bulkState.errors.length ||
+    bulkState.backendErrors.length
+  ) {
     showToast("กรุณาแก้ไขข้อผิดพลาดก่อนอัปเดตสินค้า", "warning");
     return;
   }
