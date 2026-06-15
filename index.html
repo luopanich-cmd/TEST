@@ -252,7 +252,7 @@ header.scrolled{
   isolation: isolate; /* 🔴 FIX: กัน layer เพี้ยน */
 
   /* 🔴 CHANGED: dark glass base */
-  background: rgba(28,28,30,.72);
+  background: var(--surface-glass);
   border: 1px solid var(--border);
   backdrop-filter: blur(16px) saturate(170%);
   -webkit-backdrop-filter: blur(16px) saturate(170%);
@@ -260,8 +260,8 @@ header.scrolled{
   /* 🔴 CHANGED: softer dark-depth inner rim */
   box-shadow:
     var(--shadow-control),
-    inset 0 1px 0 rgba(255,255,255,.10),
-    inset 0 -1px 0 rgba(255,255,255,.04);
+    inset 0 1px 0 var(--inner-highlight),
+    inset 0 -1px 0 var(--header-border);
 
   /* 🔴 CHANGED: remove white glow feeling */
   text-shadow: 0 1px 0 rgba(0,0,0,.35);
@@ -321,14 +321,14 @@ header.scrolled{
  }
     
   .badge{
-    color:#fff;
+    color:var(--primary-text);
   border-radius:999px;
   padding:3px 10px;
   font-size:12px;
   font-weight:700;
   letter-spacing:.2px;
-  background: #0066cc;
-  border: 1px solid rgba(255,255,255,.28);
+  background: var(--primary);
+  border: 1px solid var(--border-strong);
   box-shadow:
     0 10px 24px rgba(0,0,0,.14),
     inset 0 1px 0 rgba(255,255,255,.35);
@@ -346,12 +346,12 @@ header.scrolled{
   font-size: 17px;
   font-weight: 700;
   letter-spacing: .1px;
-  color: rgba(245,245,247,.94);
+  color: var(--text);
 }
 
 .text-muted,
 .helper-text{
-  color: rgba(235,235,245,.68);
+  color: var(--muted);
 }
 
 .helper-text{
@@ -362,7 +362,7 @@ header.scrolled{
 .empty-state{
   margin-top: 24px;
   text-align: center;
-  color: rgba(235,235,245,.68);
+  color: var(--muted);
   line-height: 1.45;
 }
 
@@ -638,7 +638,7 @@ select:focus {
 
 .form-group label {
   font-size: 13px;
-  color: rgba(235,235,245,.72);
+  color: var(--text-soft);
 }
 
 /* ================= FORM INPUT (UNIFIED) ================= */
@@ -955,7 +955,7 @@ button:disabled {
   align-items:flex-start;
   gap:12px;
   padding:14px 0;
-  border-bottom:1px solid rgba(255,255,255,.08);
+  border-bottom:1px solid var(--border);
   }
 
  .cart-item > div:first-child {
@@ -971,12 +971,12 @@ button:disabled {
  .cart-meta{
    margin-top:3px;
    font-size:12px;
-   color:rgba(235,235,245,.62);
+   color:var(--muted);
  }
 
  .cart-qty{
    font-size:14px;
-   color:rgba(235,235,245,.78);
+   color:var(--text-soft);
    white-space:nowrap;
  }
 
@@ -1013,8 +1013,8 @@ button:disabled {
   box-sizing:border-box;
   border-radius:14px;
   overflow:hidden;
-  background:#1c1c1e;
-  border:1px solid rgba(255,255,255,.08);
+  background:var(--surface-2);
+  border:1px solid var(--border);
   display:grid;
    place-items:center;
  }
@@ -1033,7 +1033,7 @@ button:disabled {
   aspect-ratio:1 / 1;
   display:grid;
   place-items:center;
-  color:rgba(235,235,245,.62);
+  color:var(--muted);
   font-size:18px;
 }
 
@@ -1045,7 +1045,7 @@ button:disabled {
  .cart-line-total{
    font-size:15px;
    font-weight:700;
-   color:rgba(245,245,247,.96);
+   color:var(--text);
    white-space:nowrap;
  }
 
@@ -1054,8 +1054,8 @@ button:disabled {
    margin-top:14px;
    padding:14px;
    border-radius:16px;
-   background:rgba(255,255,255,.05);
-   border:1px solid rgba(255,255,255,.08);
+   background:var(--bg-soft);
+   border:1px solid var(--border);
  }
 
  .summary-row{
@@ -1065,12 +1065,12 @@ button:disabled {
    gap:12px;
    padding:6px 0;
    font-size:14px;
-   color:rgba(235,235,245,.74);
+   color:var(--text-soft);
  }
 
  .summary-row strong{
    font-size:17px;
-   color:rgba(245,245,247,.96);
+   color:var(--text);
  }
 
  .order-success-card{
@@ -1095,7 +1095,7 @@ button:disabled {
 
  .success-note{
    margin-top:12px;
-   color:rgba(235,235,245,.74);
+   color:var(--text-soft);
    font-size:14px;
    line-height:1.45;
  }
@@ -1166,7 +1166,7 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255,255,255,.10);
+  border: 1px solid var(--border);
   position: relative;
   overflow: hidden;
 
@@ -1364,12 +1364,12 @@ button:disabled {
    padding:8px;
    border-radius:16px;
    /* 🔴 CHANGED: เพิ่ม contrast + ขอบ + แยกชั้นให้ชัด */
-   background: rgba(44,44,46,.96);
+   background: var(--surface-2);
    backdrop-filter: blur(26px) saturate(180%);
    -webkit-backdrop-filter: blur(26px) saturate(180%);
-   border: 1px solid rgba(255,255,255,.12);
+   border: 1px solid var(--border);
    box-shadow: var(--shadow-floating);
-   color: rgba(245,245,247,.92);
+   color: var(--text);
    display:none;
    flex-direction:column;
    gap:4px;
@@ -1385,7 +1385,7 @@ button:disabled {
    font-weight: 600;
    line-height: 1.35;
    text-align: center;  
-   color: rgba(245,245,247,.92);
+   color: var(--text);
    cursor: pointer;
    user-select: none;
    transition: background .16s ease, transform .16s ease;
@@ -1393,24 +1393,24 @@ button:disabled {
  }
 
 .filter-item.active{
-  background: rgba(0,102,204,.28);
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(100,181,255,.32);
+  background: var(--primary);
+  color: var(--primary-text);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
  /* 🔴 CHANGED: เส้นแบ่งแบบ iOS (ช่วยแยก item ไม่ให้กลืน) */
  .filter-item + .filter-item{
-   border-top: 1px solid rgba(255,255,255,.08);
+   border-top: 1px solid var(--border);
  }
 
  /* 🔴 CHANGED: hover/active ให้รู้ว่ากดได้ */
  @media (hover:hover){
    .filter-item:hover{
-     background: rgba(255,255,255,.10);
+     background: var(--bg-soft);
    }
  }
  .filter-item:active{
-   background: rgba(255,255,255,.14);
+   background: var(--surface-3);
    transform: scale(.985);
  } 
   
@@ -1424,13 +1424,13 @@ button:disabled {
   overflow: hidden;
 
   /* ✅ Match filter-btn: Apple-nimble glass (less 3D) */
-  background: rgba(28,28,30,.72);
+  background: var(--surface-glass);
   backdrop-filter: blur(16px) saturate(170%);
   -webkit-backdrop-filter: blur(16px) saturate(170%);
-  border: 1px solid rgba(255,255,255,.10);
+  border: 1px solid var(--border);
   box-shadow: var(--shadow-control);
 
-  color: rgba(255,255,255,.92);
+  color: var(--text);
   cursor:pointer;
 
   display:flex;
@@ -2053,7 +2053,7 @@ textarea {
 /* ===== STOCK TIMELINE EXPAND DETAIL ===== */
 .timeline-summary{
   font-size:13px;
-  color:rgba(235,235,245,.78);
+  color:var(--text-soft);
   margin:6px 0 8px;
 }
 
@@ -2080,7 +2080,7 @@ textarea {
 
 .timeline-product-row{
   padding:10px 0;
-  border-bottom:1px solid rgba(255,255,255,.08);
+  border-bottom:1px solid var(--border);
 }
 
 .timeline-product-row:last-child{
@@ -2088,7 +2088,7 @@ textarea {
 }
 
 .timeline-muted{
-  color:#888;
+  color:var(--muted);
 }
 
 .timeline-detail-wrap{
@@ -2232,7 +2232,7 @@ textarea {
 }
 
 .loading-box {
-  background: rgba(28,28,30,.88);
+  background: var(--sheet-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   padding: 20px 24px;
@@ -2266,7 +2266,7 @@ textarea {
 .skeleton-card{
   height:104px;
   border-radius:16px;
-  background: rgba(28,28,30,.72);
+  background: var(--surface-glass);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   box-shadow: var(--shadow-card);
@@ -2292,13 +2292,13 @@ textarea {
 }
 .skeleton-thumb{
   width:80px;height:80px;border-radius:12px;
-  background: rgba(255,255,255,.08);
+  background: var(--surface-2);
   flex-shrink:0;
 }
 .skeleton-lines{flex:1;display:flex;flex-direction:column;gap:10px;padding-top:6px;}
 .skeleton-line{
   height:12px;border-radius:999px;
-  background: rgba(255,255,255,.08);
+  background: var(--surface-2);
 }
 .skeleton-line.w70{width:70%}
 .skeleton-line.w45{width:45%}
@@ -2339,9 +2339,9 @@ textarea {
    font-weight: 600;
 
    border-radius: 16px;
-   border: 1px solid rgba(255,255,255,.08);
-   background: rgba(44,44,46,.90);
-   color: #fff;
+   border: 1px solid var(--border);
+   background: var(--surface-2);
+   color: var(--text);
    backdrop-filter: blur(6px);
 
    box-shadow:
@@ -2353,9 +2353,9 @@ textarea {
 
  /* focus = glow */
  .qty-input input[type="number"]:focus {
-   border-color: #007aff;
+   border-color: var(--focus-color);
    box-shadow:
-     0 0 0 3px rgba(0,122,255,.18),
+     var(--focus-ring),
      inset 0 1px 2px rgba(0,0,0,.05);
  }
 
@@ -2798,14 +2798,14 @@ border: 1px solid var(--border-strong);
   z-index: 46; /* ✅ สูงกว่า floatingBar (45) แต่ต่ำกว่า backdrop (100) */
 
   /* iOS glass */
-  background: rgba(28,28,30,.65);
+  background: var(--surface-glass);
   backdrop-filter: blur(22px) saturate(180%);
   -webkit-backdrop-filter: blur(22px) saturate(180%);
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid var(--border);
   box-shadow:
     var(--shadow-fab),
-    inset 0 1px 0 rgba(255,255,255,.75);
-  color: #fff;
+    inset 0 1px 0 var(--inner-highlight);
+  color: var(--text);
   font-size: 18px;
   font-weight: 700;
 
@@ -2828,11 +2828,11 @@ border: 1px solid var(--border-strong);
   padding:12px;
   border-radius:12px;
 
-  background:rgba(255,255,255,.04);
+  background:var(--surface-2);
 
-  border:1px solid rgba(255,255,255,.08);
+  border:1px solid var(--border);
 
-  color:#fff;
+  color:var(--text);
 
   font-size:15px;
 }
@@ -2840,11 +2840,9 @@ border: 1px solid var(--border-strong);
 .input:focus{
   outline:none;
 
-  border-color:#0A84FF;
+  border-color:var(--focus-color);
 
-  box-shadow:
-    0 0 0 3px
-    rgba(10,132,255,.18);
+  box-shadow: var(--focus-ring);
 }
 
 textarea.input{
@@ -2853,8 +2851,8 @@ textarea.input{
 }
 
 .btn-primary{
-  background:#0066cc;
-  color:#fff;
+  background:var(--primary);
+  color:var(--primary-text);
   border:none;
 }
 
@@ -2894,8 +2892,8 @@ textarea.input{
   margin:10px 0 12px;
   padding:10px 12px;
   border-radius:12px;
-  background:rgba(255,255,255,.05);
-  border:1px solid rgba(255,255,255,.08);
+  background:var(--bg-soft);
+  border:1px solid var(--border);
   font-size:12px;
   line-height:1.45;
   overflow-x:auto;
@@ -2905,9 +2903,9 @@ textarea.input{
 .bulk-template-table{
   margin:10px 0 12px;
   overflow-x:auto;
-  border:1px solid rgba(255,255,255,.08);
+  border:1px solid var(--border);
   border-radius:14px;
-  background:rgba(255,255,255,.04);
+  background:var(--surface);
 }
 
 .bulk-template-table table{
@@ -2920,15 +2918,15 @@ textarea.input{
 .bulk-template-table th,
 .bulk-template-table td{
   padding:9px 10px;
-  border-bottom:1px solid rgba(255,255,255,.07);
+  border-bottom:1px solid var(--border);
   text-align:left;
   vertical-align:top;
   white-space:nowrap;
 }
 
 .bulk-template-table th{
-  color:#fff;
-  background:rgba(255,255,255,.07);
+  color:var(--text);
+  background:var(--surface-2);
   font-weight:700;
 }
 
@@ -2957,8 +2955,8 @@ textarea.input{
   margin:12px 0;
   padding:12px;
   border-radius:14px;
-  border:1px solid rgba(255,255,255,.10);
-  background:rgba(255,255,255,.05);
+  border:1px solid var(--border);
+  background:var(--bg-soft);
 }
 
 .bulk-import-status strong{
@@ -2972,8 +2970,8 @@ textarea.input{
   margin:12px 0;
   padding:14px;
   border-radius:16px;
-  border:1px solid rgba(52,199,89,.35);
-  background:rgba(52,199,89,.12);
+  border:1px solid rgba(63,159,112,.35);
+  background:rgba(63,159,112,.12);
 }
 
 .bulk-import-success-actions{
@@ -2996,7 +2994,7 @@ textarea.input{
   min-height:44px;
   display:flex;
   align-items:center;
-  color:#fff;
+  color:var(--text);
   cursor:pointer;
 }
 
@@ -3015,37 +3013,37 @@ textarea.input{
 }
 
 .bulk-data-preview-table tr.has-error td{
-  background:rgba(255,59,48,.08);
+  background:rgba(207,62,103,.10);
 }
 
 .bulk-data-preview-table .placeholder-row td{
-  color:rgba(235,235,245,.60);
+  color:var(--muted);
   text-align:center;
 }
 
 .bulk-preview-card{
   padding:12px;
   border-radius:14px;
-  background:rgba(255,255,255,.05);
-  border:1px solid rgba(255,255,255,.08);
+  background:var(--surface);
+  border:1px solid var(--border);
 }
 
 .bulk-preview-card.has-error{
-  border-color:rgba(255,59,48,.55);
-  background:rgba(255,59,48,.10);
+  border-color:rgba(207,62,103,.55);
+  background:rgba(207,62,103,.10);
 }
 
 .bulk-preview-meta{
   margin-top:6px;
   font-size:12px;
-  color:rgba(235,235,245,.72);
+  color:var(--text-soft);
   line-height:1.45;
 }
 
 .bulk-error-list{
   margin:8px 0 0;
   padding-left:18px;
-  color:#ff9f0a;
+  color:var(--warning);
   font-size:12px;
   line-height:1.45;
 }
@@ -3067,7 +3065,7 @@ textarea.input{
 .bulk-update-value{
   padding:8px 10px;
   border-radius:12px;
-  background:rgba(255,255,255,.05);
+  background:var(--bg-soft);
   font-size:12px;
   line-height:1.35;
 }
@@ -3075,7 +3073,7 @@ textarea.input{
 .bulk-update-value strong{
   display:block;
   margin-top:3px;
-  color:#fff;
+  color:var(--text);
   font-size:14px;
 }
 
@@ -4573,7 +4571,7 @@ if (
     app.innerHTML = `
       <div role="status" style="
         text-align:center;
-        color:#888;
+        color:var(--muted);
         margin-top:40px;
         font-size:15px;
       ">
@@ -4598,7 +4596,7 @@ if (
       <div class="pagination-info">
         หน้า ${safePage} / ${totalPages}
         <br>
-        <span style="font-size:12px;color:rgba(235,235,245,.72)">
+        <span style="font-size:12px;color:var(--text-soft)">
           ${totalItems.toLocaleString()} รายการ
         </span>
       </div>
@@ -6637,7 +6635,7 @@ async function openStockTimeline(force = false, options = {}) {
                       </div>
                     </div>                    
 
-                    <div style="font-size:12px;color:#888;margin-top:6px">
+                    <div style="font-size:12px;color:var(--muted);margin-top:6px">
                       ${t.time.toLocaleDateString("th-TH")}
                       ${t.time.toLocaleTimeString("th-TH")}
                       · โดย ${esc(t.by)}
@@ -6717,7 +6715,7 @@ async function openStockTimeline(force = false, options = {}) {
                       : ""
                   }
 
-                      <div style="font-size:12px;color:#888;margin-top:6px">
+                      <div style="font-size:12px;color:var(--muted);margin-top:6px">
                         ${t.time.toLocaleDateString("th-TH")}
                         ${t.time.toLocaleTimeString("th-TH")}
                         · โดย ${esc(t.by)}
@@ -6728,7 +6726,7 @@ async function openStockTimeline(force = false, options = {}) {
               `;
             }).join("")
           : `
-            <div style="text-align:center;color:#888;margin-top:32px">
+            <div style="text-align:center;color:var(--muted);margin-top:32px">
               ไม่มีข้อมูลประวัติสต๊อก
             </div>
           `
@@ -7013,7 +7011,7 @@ function closeAdminOrderSheet() {
     display:block;
     margin-bottom:16px;
     padding-bottom:16px;
-    border-bottom:1px solid rgba(255,255,255,.08);
+    border-bottom:1px solid var(--border);
   ">
 
 <div>
@@ -8004,7 +8002,7 @@ async function refreshProductsWithFeedback({
       showToast("ไม่สามารถโหลดข้อมูลสินค้าได้", "error");
       confirmSheet.innerHTML = `
         <h3 id="confirmSheetTitle">โหลดข้อมูลไม่สำเร็จ</h3>
-        <div style="margin-top:12px;color:rgba(235,235,245,.78)">
+        <div style="margin-top:12px;color:var(--text-soft)">
           กรุณาลองใหม่อีกครั้ง
         </div>
         <button class="btn btn-primary" style="margin-top:16px"
@@ -9249,7 +9247,7 @@ function openProductEdit(p){
    <div style="
      margin-top:16px;
      font-size:13px;
-     color:#888;
+     color:var(--muted);
      text-align:center
    ">
      ⛔ สินค้านี้ถูกลบแล้ว
