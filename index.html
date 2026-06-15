@@ -4240,6 +4240,19 @@ function closeOverlay(el){
   restoreTriggerFocus();
 }
 
+function syncOverlayBackdropState() {
+  const activeOverlays = document.querySelectorAll(".sheet.show, .side-menu.show");
+  state.ui.overlayCount = activeOverlays.length;
+
+  if (!backdrop) return;
+
+  if (state.ui.overlayCount > 0 || state.ui.backdropLocked) {
+    backdrop.style.display = "block";
+  } else {
+    backdrop.style.display = "none";
+  }
+}
+
 async function adminStockIn(productId, qty, reason){
   if (!state.admin.token) {
     throw new Error("Not authenticated");
@@ -9012,6 +9025,7 @@ function closeAddProduct(){
 function closeMainMenu(){
   state.admin.ui.activeSheet = null;
    closeOverlay(mainMenuSheet);
+   syncOverlayBackdropState();
    document.querySelectorAll(".menu-btn[aria-expanded='true']")
      .forEach(b => syncExpanded(b, false));
    restoreTriggerFocus();
@@ -10998,7 +11012,11 @@ function clearBulkProductUpdateSelection() {
 function backToAdminMenuFromBulkProductUpdate() {
   clearBulkProductUpdateWorkingState();
   closeBulkProductUpdateSheet();
-  openMainMenu();
+  syncOverlayBackdropState();
+  requestAnimationFrame(() => {
+    openMainMenu();
+    syncOverlayBackdropState();
+  });
 }
 
 function getBulkProductUpdateFieldLabel(field) {
