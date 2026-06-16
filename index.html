@@ -3506,6 +3506,8 @@ Object.assign(window, {
   refreshPartnerRequests,
   openPartnerRequestDetail,
   updatePartnerRequestStatusFromAdmin,
+  setPartnerRequestConvertPoNumber,
+  convertPartnerRequestToOrderFromAdmin,
   backToPartnerRequestList,
   downloadBulkProductTemplate,
   handleBulkProductFileUpload,
@@ -3639,6 +3641,10 @@ const state = {
       loading: false,
       statusSubmitting: false,
       statusMessage: "",
+      convertSubmitting: false,
+      convertPoNumber: "",
+      convertResult: null,
+      convertError: "",
       error: "",
       view: "list"
     },
@@ -12916,6 +12922,10 @@ function resetPartnerRequestsState() {
   requestState.loading = false;
   requestState.statusSubmitting = false;
   requestState.statusMessage = "";
+  requestState.convertSubmitting = false;
+  requestState.convertPoNumber = "";
+  requestState.convertResult = null;
+  requestState.convertError = "";
   requestState.error = "";
   requestState.view = "list";
 }
@@ -12965,6 +12975,9 @@ function backToPartnerRequestList() {
   state.admin.partnerRequests.view = "list";
   state.admin.partnerRequests.detail = null;
   state.admin.partnerRequests.error = "";
+  state.admin.partnerRequests.convertPoNumber = "";
+  state.admin.partnerRequests.convertResult = null;
+  state.admin.partnerRequests.convertError = "";
   renderPartnerRequestsSheet();
 }
 
@@ -13112,6 +13125,78 @@ async function updatePartnerRequestStatusFromAdmin(requestId, status) {
   }
 }
 
+function setPartnerRequestConvertPoNumber(value) {
+  state.admin.partnerRequests.convertPoNumber = value || "";
+  state.admin.partnerRequests.convertError = "";
+  renderPartnerRequestsSheet();
+}
+
+async function convertPartnerRequestToOrderFromAdmin(requestId) {
+  if (!ensureAdminSessionForPartnerRequests()) return;
+
+  const requestState = state.admin.partnerRequests;
+  if (requestState.convertSubmitting) return;
+
+  const cleanRequestId = String(requestId || "").trim();
+  const poNumber = String(requestState.convertPoNumber || "").trim();
+
+  if (!cleanRequestId) return;
+
+  if (!poNumber) {
+    requestState.convertError = "กรุณาระบุเลข PO ก่อนสร้างออเดอร์";
+    requestState.convertResult = null;
+    renderPartnerRequestsSheet();
+    return;
+  }
+
+  requestState.convertSubmitting = true;
+  requestState.convertError = "";
+  requestState.convertResult = null;
+  renderPartnerRequestsSheet();
+
+  try {
+    const form = new URLSearchParams();
+    form.append("action", "convertPartnerRequestToOrder");
+    form.append("token", state.admin.token);
+    form.append("requestId", cleanRequestId);
+    form.append("poNumber", poNumber);
+
+    const res = await fetchWithTimeout(API_URL, {
+      method: "POST",
+      body: form
+    }, 30000);
+    const json = await res.json();
+
+    if (json?.success !== true) {
+      if (isAuthError(json?.error)) {
+        showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
+        exitAdmin({ silent: true });
+        return;
+      }
+      throw new Error(json?.error || json?.message || "สร้างออเดอร์จากคำขอไม่สำเร็จ");
+    }
+
+    requestState.convertResult = json.data || null;
+    requestState.convertError = "";
+    requestState.convertPoNumber = "";
+    showToast("สร้างออเดอร์แล้ว รออนุมัติใน Pending Orders", "success");
+
+    try {
+      state.admin.orders = await fetchOrders();
+    } catch (refreshErr) {
+      console.error("refresh orders after partner conversion failed:", refreshErr);
+    }
+  } catch (err) {
+    console.error(err);
+    requestState.convertResult = null;
+    requestState.convertError = err.message || "สร้างออเดอร์จากคำขอไม่สำเร็จ";
+    showToast(requestState.convertError, "error");
+  } finally {
+    requestState.convertSubmitting = false;
+    renderPartnerRequestsSheet();
+  }
+}
+
 async function loadPartnerRequests() {
   if (!ensureAdminSessionForPartnerRequests()) return;
 
@@ -13181,6 +13266,9 @@ async function openPartnerRequestDetail(requestId) {
   requestState.error = "";
   requestState.view = "detail";
   requestState.detail = null;
+  requestState.convertPoNumber = "";
+  requestState.convertResult = null;
+  requestState.convertError = "";
   renderPartnerRequestsSheet();
 
   try {
@@ -13344,6 +13432,66 @@ function renderPartnerRequestDetailItem(item) {
   `;
 }
 
+function renderPartnerRequestConvertCard(request) {
+  const requestState = state.admin.partnerRequests;
+  const requestId = String(request?.requestId || "").trim();
+  if (!requestId) return "";
+
+  const result = requestState.convertResult;
+  const error = String(requestState.convertError || "").trim();
+
+  return `
+    <div class="admin-detail-card" style="margin-top:14px">
+      <div class="admin-detail-title">สร้างออเดอร์จากคำขอ</div>
+      <div class="helper-text">
+        ออเดอร์ที่สร้างจากคำขอคู่ค้าจะเริ่มเป็น PENDING และต้องอนุมัติใน Pending Orders ก่อน ระบบจึงจะตัดสต็อก
+      </div>
+
+      <div class="form-group" style="margin-top:10px">
+        <label for="partnerRequestConvertPoNumber">เลข PO</label>
+        <input
+          id="partnerRequestConvertPoNumber"
+          class="input"
+          value="${escAttr(requestState.convertPoNumber || "")}"
+          placeholder="ระบุเลข PO"
+          ${requestState.convertSubmitting ? "disabled" : ""}
+          oninput="setPartnerRequestConvertPoNumber(this.value)">
+      </div>
+
+      ${
+        error
+          ? `<div class="bulk-error-list" role="alert" style="margin-top:10px">${esc(error)}</div>`
+          : ""
+      }
+
+      ${
+        result
+          ? `
+            <div class="bulk-import-success-card" role="status" aria-live="polite" style="margin-top:10px">
+              <strong>สร้างออเดอร์แล้ว รออนุมัติใน Pending Orders</strong>
+              <div class="helper-text" style="margin-top:8px">
+                Order ID: ${esc(result.orderId || "-")}<br>
+                สถานะ: ${esc(result.status || "PENDING")}<br>
+                PO: ${esc(result.poNumber || "-")}<br>
+                รวม: ${esc(formatPartnerRequestMoney(result.total || 0))}<br>
+                จำนวนรายการ: ${Number(result.itemCount || 0).toLocaleString("th-TH")}
+              </div>
+            </div>
+          `
+          : ""
+      }
+
+      <div class="bulk-product-picker-actions" style="margin-top:12px">
+        <button class="btn btn-primary" type="button"
+          ${requestState.convertSubmitting ? "disabled" : ""}
+          onclick="convertPartnerRequestToOrderFromAdmin(${toInlineJsStringLiteral(requestId)})">
+          ${requestState.convertSubmitting ? "กำลังสร้างออเดอร์..." : "สร้างออเดอร์จากคำขอ"}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 function renderPartnerRequestDetail() {
   const requestState = state.admin.partnerRequests;
   if (requestState.loading) {
@@ -13384,6 +13532,8 @@ function renderPartnerRequestDetail() {
       ${request.message ? `<div class="helper-text" style="margin-top:10px">ข้อความ: ${esc(request.message)}</div>` : ""}
       ${renderPartnerRequestStatusActions(request)}
     </div>
+
+    ${renderPartnerRequestConvertCard(request)}
 
     <div class="admin-detail-title" style="margin-top:14px">รายการสินค้า</div>
     ${
