@@ -84,6 +84,11 @@ const PARTNER_SHEET_SCHEMAS = Object.freeze({
   ]
 });
 
+const PARTNER_REQUEST_MAX_ITEMS = 100;
+const PARTNER_REQUEST_MAX_CONTACT_LENGTH = 120;
+const PARTNER_REQUEST_MAX_MESSAGE_LENGTH = 1000;
+const PARTNER_REQUEST_MAX_NOTE_LENGTH = 500;
+
 function ensurePartnerCatalogSheets() {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -293,6 +298,179 @@ function getPartnerCatalog(partnerToken) {
   }
 
   const ss = getSS();
+  const context = getPartnerCatalogContext_(ss, rawToken);
+  const products = context.selectedProductIds
+    .map(productId => context.productMap.get(productId))
+    .filter(row => row && isProductActive_(row))
+    .map(row => toSafePartnerProduct_(row));
+
+  return {
+    success: true,
+    data: {
+      partner: {
+        partnerId: context.partner.partnerId,
+        partnerName: context.partner.partnerName
+      },
+      link: {
+        linkId: context.link.linkId,
+        expiresAt: context.link.expiresAt,
+        label: context.link.label || ""
+      },
+      products
+    }
+  };
+}
+
+function submitPartnerRequest(params) {
+  const rawToken = String(params.partnerToken || "").trim();
+  if (!rawToken) {
+    throw new Error("Missing partner token");
+  }
+
+  const requestItems = parsePartnerRequestItems_(params.items);
+  const contactName = sanitizePartnerText_(
+    params.contactName,
+    PARTNER_REQUEST_MAX_CONTACT_LENGTH
+  );
+  const contactEmail = sanitizePartnerText_(
+    params.contactEmail,
+    PARTNER_REQUEST_MAX_CONTACT_LENGTH
+  );
+  const contactPhone = sanitizePartnerText_(
+    params.contactPhone,
+    PARTNER_REQUEST_MAX_CONTACT_LENGTH
+  );
+  const message = sanitizePartnerText_(
+    params.message,
+    PARTNER_REQUEST_MAX_MESSAGE_LENGTH
+  );
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = getSS();
+    const context = getPartnerCatalogContext_(ss, rawToken);
+    const requestSheet = ss.getSheetByName(
+      PARTNER_SHEET_NAMES.partnerRequests
+    );
+    const itemSheet = ss.getSheetByName(
+      PARTNER_SHEET_NAMES.partnerRequestItems
+    );
+
+    if (!requestSheet) {
+      throw new Error("partner_requests sheet not found");
+    }
+    if (!itemSheet) {
+      throw new Error("partner_request_items sheet not found");
+    }
+
+    const visibleProductIds = new Set(context.selectedProductIds);
+    const seen = {};
+    const cleanItems = requestItems.map((item, index) => {
+      const productId = String(item.productId || "").trim().toUpperCase();
+      const qty = item.qty;
+
+      if (!visibleProductIds.has(productId)) {
+        throw new Error("Product not available for this partner link: " + productId);
+      }
+      if (seen[productId]) {
+        throw new Error("Duplicate productId in request: " + productId);
+      }
+      seen[productId] = true;
+
+      const productRow = context.productMap.get(productId);
+      if (!productRow || !isProductActive_(productRow)) {
+        throw new Error("Product not available for this partner link: " + productId);
+      }
+
+      const safeProduct = toSafePartnerProduct_(productRow);
+      return {
+        productId,
+        nameSnapshot: safeProduct.name,
+        priceSnapshot: safeProduct.price,
+        qty,
+        statusSnapshot: safeProduct.status,
+        imageSnapshot: safeProduct.image,
+        partnerNote: sanitizePartnerText_(
+          item.partnerNote,
+          PARTNER_REQUEST_MAX_NOTE_LENGTH
+        ),
+        sortOrder: index + 1
+      };
+    });
+
+    const estimatedTotal = cleanItems.reduce(
+      (sum, item) => sum + item.priceSnapshot * item.qty,
+      0
+    );
+    const requestId = "PR-" + Utilities.getUuid();
+    const submittedAt = new Date();
+    let headerCreated = false;
+    let itemRowsCreated = 0;
+
+    try {
+      requestSheet.appendRow([
+        requestId,
+        context.link.linkId,
+        context.partner.partnerId,
+        context.partner.partnerName,
+        contactName,
+        contactEmail,
+        contactPhone,
+        message,
+        "new",
+        cleanItems.length,
+        estimatedTotal,
+        submittedAt,
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]);
+      headerCreated = true;
+
+      cleanItems.forEach(item => {
+        itemSheet.appendRow([
+          requestId,
+          item.productId,
+          item.nameSnapshot,
+          item.priceSnapshot,
+          item.qty,
+          item.statusSnapshot,
+          item.imageSnapshot,
+          item.partnerNote,
+          item.sortOrder
+        ]);
+        itemRowsCreated++;
+      });
+    } catch (err) {
+      rollbackPartnerRequestCreate_(
+        requestSheet,
+        itemSheet,
+        requestId,
+        headerCreated,
+        itemRowsCreated
+      );
+      throw err;
+    }
+
+    return {
+      success: true,
+      data: {
+        requestId,
+        submittedAt,
+        itemCount: cleanItems.length,
+        estimatedTotal
+      }
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getPartnerCatalogContext_(ss, rawToken) {
   const linkData = getSheetDataBySchema_(
     ss,
     PARTNER_SHEET_NAMES.partnerLinks
@@ -318,6 +496,25 @@ function getPartnerCatalog(partnerToken) {
     throw new Error("Partner link not found");
   }
 
+  validatePartnerLink_(link);
+
+  const partner = findPartnerById_(partnerData, link.partnerId);
+  if (!partner) {
+    throw new Error("Partner not found or disabled");
+  }
+
+  return {
+    link,
+    partner,
+    selectedProductIds: getVisiblePartnerCatalogProductIds_(
+      catalogData,
+      link.linkId
+    ),
+    productMap: getProductRowMap_(productSheet)
+  };
+}
+
+function validatePartnerLink_(link) {
   const linkStatus = normalizePartnerStatus_(link.status);
   if (linkStatus === "expired") {
     throw new Error("Partner link expired");
@@ -331,37 +528,79 @@ function getPartnerCatalog(partnerToken) {
   if (!link.expiresAt || new Date(link.expiresAt) <= new Date()) {
     throw new Error("Partner link expired");
   }
+}
 
-  const partner = findPartnerById_(partnerData, link.partnerId);
-  if (!partner) {
-    throw new Error("Partner not found or disabled");
+function parsePartnerRequestItems_(rawItems) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(rawItems || "[]"));
+  } catch (err) {
+    throw new Error("Invalid request items");
   }
 
-  const selectedProductIds = getVisiblePartnerCatalogProductIds_(
-    catalogData,
-    link.linkId
-  );
-  const productMap = getProductRowMap_(productSheet);
-  const products = selectedProductIds
-    .map(productId => productMap.get(productId))
-    .filter(row => row && isProductActive_(row))
-    .map(row => toSafePartnerProduct_(row));
+  if (!Array.isArray(parsed) || !parsed.length) {
+    throw new Error("Invalid request items");
+  }
 
-  return {
-    success: true,
-    data: {
-      partner: {
-        partnerId: partner.partnerId,
-        partnerName: partner.partnerName
-      },
-      link: {
-        linkId: link.linkId,
-        expiresAt: link.expiresAt,
-        label: link.label || ""
-      },
-      products
+  if (parsed.length > PARTNER_REQUEST_MAX_ITEMS) {
+    throw new Error(
+      "Partner request cannot contain more than " +
+      PARTNER_REQUEST_MAX_ITEMS +
+      " items"
+    );
+  }
+
+  return parsed.map((item, index) => {
+    const productId = String(item && item.productId || "").trim().toUpperCase();
+    const rawQty =
+      item && item.hasOwnProperty("qty")
+        ? item.qty
+        : 1;
+    const qty = Number(rawQty);
+
+    if (!productId) {
+      throw new Error("Product ID is required at row " + (index + 1));
     }
-  };
+
+    if (!Number.isInteger(qty) || qty <= 0) {
+      throw new Error("Invalid quantity for " + productId);
+    }
+
+    return {
+      productId,
+      qty,
+      partnerNote: item ? item.partnerNote : ""
+    };
+  });
+}
+
+function sanitizePartnerText_(value, maxLength) {
+  const text = String(value || "")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text.slice(0, maxLength);
+}
+
+function rollbackPartnerRequestCreate_(
+  requestSheet,
+  itemSheet,
+  requestId,
+  headerCreated,
+  itemRowsCreated
+) {
+  if (itemRowsCreated > 0) {
+    deleteRowsByFirstColumnValue_(
+      itemSheet,
+      requestId,
+      itemRowsCreated
+    );
+  }
+
+  if (headerCreated) {
+    deleteRowsByFirstColumnValue_(requestSheet, requestId, 1);
+  }
 }
 
 function parseFuturePartnerDate_(rawValue) {
@@ -1109,6 +1348,12 @@ function doPost(e) {
     if (action === "getPartnerCatalog") {
       return json(
         getPartnerCatalog(params.partnerToken)
+      );
+    }
+
+    if (action === "submitPartnerRequest") {
+      return json(
+        submitPartnerRequest(params)
       );
     }
 
