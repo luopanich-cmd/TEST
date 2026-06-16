@@ -98,6 +98,12 @@ const PARTNER_LINK_ALLOWED_STATUSES = Object.freeze([
   "active",
   "disabled"
 ]);
+const ORDER_OPTIONAL_METADATA_HEADERS = Object.freeze([
+  "source",
+  "partnerRequestId",
+  "partnerId",
+  "partnerNameSnapshot"
+]);
 
 function ensurePartnerCatalogSheets() {
   const lock = LockService.getScriptLock();
@@ -176,6 +182,41 @@ function ensureSheetWithHeaders_(ss, sheetName, expectedHeaders) {
     name: sheetName,
     created,
     initialized: false
+  };
+}
+
+function ensureOrdersExtendedHeaders_(ss) {
+  if (!ss) {
+    throw new Error("Spreadsheet is required");
+  }
+
+  const sheet = ss.getSheetByName("Orders");
+  if (!sheet) {
+    throw new Error("Orders sheet not found");
+  }
+
+  if (sheet.getLastRow() === 0) {
+    throw new Error("Orders sheet has no header row");
+  }
+
+  const lastColumn = sheet.getLastColumn();
+  const headers = sheet
+    .getRange(1, 1, 1, lastColumn)
+    .getValues()[0]
+    .map(header => String(header || "").trim());
+  const missingHeaders = ORDER_OPTIONAL_METADATA_HEADERS.filter(
+    header => headers.indexOf(header) === -1
+  );
+
+  if (missingHeaders.length) {
+    sheet
+      .getRange(1, lastColumn + 1, 1, missingHeaders.length)
+      .setValues([missingHeaders]);
+  }
+
+  return {
+    appended: missingHeaders,
+    headers: headers.concat(missingHeaders)
   };
 }
 
@@ -2818,6 +2859,8 @@ function createOrder(data) {
     throw new Error("Orders sheet not found");
   }
 
+  ensureOrdersExtendedHeaders_(ss);
+
   /* ================= LOAD AUTHORITATIVE PRODUCTS ================= */
   const productSheet = ss.getSheetByName("Products");
   if (!productSheet) {
@@ -4113,11 +4156,14 @@ function cleanupExpiredSessions() {
 
 function getOrders() {
   // 🔒 FIX: ใช้ Spreadsheet เดียวกับทั้งระบบ
-  const sheet = getSS().getSheetByName("Orders");
+  const ss = getSS();
+  const sheet = ss.getSheetByName("Orders");
 
   if (!sheet) {
     return [];
   }
+
+  ensureOrdersExtendedHeaders_(ss);
 
   const rows = sheet.getDataRange().getValues();
 
