@@ -470,6 +470,174 @@ function submitPartnerRequest(params) {
   }
 }
 
+function listPartnerRequests(params, auth) {
+  if (!auth || !auth.username) {
+    throw new Error("Unauthorized");
+  }
+
+  const statusFilter = String(params.status || "").trim().toLowerCase();
+  const partnerIdFilter = String(params.partnerId || "").trim();
+  const searchText = String(params.q || "").trim().toLowerCase();
+  const limit = clampPartnerRequestLimit_(params.limit);
+  const offset = clampPartnerRequestOffset_(params.offset);
+
+  const ss = getSS();
+  const requestData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partnerRequests
+  );
+
+  const requests = requestData.rows
+    .map(row => mapPartnerRequestRow_(requestData, row))
+    .filter(request => request.requestId)
+    .filter(request => {
+      if (statusFilter && statusFilter !== "all") {
+        if (String(request.status || "").toLowerCase() !== statusFilter) {
+          return false;
+        }
+      }
+
+      if (partnerIdFilter) {
+        if (String(request.partnerId || "").trim() !== partnerIdFilter) {
+          return false;
+        }
+      }
+
+      if (searchText) {
+        const haystack = [
+          request.requestId,
+          request.partnerId,
+          request.partnerNameSnapshot,
+          request.contactName,
+          request.contactEmail,
+          request.contactPhone,
+          request.message
+        ].join(" ").toLowerCase();
+        if (haystack.indexOf(searchText) === -1) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    .sort((left, right) =>
+      getPartnerRequestDateTime_(right.submittedAt) -
+      getPartnerRequestDateTime_(left.submittedAt)
+    );
+
+  return {
+    success: true,
+    data: {
+      requests: requests.slice(offset, offset + limit),
+      total: requests.length,
+      limit,
+      offset
+    }
+  };
+}
+
+function getPartnerRequestDetail(params, auth) {
+  if (!auth || !auth.username) {
+    throw new Error("Unauthorized");
+  }
+
+  const requestId = String(params.requestId || "").trim();
+  if (!requestId) {
+    throw new Error("Request ID is required");
+  }
+
+  const ss = getSS();
+  const requestData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partnerRequests
+  );
+  const itemData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partnerRequestItems
+  );
+
+  const requestRow = requestData.rows.find(row =>
+    String(row[requestData.col.requestId] || "").trim() === requestId
+  );
+
+  if (!requestRow) {
+    throw new Error("Partner request not found");
+  }
+
+  const request = mapPartnerRequestRow_(requestData, requestRow);
+  const items = itemData.rows
+    .filter(row =>
+      String(row[itemData.col.requestId] || "").trim() === requestId
+    )
+    .map(row => mapPartnerRequestItemRow_(itemData, row))
+    .sort((left, right) =>
+      (Number(left.sortOrder) || 0) - (Number(right.sortOrder) || 0)
+    )
+    .map(item => {
+      const copy = Object.assign({}, item);
+      delete copy.sortOrder;
+      return copy;
+    });
+
+  return {
+    success: true,
+    data: {
+      request,
+      items
+    }
+  };
+}
+
+function mapPartnerRequestRow_(requestData, row) {
+  return {
+    requestId: String(row[requestData.col.requestId] || "").trim(),
+    partnerId: String(row[requestData.col.partnerId] || "").trim(),
+    partnerNameSnapshot: String(row[requestData.col.partnerNameSnapshot] || "").trim(),
+    contactName: String(row[requestData.col.contactName] || "").trim(),
+    contactPhone: String(row[requestData.col.contactPhone] || "").trim(),
+    contactEmail: String(row[requestData.col.contactEmail] || "").trim(),
+    message: String(row[requestData.col.message] || "").trim(),
+    status: String(row[requestData.col.status] || "").trim(),
+    itemCount: Number(row[requestData.col.itemCount]) || 0,
+    estimatedTotal: Number(row[requestData.col.estimatedTotal]) || 0,
+    submittedAt: row[requestData.col.submittedAt] || ""
+  };
+}
+
+function mapPartnerRequestItemRow_(itemData, row) {
+  const requestId = String(row[itemData.col.requestId] || "").trim();
+  const sortOrder = Number(row[itemData.col.sortOrder]) || 0;
+  return {
+    requestItemId: requestId + "-" + (sortOrder || "item"),
+    requestId,
+    productId: String(row[itemData.col.productId] || "").trim(),
+    nameSnapshot: String(row[itemData.col.nameSnapshot] || "").trim(),
+    priceSnapshot: Number(row[itemData.col.priceSnapshot]) || 0,
+    qty: Number(row[itemData.col.qty]) || 0,
+    partnerNote: String(row[itemData.col.partnerNote] || "").trim(),
+    statusSnapshot: String(row[itemData.col.statusSnapshot] || "").trim(),
+    imageSnapshot: String(row[itemData.col.imageSnapshot] || "").trim(),
+    sortOrder
+  };
+}
+
+function clampPartnerRequestLimit_(rawLimit) {
+  const limit = Number(rawLimit || 50);
+  if (!Number.isFinite(limit) || limit <= 0) return 50;
+  return Math.min(Math.floor(limit), 100);
+}
+
+function clampPartnerRequestOffset_(rawOffset) {
+  const offset = Number(rawOffset || 0);
+  if (!Number.isFinite(offset) || offset <= 0) return 0;
+  return Math.floor(offset);
+}
+
+function getPartnerRequestDateTime_(value) {
+  const time = value ? new Date(value).getTime() : 0;
+  return isNaN(time) ? 0 : time;
+}
+
 function getPartnerCatalogContext_(ss, rawToken) {
   const linkData = getSheetDataBySchema_(
     ss,
@@ -1451,6 +1619,18 @@ function doPost(e) {
     if (action === "createPartnerLink") {
       return json(
         createPartnerLink(params, auth)
+      );
+    }
+
+    if (action === "listPartnerRequests") {
+      return json(
+        listPartnerRequests(params, auth)
+      );
+    }
+
+    if (action === "getPartnerRequestDetail") {
+      return json(
+        getPartnerRequestDetail(params, auth)
       );
     }
 
