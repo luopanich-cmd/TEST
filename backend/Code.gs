@@ -5,6 +5,161 @@ function getSS() {
   return SpreadsheetApp.openById(SPREADSHEET_ID);
 }
 
+const PARTNER_SHEET_NAMES = Object.freeze({
+  partners: "partners",
+  partnerLinks: "partner_links",
+  partnerCatalogItems: "partner_catalog_items",
+  partnerRequests: "partner_requests",
+  partnerRequestItems: "partner_request_items"
+});
+
+const PARTNER_SHEET_SCHEMAS = Object.freeze({
+  partners: [
+    "partnerId",
+    "partnerName",
+    "contactName",
+    "email",
+    "phone",
+    "company",
+    "status",
+    "note",
+    "createdAt",
+    "createdBy",
+    "updatedAt",
+    "updatedBy"
+  ],
+  partner_links: [
+    "linkId",
+    "partnerId",
+    "tokenHash",
+    "status",
+    "expiresAt",
+    "label",
+    "createdAt",
+    "createdBy",
+    "disabledAt",
+    "disabledBy",
+    "lastAccessedAt",
+    "accessCount",
+    "renewedFromLinkId"
+  ],
+  partner_catalog_items: [
+    "linkId",
+    "productId",
+    "visible",
+    "sortOrder",
+    "note",
+    "createdAt",
+    "createdBy"
+  ],
+  partner_requests: [
+    "requestId",
+    "linkId",
+    "partnerId",
+    "partnerNameSnapshot",
+    "contactName",
+    "contactEmail",
+    "contactPhone",
+    "message",
+    "status",
+    "itemCount",
+    "estimatedTotal",
+    "submittedAt",
+    "sourceIpHash",
+    "userAgent",
+    "reviewedAt",
+    "reviewedBy",
+    "adminNote"
+  ],
+  partner_request_items: [
+    "requestId",
+    "productId",
+    "nameSnapshot",
+    "priceSnapshot",
+    "qty",
+    "statusSnapshot",
+    "imageSnapshot",
+    "partnerNote",
+    "sortOrder"
+  ]
+});
+
+function ensurePartnerCatalogSheets() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = getSS();
+    const results = [];
+
+    Object.keys(PARTNER_SHEET_SCHEMAS).forEach(name => {
+      results.push(
+        ensureSheetWithHeaders_(
+          ss,
+          name,
+          PARTNER_SHEET_SCHEMAS[name]
+        )
+      );
+    });
+
+    return {
+      success: true,
+      sheets: results
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function ensureSheetWithHeaders_(ss, sheetName, expectedHeaders) {
+  if (!ss) {
+    throw new Error("Spreadsheet is required");
+  }
+
+  if (!sheetName || !Array.isArray(expectedHeaders) || !expectedHeaders.length) {
+    throw new Error("Invalid sheet schema");
+  }
+
+  let sheet = ss.getSheetByName(sheetName);
+  let created = false;
+
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    created = true;
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet
+      .getRange(1, 1, 1, expectedHeaders.length)
+      .setValues([expectedHeaders]);
+    sheet.setFrozenRows(1);
+    return {
+      name: sheetName,
+      created,
+      initialized: true
+    };
+  }
+
+  const actualHeaders = sheet
+    .getRange(1, 1, 1, expectedHeaders.length)
+    .getValues()[0]
+    .map(header => String(header || "").trim());
+
+  const matches = expectedHeaders.every((header, index) =>
+    actualHeaders[index] === header
+  );
+
+  if (!matches) {
+    throw new Error(sheetName + " schema mismatch");
+  }
+
+  return {
+    name: sheetName,
+    created,
+    initialized: false
+  };
+}
+
 function getPendingDeliverySheet() {
   const sheet =
     getSS().getSheetByName("pending_delivery");
