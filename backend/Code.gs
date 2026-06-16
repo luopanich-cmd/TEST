@@ -90,25 +90,29 @@ function ensurePartnerCatalogSheets() {
 
   try {
     const ss = getSS();
-    const results = [];
-
-    Object.keys(PARTNER_SHEET_SCHEMAS).forEach(name => {
-      results.push(
-        ensureSheetWithHeaders_(
-          ss,
-          name,
-          PARTNER_SHEET_SCHEMAS[name]
-        )
-      );
-    });
-
     return {
       success: true,
-      sheets: results
+      sheets: ensurePartnerCatalogSheets_(ss)
     };
   } finally {
     lock.releaseLock();
   }
+}
+
+function ensurePartnerCatalogSheets_(ss) {
+  const results = [];
+
+  Object.keys(PARTNER_SHEET_SCHEMAS).forEach(name => {
+    results.push(
+      ensureSheetWithHeaders_(
+        ss,
+        name,
+        PARTNER_SHEET_SCHEMAS[name]
+      )
+    );
+  });
+
+  return results;
 }
 
 function ensureSheetWithHeaders_(ss, sheetName, expectedHeaders) {
@@ -158,6 +162,457 @@ function ensureSheetWithHeaders_(ss, sheetName, expectedHeaders) {
     created,
     initialized: false
   };
+}
+
+function createPartnerLink(params, auth) {
+  if (!auth || !auth.username) {
+    throw new Error("Unauthorized");
+  }
+
+  const partnerId = String(params.partnerId || "").trim();
+  const label = String(params.label || "").trim();
+  const expiresAt = parseFuturePartnerDate_(params.expiresAt);
+  const productIds = parsePartnerProductIds_(params.productIds);
+
+  if (!partnerId) {
+    throw new Error("Partner ID is required");
+  }
+
+  if (!productIds.length) {
+    throw new Error("At least one product is required");
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = getSS();
+    ensurePartnerCatalogSheets_(ss);
+
+    const partnerData = getSheetDataBySchema_(
+      ss,
+      PARTNER_SHEET_NAMES.partners
+    );
+    const linkData = getSheetDataBySchema_(
+      ss,
+      PARTNER_SHEET_NAMES.partnerLinks
+    );
+    const catalogSheet = ss.getSheetByName(
+      PARTNER_SHEET_NAMES.partnerCatalogItems
+    );
+    const productSheet = ss.getSheetByName("Products");
+
+    if (!productSheet) {
+      throw new Error("Products sheet not found");
+    }
+
+    const partner = findPartnerById_(partnerData, partnerId);
+    if (!partner) {
+      throw new Error("Partner not found or disabled");
+    }
+
+    const productMap = getProductRowMap_(productSheet);
+    productIds.forEach(productId => {
+      if (!productMap.has(productId)) {
+        throw new Error("Product not found: " + productId);
+      }
+    });
+
+    const linkId = "PL-" + Utilities.getUuid();
+    const rawToken = createPartnerRawToken_();
+    const tokenHash = hashPartnerToken_(rawToken);
+
+    if (findPartnerLinkByTokenHash_(linkData, tokenHash)) {
+      throw new Error("Partner token collision");
+    }
+
+    const createdAt = new Date();
+    const createdProductIds = [];
+    let linkCreated = false;
+
+    try {
+      linkData.sheet.appendRow([
+        linkId,
+        partnerId,
+        tokenHash,
+        "active",
+        expiresAt,
+        label,
+        createdAt,
+        auth.username,
+        "",
+        "",
+        "",
+        0,
+        ""
+      ]);
+      linkCreated = true;
+
+      productIds.forEach((productId, index) => {
+        catalogSheet.appendRow([
+          linkId,
+          productId,
+          true,
+          index + 1,
+          "",
+          createdAt,
+          auth.username
+        ]);
+        createdProductIds.push(productId);
+      });
+    } catch (err) {
+      rollbackPartnerLinkCreate_(
+        linkData.sheet,
+        catalogSheet,
+        linkId,
+        linkCreated,
+        createdProductIds.length
+      );
+      throw err;
+    }
+
+    return {
+      success: true,
+      data: {
+        linkId,
+        partnerId,
+        token: rawToken,
+        url: getPartnerCatalogUrl_(rawToken),
+        expiresAt
+      }
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getPartnerCatalog(partnerToken) {
+  const rawToken = String(partnerToken || "").trim();
+  if (!rawToken) {
+    throw new Error("Missing partner token");
+  }
+
+  const ss = getSS();
+  const linkData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partnerLinks
+  );
+  const partnerData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partners
+  );
+  const catalogData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partnerCatalogItems
+  );
+  const productSheet = ss.getSheetByName("Products");
+
+  if (!productSheet) {
+    throw new Error("Products sheet not found");
+  }
+
+  const tokenHash = hashPartnerToken_(rawToken);
+  const link = findPartnerLinkByTokenHash_(linkData, tokenHash);
+
+  if (!link) {
+    throw new Error("Partner link not found");
+  }
+
+  const linkStatus = normalizePartnerStatus_(link.status);
+  if (linkStatus === "expired") {
+    throw new Error("Partner link expired");
+  }
+  if (linkStatus === "disabled") {
+    throw new Error("Partner link disabled");
+  }
+  if (linkStatus !== "active") {
+    throw new Error("Partner link disabled");
+  }
+  if (!link.expiresAt || new Date(link.expiresAt) <= new Date()) {
+    throw new Error("Partner link expired");
+  }
+
+  const partner = findPartnerById_(partnerData, link.partnerId);
+  if (!partner) {
+    throw new Error("Partner not found or disabled");
+  }
+
+  const selectedProductIds = getVisiblePartnerCatalogProductIds_(
+    catalogData,
+    link.linkId
+  );
+  const productMap = getProductRowMap_(productSheet);
+  const products = selectedProductIds
+    .map(productId => productMap.get(productId))
+    .filter(row => row && isProductActive_(row))
+    .map(row => toSafePartnerProduct_(row));
+
+  return {
+    success: true,
+    data: {
+      partner: {
+        partnerId: partner.partnerId,
+        partnerName: partner.partnerName
+      },
+      link: {
+        linkId: link.linkId,
+        expiresAt: link.expiresAt,
+        label: link.label || ""
+      },
+      products
+    }
+  };
+}
+
+function parseFuturePartnerDate_(rawValue) {
+  const value = String(rawValue || "").trim();
+  if (!value) {
+    throw new Error("Expiration date is required");
+  }
+
+  const date = new Date(value);
+  if (isNaN(date.getTime())) {
+    throw new Error("Invalid expiration date");
+  }
+
+  if (date <= new Date()) {
+    throw new Error("Expiration date must be in the future");
+  }
+
+  return date;
+}
+
+function parsePartnerProductIds_(rawValue) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(rawValue || "[]"));
+  } catch (err) {
+    throw new Error("Invalid productIds JSON");
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("productIds must be an array");
+  }
+
+  const seen = {};
+  const productIds = [];
+
+  parsed.forEach(value => {
+    const productId = String(value || "").trim().toUpperCase();
+    if (!productId || seen[productId]) return;
+    seen[productId] = true;
+    productIds.push(productId);
+  });
+
+  return productIds;
+}
+
+function getSheetDataBySchema_(ss, sheetName) {
+  const expectedHeaders = PARTNER_SHEET_SCHEMAS[sheetName];
+  if (!expectedHeaders) {
+    throw new Error("Unknown partner sheet: " + sheetName);
+  }
+
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    throw new Error(sheetName + " sheet not found");
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastColumn = expectedHeaders.length;
+  const headers = sheet
+    .getRange(1, 1, 1, lastColumn)
+    .getValues()[0]
+    .map(header => String(header || "").trim());
+
+  const matches = expectedHeaders.every((header, index) =>
+    headers[index] === header
+  );
+  if (!matches) {
+    throw new Error(sheetName + " schema mismatch");
+  }
+
+  const rows = lastRow > 1
+    ? sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues()
+    : [];
+  const col = {};
+  headers.forEach((header, index) => {
+    col[header] = index;
+  });
+
+  return {
+    sheet,
+    headers,
+    rows,
+    col
+  };
+}
+
+function findPartnerById_(partnerData, partnerId) {
+  const targetId = String(partnerId || "").trim();
+  const row = partnerData.rows.find(item =>
+    String(item[partnerData.col.partnerId] || "").trim() === targetId &&
+    normalizePartnerStatus_(item[partnerData.col.status]) === "active"
+  );
+
+  if (!row) return null;
+
+  return {
+    partnerId: String(row[partnerData.col.partnerId] || "").trim(),
+    partnerName: String(row[partnerData.col.partnerName] || "").trim()
+  };
+}
+
+function findPartnerLinkByTokenHash_(linkData, tokenHash) {
+  const targetHash = String(tokenHash || "").trim();
+  const row = linkData.rows.find(item =>
+    String(item[linkData.col.tokenHash] || "").trim() === targetHash
+  );
+
+  if (!row) return null;
+
+  return {
+    linkId: String(row[linkData.col.linkId] || "").trim(),
+    partnerId: String(row[linkData.col.partnerId] || "").trim(),
+    status: String(row[linkData.col.status] || "").trim(),
+    expiresAt: row[linkData.col.expiresAt],
+    label: String(row[linkData.col.label] || "").trim()
+  };
+}
+
+function getVisiblePartnerCatalogProductIds_(catalogData, linkId) {
+  const targetLinkId = String(linkId || "").trim();
+  return catalogData.rows
+    .filter(row =>
+      String(row[catalogData.col.linkId] || "").trim() === targetLinkId &&
+      parsePartnerBoolean_(row[catalogData.col.visible])
+    )
+    .sort((left, right) =>
+      (Number(left[catalogData.col.sortOrder]) || 0) -
+      (Number(right[catalogData.col.sortOrder]) || 0)
+    )
+    .map(row => String(row[catalogData.col.productId] || "").trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function getProductRowMap_(productSheet) {
+  const rows = productSheet.getDataRange().getValues();
+  rows.shift();
+
+  const productMap = new Map();
+  rows.forEach(row => {
+    const productId = String(row[0] || "").trim().toUpperCase();
+    if (productId) {
+      productMap.set(productId, row);
+    }
+  });
+
+  return productMap;
+}
+
+function toSafePartnerProduct_(row) {
+  const stock = Number(row[3]) || 0;
+  const status = stock <= 0
+    ? "out"
+    : String(row[6] || "").trim();
+
+  return {
+    productId: String(row[0] || "").trim(),
+    name: String(row[1] || "").trim(),
+    price: Number(row[2]) || 0,
+    image:
+      typeof row[4] === "string" && row[4].startsWith("http")
+        ? row[4].trim()
+        : "",
+    status,
+    detailsText: String(row[10] || "").trim(),
+    compareImages: String(row[11] || "").trim()
+  };
+}
+
+function isProductActive_(row) {
+  const active = row[5];
+  return (
+    active === true ||
+    active === "TRUE" ||
+    active === 1 ||
+    active === "1"
+  );
+}
+
+function parsePartnerBoolean_(value) {
+  return (
+    value === true ||
+    value === "TRUE" ||
+    value === "true" ||
+    value === 1 ||
+    value === "1"
+  );
+}
+
+function normalizePartnerStatus_(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function createPartnerRawToken_() {
+  return (
+    Utilities.getUuid().replace(/-/g, "") +
+    Utilities.getUuid().replace(/-/g, "")
+  );
+}
+
+function hashPartnerToken_(token) {
+  return sha256Hex("partner:" + String(token || "").trim());
+}
+
+function getPartnerCatalogUrl_(rawToken) {
+  let baseUrl = "";
+  try {
+    baseUrl = ScriptApp.getService().getUrl();
+  } catch (err) {
+    baseUrl = "";
+  }
+
+  const separator = baseUrl.indexOf("?") === -1 ? "?" : "&";
+  return baseUrl
+    ? baseUrl + separator + "partnerToken=" + encodeURIComponent(rawToken)
+    : "?partnerToken=" + encodeURIComponent(rawToken);
+}
+
+function rollbackPartnerLinkCreate_(
+  linkSheet,
+  catalogSheet,
+  linkId,
+  linkCreated,
+  catalogRowsCreated
+) {
+  if (catalogRowsCreated > 0) {
+    deleteRowsByFirstColumnValue_(
+      catalogSheet,
+      linkId,
+      catalogRowsCreated
+    );
+  }
+
+  if (linkCreated) {
+    deleteRowsByFirstColumnValue_(linkSheet, linkId, 1);
+  }
+}
+
+function deleteRowsByFirstColumnValue_(sheet, value, maxRows) {
+  const target = String(value || "").trim();
+  if (!sheet || !target) return;
+
+  const rows = sheet.getDataRange().getValues();
+  let deleted = 0;
+
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][0] || "").trim() === target) {
+      sheet.deleteRow(i + 1);
+      deleted++;
+      if (maxRows && deleted >= maxRows) return;
+    }
+  }
 }
 
 function getPendingDeliverySheet() {
@@ -651,6 +1106,12 @@ function doPost(e) {
       throw new Error("Missing action");
     }
 
+    if (action === "getPartnerCatalog") {
+      return json(
+        getPartnerCatalog(params.partnerToken)
+      );
+    }
+
     /* =================================================
        🔓 PUBLIC ACTION (NO AUTH REQUIRED)
     ================================================= */
@@ -741,6 +1202,12 @@ function doPost(e) {
       });
     }
     
+
+    if (action === "createPartnerLink") {
+      return json(
+        createPartnerLink(params, auth)
+      );
+    }
 
     if (action === "stockLogs") {
       return json({
