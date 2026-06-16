@@ -730,6 +730,16 @@ function doPost(e) {
         data: getAdminProducts()
       });
     }
+
+    if (action === "ensurePartnerCatalogSheets") {
+      const result = ensurePartnerCatalogSheets();
+      return json({
+        success: true,
+        data: {
+          sheets: result.sheets
+        }
+      });
+    }
     
 
     if (action === "stockLogs") {
