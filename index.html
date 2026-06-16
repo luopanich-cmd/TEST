@@ -13179,7 +13179,6 @@ async function updatePartnerRequestStatusFromAdmin(requestId, status) {
 function setPartnerRequestConvertPoNumber(value) {
   state.admin.partnerRequests.convertPoNumber = value || "";
   state.admin.partnerRequests.convertError = "";
-  renderPartnerRequestsSheet();
 }
 
 async function convertPartnerRequestToOrderFromAdmin(requestId) {
@@ -13189,7 +13188,8 @@ async function convertPartnerRequestToOrderFromAdmin(requestId) {
   if (requestState.convertSubmitting) return;
 
   const cleanRequestId = String(requestId || "").trim();
-  const poNumber = String(requestState.convertPoNumber || "").trim();
+  const poInput = document.getElementById("partnerRequestConvertPoNumber");
+  const poNumber = String(poInput?.value || requestState.convertPoNumber || "").trim();
 
   if (!cleanRequestId) return;
 
@@ -13200,6 +13200,7 @@ async function convertPartnerRequestToOrderFromAdmin(requestId) {
     return;
   }
 
+  requestState.convertPoNumber = poNumber;
   requestState.convertSubmitting = true;
   requestState.convertError = "";
   requestState.convertResult = null;
@@ -13504,9 +13505,11 @@ function renderPartnerRequestConvertCard(request) {
           id="partnerRequestConvertPoNumber"
           class="input"
           value="${escAttr(requestState.convertPoNumber || "")}"
-          placeholder="ระบุเลข PO"
-          ${requestState.convertSubmitting ? "disabled" : ""}
-          oninput="setPartnerRequestConvertPoNumber(this.value)">
+          placeholder="เช่น PO-PARTNER-20260617-001"
+          ${requestState.convertSubmitting ? "disabled" : ""}>
+        <div class="helper-text" style="margin-top:6px">
+          ตัวอย่าง: PO-PARTNER-20260617-001
+        </div>
       </div>
 
       ${
