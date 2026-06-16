@@ -94,6 +94,10 @@ const PARTNER_REQUEST_ALLOWED_STATUSES = Object.freeze([
   "closed",
   "cancelled"
 ]);
+const PARTNER_LINK_ALLOWED_STATUSES = Object.freeze([
+  "active",
+  "disabled"
+]);
 
 function ensurePartnerCatalogSheets() {
   const lock = LockService.getScriptLock();
@@ -648,6 +652,291 @@ function updatePartnerRequestStatus(params, auth) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function listPartnerLinks(params, auth) {
+  if (!auth || !auth.username) {
+    throw new Error("Unauthorized");
+  }
+
+  const partnerIdFilter = String(params.partnerId || "").trim();
+  const statusFilter = String(params.status || "").trim().toLowerCase();
+  const searchText = String(params.q || "").trim().toLowerCase();
+  const limit = clampPartnerRequestLimit_(params.limit);
+  const offset = clampPartnerRequestOffset_(params.offset);
+
+  const ss = getSS();
+  const linkData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partnerLinks
+  );
+  const partnerData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partners
+  );
+  const catalogData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partnerCatalogItems
+  );
+
+  const partnerNameById = getPartnerNameByIdMap_(partnerData);
+  const itemCountByLinkId = getPartnerCatalogItemCountMap_(catalogData);
+  const links = linkData.rows
+    .map(row =>
+      mapPartnerLinkRow_(
+        linkData,
+        row,
+        partnerNameById,
+        itemCountByLinkId
+      )
+    )
+    .filter(link => link.linkId)
+    .filter(link => {
+      if (partnerIdFilter && link.partnerId !== partnerIdFilter) {
+        return false;
+      }
+
+      if (statusFilter && statusFilter !== "all") {
+        if (String(link.status || "").toLowerCase() !== statusFilter) {
+          return false;
+        }
+      }
+
+      if (searchText) {
+        const haystack = [
+          link.linkId,
+          link.partnerId,
+          link.partnerNameSnapshot,
+          link.label,
+          link.status,
+          link.createdBy
+        ].join(" ").toLowerCase();
+        if (haystack.indexOf(searchText) === -1) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    .sort((left, right) =>
+      getPartnerRequestDateTime_(right.createdAt) -
+      getPartnerRequestDateTime_(left.createdAt)
+    );
+
+  return {
+    success: true,
+    data: {
+      links: links.slice(offset, offset + limit),
+      total: links.length,
+      limit,
+      offset
+    }
+  };
+}
+
+function getPartnerLinkDetail(params, auth) {
+  if (!auth || !auth.username) {
+    throw new Error("Unauthorized");
+  }
+
+  const linkId = String(params.linkId || "").trim();
+  if (!linkId) {
+    throw new Error("Partner link ID is required");
+  }
+
+  const ss = getSS();
+  const linkData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partnerLinks
+  );
+  const partnerData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partners
+  );
+  const catalogData = getSheetDataBySchema_(
+    ss,
+    PARTNER_SHEET_NAMES.partnerCatalogItems
+  );
+  const productSheet = ss.getSheetByName("Products");
+
+  if (!productSheet) {
+    throw new Error("Products sheet not found");
+  }
+
+  const linkRow = linkData.rows.find(row =>
+    String(row[linkData.col.linkId] || "").trim() === linkId
+  );
+
+  if (!linkRow) {
+    throw new Error("Partner link not found");
+  }
+
+  const partnerNameById = getPartnerNameByIdMap_(partnerData);
+  const itemCountByLinkId = getPartnerCatalogItemCountMap_(catalogData);
+  const productMap = getProductRowMap_(productSheet);
+  const link = mapPartnerLinkRow_(
+    linkData,
+    linkRow,
+    partnerNameById,
+    itemCountByLinkId
+  );
+  const items = catalogData.rows
+    .filter(row =>
+      String(row[catalogData.col.linkId] || "").trim() === linkId &&
+      parsePartnerBoolean_(row[catalogData.col.visible])
+    )
+    .sort((left, right) =>
+      (Number(left[catalogData.col.sortOrder]) || 0) -
+      (Number(right[catalogData.col.sortOrder]) || 0)
+    )
+    .map(row => mapPartnerCatalogItemRow_(catalogData, row, productMap));
+
+  return {
+    success: true,
+    data: {
+      link,
+      items
+    }
+  };
+}
+
+function updatePartnerLinkStatus(params, auth) {
+  if (!auth || !auth.username) {
+    throw new Error("Unauthorized");
+  }
+
+  const linkId = String(params.linkId || "").trim();
+  const status = String(params.status || "").trim().toLowerCase();
+
+  if (!linkId) {
+    throw new Error("Partner link ID is required");
+  }
+
+  if (!status) {
+    throw new Error("Status is required");
+  }
+
+  if (PARTNER_LINK_ALLOWED_STATUSES.indexOf(status) === -1) {
+    throw new Error("Invalid partner link status");
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = getSS();
+    const linkData = getSheetDataBySchema_(
+      ss,
+      PARTNER_SHEET_NAMES.partnerLinks
+    );
+    const partnerData = getSheetDataBySchema_(
+      ss,
+      PARTNER_SHEET_NAMES.partners
+    );
+    const catalogData = getSheetDataBySchema_(
+      ss,
+      PARTNER_SHEET_NAMES.partnerCatalogItems
+    );
+
+    const rowIndex = linkData.rows.findIndex(row =>
+      String(row[linkData.col.linkId] || "").trim() === linkId
+    );
+
+    if (rowIndex === -1) {
+      throw new Error("Partner link not found");
+    }
+
+    linkData.sheet
+      .getRange(rowIndex + 2, linkData.col.status + 1)
+      .setValue(status);
+
+    const updatedRow = linkData.rows[rowIndex].slice();
+    updatedRow[linkData.col.status] = status;
+
+    return {
+      success: true,
+      data: {
+        link: mapPartnerLinkRow_(
+          linkData,
+          updatedRow,
+          getPartnerNameByIdMap_(partnerData),
+          getPartnerCatalogItemCountMap_(catalogData)
+        )
+      }
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function mapPartnerLinkRow_(
+  linkData,
+  row,
+  partnerNameById,
+  itemCountByLinkId
+) {
+  const linkId = String(row[linkData.col.linkId] || "").trim();
+  const partnerId = String(row[linkData.col.partnerId] || "").trim();
+  const link = {
+    linkId,
+    partnerId,
+    partnerNameSnapshot: String(partnerNameById[partnerId] || "").trim(),
+    label: String(row[linkData.col.label] || "").trim(),
+    status: String(row[linkData.col.status] || "").trim(),
+    expiresAt: row[linkData.col.expiresAt] || "",
+    createdAt: row[linkData.col.createdAt] || "",
+    createdBy: String(row[linkData.col.createdBy] || "").trim(),
+    itemCount: Number(itemCountByLinkId[linkId]) || 0
+  };
+  link.isExpired = isPartnerLinkExpired_(link);
+  return link;
+}
+
+function mapPartnerCatalogItemRow_(catalogData, row, productMap) {
+  const productId = String(row[catalogData.col.productId] || "")
+    .trim()
+    .toUpperCase();
+  const productRow = productMap.get(productId);
+  const product = productRow
+    ? toSafePartnerProduct_(productRow)
+    : null;
+
+  return {
+    linkId: String(row[catalogData.col.linkId] || "").trim(),
+    productId,
+    nameSnapshot: product ? product.name : "",
+    priceSnapshot: product ? product.price : 0,
+    statusSnapshot: product ? product.status : "",
+    imageSnapshot: product ? product.image : ""
+  };
+}
+
+function getPartnerNameByIdMap_(partnerData) {
+  const result = {};
+  partnerData.rows.forEach(row => {
+    const partnerId = String(row[partnerData.col.partnerId] || "").trim();
+    if (!partnerId) return;
+    result[partnerId] = String(row[partnerData.col.partnerName] || "").trim();
+  });
+  return result;
+}
+
+function getPartnerCatalogItemCountMap_(catalogData) {
+  const result = {};
+  catalogData.rows.forEach(row => {
+    if (!parsePartnerBoolean_(row[catalogData.col.visible])) return;
+    const linkId = String(row[catalogData.col.linkId] || "").trim();
+    if (!linkId) return;
+    result[linkId] = (Number(result[linkId]) || 0) + 1;
+  });
+  return result;
+}
+
+function isPartnerLinkExpired_(link) {
+  const time = link && link.expiresAt
+    ? new Date(link.expiresAt).getTime()
+    : NaN;
+  return isNaN(time) || time <= new Date().getTime();
 }
 
 function mapPartnerRequestRow_(requestData, row) {
@@ -1699,6 +1988,24 @@ function doPost(e) {
     if (action === "updatePartnerRequestStatus") {
       return json(
         updatePartnerRequestStatus(params, auth)
+      );
+    }
+
+    if (action === "listPartnerLinks") {
+      return json(
+        listPartnerLinks(params, auth)
+      );
+    }
+
+    if (action === "getPartnerLinkDetail") {
+      return json(
+        getPartnerLinkDetail(params, auth)
+      );
+    }
+
+    if (action === "updatePartnerLinkStatus") {
+      return json(
+        updatePartnerLinkStatus(params, auth)
       );
     }
 
