@@ -531,6 +531,29 @@ body[data-theme="cute"] .shop-subtitle{
     font-size:13px;
   }
 
+  .partner-order-source-badge{
+    display:grid;
+    gap:4px;
+    margin-top:8px;
+    padding:10px 12px;
+    border-radius:14px;
+    border:1px solid var(--border);
+    background:var(--surface-2);
+    color:var(--text-soft);
+    font-size:13px;
+    line-height:1.45;
+  }
+
+  .partner-order-source-badge strong{
+    color:var(--text);
+  }
+
+  .partner-order-source-badge.compact{
+    gap:2px;
+    padding:8px 10px;
+    font-size:12px;
+  }
+
   .admin-detail-section{
     margin-top:14px;
     padding:14px;
@@ -6431,6 +6454,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
                     <span class="status-badge compact status-pending">${esc(o.status)}</span>
                     <span>รวม ฿${Number(o.total || 0).toLocaleString("th-TH")}</span>
                   </div>
+                  ${renderPartnerOrderSourceBadge(o, { compact: true })}
                   <div class="price">฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
                   <div class="stock">
                     วันที่: ${esc(formatThaiDate(getOrderDateValue(o)))}
@@ -6524,6 +6548,7 @@ ${
                 <span class="status-badge compact status-approved">${esc(o.status)}</span>
                 <span>รวม ฿${Number(o.total || 0).toLocaleString("th-TH")}</span>
               </div>
+              ${renderPartnerOrderSourceBadge(o, { compact: true })}
               <div class="price">฿${Number(o.total || 0).toLocaleString("th-TH")}</div>
               <div class="stock">
                 วันที่: ${esc(formatThaiDate(getOrderDateValue(o)))}
@@ -6723,6 +6748,30 @@ function handleOpenPendingOrders() {
 function handleOpenOrders() {
   allowOpenOrders = true;
   openAdminDashboard("SUMMARY");
+}
+
+function isPartnerRequestOrder(order) {
+  return !!(
+    order &&
+    (
+      String(order.source || "").trim() === "partner_request" ||
+      String(order.partnerRequestId || "").trim()
+    )
+  );
+}
+
+function renderPartnerOrderSourceBadge(order, options = {}) {
+  if (!isPartnerRequestOrder(order)) return "";
+
+  const compactClass = options.compact ? " compact" : "";
+  return `
+    <div class="partner-order-source-badge${compactClass}">
+      <div><strong>ที่มา:</strong> คำขอคู่ค้า</div>
+      <div><strong>Partner:</strong> ${esc(order.partnerNameSnapshot || "-")}</div>
+      <div><strong>Partner ID:</strong> ${esc(order.partnerId || "-")}</div>
+      <div><strong>Partner Request ID:</strong> ${esc(order.partnerRequestId || "-")}</div>
+    </div>
+  `;
 }
 
 
@@ -7180,6 +7229,8 @@ adminOrderSheet.innerHTML = `
   </button>
 
   <h3 id="adminOrderSheetTitle">${esc(order.orderId)}</h3>
+
+  ${renderPartnerOrderSourceBadge(order)}
 
  ${
    order.status !== "PENDING" &&
