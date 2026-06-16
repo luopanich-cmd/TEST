@@ -11990,14 +11990,11 @@ function getPartnerCatalogExpiresAt() {
 }
 
 function getPartnerCatalogResultUrl(data) {
-  const rawUrl = String(data?.url || "").trim();
-  if (rawUrl) return rawUrl;
-
   const rawToken = String(data?.token || "").trim();
   if (!rawToken) return "";
-  const url = new URL("partner.html", location.href);
+  const url = new URL("partner.html", window.location.href);
   url.searchParams.set("token", rawToken);
-  return url.href;
+  return url.toString();
 }
 
 function renderPartnerCatalogPickerRows() {
