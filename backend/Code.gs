@@ -88,6 +88,12 @@ const PARTNER_REQUEST_MAX_ITEMS = 100;
 const PARTNER_REQUEST_MAX_CONTACT_LENGTH = 120;
 const PARTNER_REQUEST_MAX_MESSAGE_LENGTH = 1000;
 const PARTNER_REQUEST_MAX_NOTE_LENGTH = 500;
+const PARTNER_REQUEST_ALLOWED_STATUSES = Object.freeze([
+  "new",
+  "reviewed",
+  "closed",
+  "cancelled"
+]);
 
 function ensurePartnerCatalogSheets() {
   const lock = LockService.getScriptLock();
@@ -586,6 +592,62 @@ function getPartnerRequestDetail(params, auth) {
       items
     }
   };
+}
+
+function updatePartnerRequestStatus(params, auth) {
+  if (!auth || !auth.username) {
+    throw new Error("Unauthorized");
+  }
+
+  const requestId = String(params.requestId || "").trim();
+  const status = String(params.status || "").trim().toLowerCase();
+
+  if (!requestId) {
+    throw new Error("Request ID is required");
+  }
+
+  if (!status) {
+    throw new Error("Status is required");
+  }
+
+  if (PARTNER_REQUEST_ALLOWED_STATUSES.indexOf(status) === -1) {
+    throw new Error("Invalid partner request status");
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = getSS();
+    const requestData = getSheetDataBySchema_(
+      ss,
+      PARTNER_SHEET_NAMES.partnerRequests
+    );
+
+    const rowIndex = requestData.rows.findIndex(row =>
+      String(row[requestData.col.requestId] || "").trim() === requestId
+    );
+
+    if (rowIndex === -1) {
+      throw new Error("Partner request not found");
+    }
+
+    requestData.sheet
+      .getRange(rowIndex + 2, requestData.col.status + 1)
+      .setValue(status);
+
+    const updatedRow = requestData.rows[rowIndex].slice();
+    updatedRow[requestData.col.status] = status;
+
+    return {
+      success: true,
+      data: {
+        request: mapPartnerRequestRow_(requestData, updatedRow)
+      }
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function mapPartnerRequestRow_(requestData, row) {
@@ -1631,6 +1693,12 @@ function doPost(e) {
     if (action === "getPartnerRequestDetail") {
       return json(
         getPartnerRequestDetail(params, auth)
+      );
+    }
+
+    if (action === "updatePartnerRequestStatus") {
+      return json(
+        updatePartnerRequestStatus(params, auth)
       );
     }
 
