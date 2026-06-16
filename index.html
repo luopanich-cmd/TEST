@@ -3394,6 +3394,7 @@ textarea.input{
  <div id="adminBulkProductImportSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminBulkProductImportSheetTitle" tabindex="-1"></div>
  <div id="adminBulkProductUpdateSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminBulkProductUpdateSheetTitle" tabindex="-1"></div>
  <div id="adminPartnerCatalogSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminPartnerCatalogSheetTitle" tabindex="-1"></div>
+ <div id="adminPartnerRequestsSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminPartnerRequestsSheetTitle" tabindex="-1"></div>
 
   
 <script>
@@ -3432,6 +3433,8 @@ const adminBulkProductUpdateSheet =
   document.getElementById("adminBulkProductUpdateSheet");
 const adminPartnerCatalogSheet =
   document.getElementById("adminPartnerCatalogSheet");
+const adminPartnerRequestsSheet =
+  document.getElementById("adminPartnerRequestsSheet");
 
 // ================= ADMIN UI REGISTRY =================
 // 🔒 รวม ref ฝั่ง admin ไว้จุดเดียว เพื่อให้เพิ่ม/ถอดเมนูในอนาคตง่ายขึ้น
@@ -3449,6 +3452,7 @@ const ADMIN_SHEETS = Object.freeze({
   bulkProductImport: adminBulkProductImportSheet,
   bulkProductUpdate: adminBulkProductUpdateSheet,
   partnerCatalog: adminPartnerCatalogSheet,
+  partnerRequests: adminPartnerRequestsSheet,
   bulkPending: bulkPendingDeliverySheet
 });
 
@@ -3485,6 +3489,15 @@ Object.assign(window, {
   createPartnerCatalogLink,
   copyPartnerCatalogLink,
   backToAdminMenuFromPartnerCatalog,
+  openPartnerRequestsSheet,
+  closePartnerRequestsSheet,
+  backToAdminMenuFromPartnerRequests,
+  setPartnerRequestStatusFilter,
+  setPartnerRequestSearch,
+  setPartnerRequestPartnerFilter,
+  refreshPartnerRequests,
+  openPartnerRequestDetail,
+  backToPartnerRequestList,
   downloadBulkProductTemplate,
   handleBulkProductFileUpload,
   copyBulkProductHeader,
@@ -3591,6 +3604,19 @@ const state = {
       pickerStatus: "all",
       result: null,
       error: ""
+    },
+    partnerRequests: {
+      status: "all",
+      q: "",
+      partnerId: "",
+      limit: 50,
+      offset: 0,
+      requests: [],
+      total: 0,
+      detail: null,
+      loading: false,
+      error: "",
+      view: "list"
     },
     ui: {
       activeSheet: null
@@ -5663,6 +5689,7 @@ function closeTopSheet(){
     document.getElementById("adminBulkProductImportSheet"),
     document.getElementById("adminBulkProductUpdateSheet"),
     document.getElementById("adminPartnerCatalogSheet"),
+    document.getElementById("adminPartnerRequestsSheet"),
     document.getElementById("adminProductActionSheet"),
     document.getElementById("adminProductEditSheet"),
     document.getElementById("adminStockActionSheet"),
@@ -8834,6 +8861,11 @@ function openMainMenu(triggerEl){
                 <button class="btn btn-secondary"
                   onclick="closeMainMenu(); openPartnerCatalogSheet();">
                   ลิงก์คู่ค้า
+                </button>
+
+                <button class="btn btn-secondary"
+                  onclick="closeMainMenu(); openPartnerRequestsSheet();">
+                  คำขอคู่ค้า
                 </button>
 
                 <button class="btn btn-secondary"
@@ -12349,6 +12381,421 @@ async function copyPartnerCatalogLink() {
     console.error(err);
     showToast("คัดลอกลิงก์ไม่สำเร็จ กรุณาคัดลอกจากช่องข้อความ", "warning");
   }
+}
+
+function ensureAdminSessionForPartnerRequests() {
+  if (
+    state.mode !== "admin" ||
+    !state.admin.loggedIn ||
+    !state.admin.token ||
+    isAdminSessionExpired()
+  ) {
+    showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
+    exitAdmin();
+    return false;
+  }
+  return true;
+}
+
+function resetPartnerRequestsState() {
+  const requestState = state.admin.partnerRequests;
+  requestState.status = "all";
+  requestState.q = "";
+  requestState.partnerId = "";
+  requestState.limit = 50;
+  requestState.offset = 0;
+  requestState.requests = [];
+  requestState.total = 0;
+  requestState.detail = null;
+  requestState.loading = false;
+  requestState.error = "";
+  requestState.view = "list";
+}
+
+function openPartnerRequestsSheet() {
+  if (!ensureAdminSessionForPartnerRequests()) return;
+
+  resetPartnerRequestsState();
+  renderPartnerRequestsSheet();
+  openOverlay(adminPartnerRequestsSheet);
+  loadPartnerRequests();
+}
+
+function closePartnerRequestsSheet() {
+  closeOverlay(adminPartnerRequestsSheet);
+}
+
+function backToAdminMenuFromPartnerRequests() {
+  closePartnerRequestsSheet();
+  syncOverlayBackdropState();
+  requestAnimationFrame(() => {
+    openMainMenu();
+    syncOverlayBackdropState();
+  });
+}
+
+function setPartnerRequestStatusFilter(value) {
+  state.admin.partnerRequests.status = value || "all";
+  state.admin.partnerRequests.offset = 0;
+  loadPartnerRequests();
+}
+
+function setPartnerRequestSearch(value) {
+  state.admin.partnerRequests.q = value || "";
+}
+
+function setPartnerRequestPartnerFilter(value) {
+  state.admin.partnerRequests.partnerId = value || "";
+}
+
+function refreshPartnerRequests() {
+  state.admin.partnerRequests.offset = 0;
+  loadPartnerRequests();
+}
+
+function backToPartnerRequestList() {
+  state.admin.partnerRequests.view = "list";
+  state.admin.partnerRequests.detail = null;
+  state.admin.partnerRequests.error = "";
+  renderPartnerRequestsSheet();
+}
+
+function formatPartnerRequestMoney(value) {
+  return `฿${Number(value || 0).toLocaleString("th-TH")}`;
+}
+
+function getPartnerRequestStatusClass(status) {
+  const key = String(status || "").trim().toLowerCase();
+  if (key === "new") return "status-pending";
+  if (key === "reviewed") return "status-approved";
+  if (key === "closed") return "status-neutral";
+  return "status-neutral";
+}
+
+function getPartnerRequestStatusLabel(status) {
+  const key = String(status || "").trim().toLowerCase();
+  return {
+    new: "ใหม่",
+    reviewed: "ตรวจแล้ว",
+    closed: "ปิดแล้ว"
+  }[key] || (status || "-");
+}
+
+function getPartnerRequestMessagePreview(message) {
+  const text = String(message || "").trim();
+  if (!text) return "";
+  return text.length > 90 ? `${text.slice(0, 90)}...` : text;
+}
+
+async function loadPartnerRequests() {
+  if (!ensureAdminSessionForPartnerRequests()) return;
+
+  const requestState = state.admin.partnerRequests;
+  requestState.loading = true;
+  requestState.error = "";
+  requestState.view = "list";
+  renderPartnerRequestsSheet();
+
+  try {
+    const form = new URLSearchParams();
+    form.append("action", "listPartnerRequests");
+    form.append("token", state.admin.token);
+    form.append("limit", String(requestState.limit || 50));
+    form.append("offset", String(requestState.offset || 0));
+    if (requestState.status && requestState.status !== "all") {
+      form.append("status", requestState.status);
+    }
+    if (String(requestState.partnerId || "").trim()) {
+      form.append("partnerId", requestState.partnerId.trim());
+    }
+    if (String(requestState.q || "").trim()) {
+      form.append("q", requestState.q.trim());
+    }
+
+    const res = await fetchWithTimeout(API_URL, {
+      method: "POST",
+      body: form
+    }, 30000);
+    const json = await res.json();
+
+    if (json?.success !== true) {
+      if (isAuthError(json?.error)) {
+        showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
+        exitAdmin({ silent: true });
+        return;
+      }
+      throw new Error(json?.error || json?.message || "โหลดคำขอคู่ค้าไม่สำเร็จ");
+    }
+
+    requestState.requests = Array.isArray(json.data?.requests)
+      ? json.data.requests
+      : [];
+    requestState.total = Number(json.data?.total || 0);
+    requestState.limit = Number(json.data?.limit || requestState.limit || 50);
+    requestState.offset = Number(json.data?.offset || 0);
+    requestState.error = "";
+  } catch (err) {
+    console.error(err);
+    requestState.requests = [];
+    requestState.total = 0;
+    requestState.error = err.message || "โหลดคำขอคู่ค้าไม่สำเร็จ";
+  } finally {
+    requestState.loading = false;
+    renderPartnerRequestsSheet();
+  }
+}
+
+async function openPartnerRequestDetail(requestId) {
+  if (!ensureAdminSessionForPartnerRequests()) return;
+
+  const cleanRequestId = String(requestId || "").trim();
+  if (!cleanRequestId) return;
+
+  const requestState = state.admin.partnerRequests;
+  requestState.loading = true;
+  requestState.error = "";
+  requestState.view = "detail";
+  requestState.detail = null;
+  renderPartnerRequestsSheet();
+
+  try {
+    const form = new URLSearchParams();
+    form.append("action", "getPartnerRequestDetail");
+    form.append("token", state.admin.token);
+    form.append("requestId", cleanRequestId);
+
+    const res = await fetchWithTimeout(API_URL, {
+      method: "POST",
+      body: form
+    }, 30000);
+    const json = await res.json();
+
+    if (json?.success !== true) {
+      if (isAuthError(json?.error)) {
+        showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
+        exitAdmin({ silent: true });
+        return;
+      }
+      throw new Error(json?.error || json?.message || "โหลดรายละเอียดคำขอไม่สำเร็จ");
+    }
+
+    requestState.detail = json.data || null;
+    requestState.error = "";
+  } catch (err) {
+    console.error(err);
+    requestState.detail = null;
+    requestState.error = err.message || "โหลดรายละเอียดคำขอไม่สำเร็จ";
+  } finally {
+    requestState.loading = false;
+    renderPartnerRequestsSheet();
+  }
+}
+
+function renderPartnerRequestsFilters() {
+  const requestState = state.admin.partnerRequests;
+  const status = requestState.status || "all";
+
+  return `
+    <div class="bulk-product-picker-controls">
+      <input
+        id="partnerRequestSearch"
+        type="search"
+        value="${escAttr(requestState.q || "")}"
+        placeholder="ค้นหา requestId / คู่ค้า / ผู้ติดต่อ"
+        oninput="setPartnerRequestSearch(this.value)"
+        onkeydown="if(event.key === 'Enter') refreshPartnerRequests();">
+      <input
+        id="partnerRequestPartnerId"
+        value="${escAttr(requestState.partnerId || "")}"
+        placeholder="Partner ID"
+        oninput="setPartnerRequestPartnerFilter(this.value)"
+        onkeydown="if(event.key === 'Enter') refreshPartnerRequests();">
+      <select
+        id="partnerRequestStatus"
+        onchange="setPartnerRequestStatusFilter(this.value)">
+        <option value="all" ${status === "all" ? "selected" : ""}>ทุกสถานะ</option>
+        <option value="new" ${status === "new" ? "selected" : ""}>ใหม่</option>
+        <option value="reviewed" ${status === "reviewed" ? "selected" : ""}>ตรวจแล้ว</option>
+        <option value="closed" ${status === "closed" ? "selected" : ""}>ปิดแล้ว</option>
+      </select>
+    </div>
+    <div class="bulk-product-picker-actions">
+      <button class="btn btn-outline" type="button" onclick="refreshPartnerRequests()">
+        รีเฟรช / ค้นหา
+      </button>
+      <button class="btn btn-outline" type="button"
+        onclick="state.admin.partnerRequests.q=''; state.admin.partnerRequests.partnerId=''; state.admin.partnerRequests.status='all'; refreshPartnerRequests();">
+        ล้างตัวกรอง
+      </button>
+    </div>
+  `;
+}
+
+function renderPartnerRequestCard(request) {
+  const messagePreview = getPartnerRequestMessagePreview(request.message);
+  return `
+    <div class="bulk-preview-card">
+      <div>
+        <div class="name">${esc(request.partnerNameSnapshot || request.partnerId || "-")}</div>
+        <div class="bulk-preview-meta">
+          Request: ${esc(request.requestId || "-")}<br>
+          Partner ID: ${esc(request.partnerId || "-")}<br>
+          ผู้ติดต่อ: ${esc(request.contactName || "-")} · ${esc(request.contactPhone || "-")}<br>
+          อีเมล: ${esc(request.contactEmail || "-")}<br>
+          วันที่: ${esc(formatThaiDate(request.submittedAt || ""))}
+        </div>
+        <div class="bulk-product-picker-meta" style="margin-top:8px">
+          <span class="status-badge compact ${getPartnerRequestStatusClass(request.status)}">
+            ${esc(getPartnerRequestStatusLabel(request.status))}
+          </span>
+          <span>${Number(request.itemCount || 0)} รายการ</span>
+          <span>${esc(formatPartnerRequestMoney(request.estimatedTotal))}</span>
+        </div>
+        ${messagePreview ? `<div class="helper-text" style="margin-top:8px">${esc(messagePreview)}</div>` : ""}
+        <div class="bulk-product-picker-actions">
+          <button class="btn btn-primary" type="button"
+            onclick="openPartnerRequestDetail(${toInlineJsStringLiteral(request.requestId || "")})">
+            ดูรายละเอียด
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPartnerRequestsList() {
+  const requestState = state.admin.partnerRequests;
+  if (requestState.loading) {
+    return `<div class="loading">กำลังโหลดคำขอคู่ค้า...</div>`;
+  }
+  if (requestState.error) {
+    return `
+      <div class="empty-state">
+        ${esc(requestState.error)}
+        <div style="margin-top:10px">
+          <button class="btn btn-outline" type="button" onclick="refreshPartnerRequests()">ลองใหม่</button>
+        </div>
+      </div>
+    `;
+  }
+  if (!requestState.requests.length) {
+    return `<div class="empty-state">ยังไม่มีคำขอคู่ค้าตามเงื่อนไขที่เลือก</div>`;
+  }
+
+  return `
+    <div class="helper-text" style="margin:10px 0">
+      พบ ${Number(requestState.total || 0).toLocaleString("th-TH")} คำขอ
+    </div>
+    <div class="bulk-preview-list">
+      ${requestState.requests.map(renderPartnerRequestCard).join("")}
+    </div>
+  `;
+}
+
+function renderPartnerRequestDetailItem(item) {
+  const qty = Number(item.qty || 0);
+  const price = Number(item.priceSnapshot || 0);
+  const subtotal = qty * price;
+  return `
+    <div class="bulk-preview-card">
+      ${renderCartItemThumb({
+        productId: item.productId,
+        name: item.nameSnapshot || item.productId || "สินค้า",
+        image: item.imageSnapshot || ""
+      })}
+      <div>
+        <div class="name">${esc(item.nameSnapshot || item.productId || "-")}</div>
+        <div class="bulk-preview-meta">
+          SKU: ${esc(item.productId || "-")}<br>
+          ราคา: ${esc(formatPartnerRequestMoney(price))} · จำนวน: ${qty.toLocaleString("th-TH")}<br>
+          รวม: ${esc(formatPartnerRequestMoney(subtotal))}
+        </div>
+        <div class="bulk-product-picker-meta" style="margin-top:8px">
+          ${renderBulkProductUpdateValueDisplay("status", item.statusSnapshot)}
+        </div>
+        ${item.partnerNote ? `<div class="helper-text" style="margin-top:8px">หมายเหตุ: ${esc(item.partnerNote)}</div>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function renderPartnerRequestDetail() {
+  const requestState = state.admin.partnerRequests;
+  if (requestState.loading) {
+    return `<div class="loading">กำลังโหลดรายละเอียดคำขอ...</div>`;
+  }
+  if (requestState.error) {
+    return `
+      <div class="empty-state">
+        ${esc(requestState.error)}
+        <div style="margin-top:10px">
+          <button class="btn btn-outline" type="button" onclick="backToPartnerRequestList()">กลับรายการคำขอ</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const detail = requestState.detail || {};
+  const request = detail.request || {};
+  const items = Array.isArray(detail.items) ? detail.items : [];
+  return `
+    <div class="admin-detail-card">
+      <div class="admin-detail-title">${esc(request.partnerNameSnapshot || request.partnerId || "คำขอคู่ค้า")}</div>
+      <div class="bulk-preview-meta">
+        Request: ${esc(request.requestId || "-")}<br>
+        Partner ID: ${esc(request.partnerId || "-")}<br>
+        ผู้ติดต่อ: ${esc(request.contactName || "-")}<br>
+        โทร: ${esc(request.contactPhone || "-")}<br>
+        อีเมล: ${esc(request.contactEmail || "-")}<br>
+        วันที่: ${esc(formatThaiDate(request.submittedAt || ""))}
+      </div>
+      <div class="bulk-product-picker-meta" style="margin-top:8px">
+        <span class="status-badge compact ${getPartnerRequestStatusClass(request.status)}">
+          ${esc(getPartnerRequestStatusLabel(request.status))}
+        </span>
+        <span>${Number(request.itemCount || items.length || 0)} รายการ</span>
+        <span>${esc(formatPartnerRequestMoney(request.estimatedTotal))}</span>
+      </div>
+      ${request.message ? `<div class="helper-text" style="margin-top:10px">ข้อความ: ${esc(request.message)}</div>` : ""}
+    </div>
+
+    <div class="admin-detail-title" style="margin-top:14px">รายการสินค้า</div>
+    ${
+      items.length
+        ? `<div class="bulk-preview-list">${items.map(renderPartnerRequestDetailItem).join("")}</div>`
+        : `<div class="empty-state">ไม่มีรายการสินค้าในคำขอนี้</div>`
+    }
+  `;
+}
+
+function renderPartnerRequestsSheet() {
+  const requestState = state.admin.partnerRequests;
+  const isDetail = requestState.view === "detail";
+
+  adminPartnerRequestsSheet.innerHTML = `
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="${isDetail ? "backToPartnerRequestList()" : "backToAdminMenuFromPartnerRequests()"}"
+        aria-label="กลับ">←</button>
+      <h3 id="adminPartnerRequestsSheetTitle">${isDetail ? "รายละเอียดคำขอคู่ค้า" : "คำขอคู่ค้า"}</h3>
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closePartnerRequestsSheet()"
+        aria-label="ปิดหน้าต่างคำขอคู่ค้า">×</button>
+    </div>
+
+    <div class="helper-text" style="margin-bottom:10px">
+      อ่านคำขอจาก Partner Catalog เท่านั้น หน้านี้ยังไม่สร้างออเดอร์ ไม่อนุมัติ และไม่ตัดสต็อก
+    </div>
+
+    ${
+      isDetail
+        ? renderPartnerRequestDetail()
+        : `
+          ${renderPartnerRequestsFilters()}
+          ${renderPartnerRequestsList()}
+        `
+    }
+  `;
 }
 
 function openAdminProductAction(p){
