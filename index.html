@@ -3497,6 +3497,7 @@ Object.assign(window, {
   setPartnerRequestPartnerFilter,
   refreshPartnerRequests,
   openPartnerRequestDetail,
+  updatePartnerRequestStatusFromAdmin,
   backToPartnerRequestList,
   downloadBulkProductTemplate,
   handleBulkProductFileUpload,
@@ -3615,6 +3616,8 @@ const state = {
       total: 0,
       detail: null,
       loading: false,
+      statusSubmitting: false,
+      statusMessage: "",
       error: "",
       view: "list"
     },
@@ -12408,6 +12411,8 @@ function resetPartnerRequestsState() {
   requestState.total = 0;
   requestState.detail = null;
   requestState.loading = false;
+  requestState.statusSubmitting = false;
+  requestState.statusMessage = "";
   requestState.error = "";
   requestState.view = "list";
 }
@@ -12477,7 +12482,8 @@ function getPartnerRequestStatusLabel(status) {
   return {
     new: "ใหม่",
     reviewed: "ตรวจแล้ว",
-    closed: "ปิดแล้ว"
+    closed: "ปิดแล้ว",
+    cancelled: "ยกเลิกแล้ว"
   }[key] || (status || "-");
 }
 
@@ -12485,6 +12491,122 @@ function getPartnerRequestMessagePreview(message) {
   const text = String(message || "").trim();
   if (!text) return "";
   return text.length > 90 ? `${text.slice(0, 90)}...` : text;
+}
+
+function getPartnerRequestStatusActions(status) {
+  const key = String(status || "").trim().toLowerCase();
+  const actionsByStatus = {
+    new: [
+      ["reviewed", "ทำเครื่องหมายว่าตรวจแล้ว"],
+      ["closed", "ปิดคำขอ"],
+      ["cancelled", "ยกเลิก"]
+    ],
+    reviewed: [
+      ["closed", "ปิดคำขอ"],
+      ["cancelled", "ยกเลิก"],
+      ["new", "กลับเป็นใหม่"]
+    ],
+    closed: [
+      ["new", "กลับเป็นใหม่"],
+      ["reviewed", "ทำเครื่องหมายว่าตรวจแล้ว"]
+    ],
+    cancelled: [
+      ["new", "กลับเป็นใหม่"],
+      ["reviewed", "ทำเครื่องหมายว่าตรวจแล้ว"]
+    ]
+  };
+  return actionsByStatus[key] || actionsByStatus.new;
+}
+
+function renderPartnerRequestStatusActions(request) {
+  const requestState = state.admin.partnerRequests;
+  const requestId = String(request?.requestId || "").trim();
+  if (!requestId) return "";
+
+  const buttons = getPartnerRequestStatusActions(request.status)
+    .map(([status, label]) => `
+      <button class="btn ${status === "cancelled" ? "btn-danger" : "btn-outline"}" type="button"
+        ${requestState.statusSubmitting ? "disabled" : ""}
+        onclick="updatePartnerRequestStatusFromAdmin(${toInlineJsStringLiteral(requestId)}, ${toInlineJsStringLiteral(status)})">
+        ${esc(label)}
+      </button>
+    `)
+    .join("");
+
+  return `
+    <div class="bulk-product-picker-actions" style="margin-top:12px">
+      ${buttons}
+    </div>
+    ${
+      requestState.statusMessage
+        ? `<div class="helper-text" style="margin-top:8px">${esc(requestState.statusMessage)}</div>`
+        : ""
+    }
+  `;
+}
+
+async function updatePartnerRequestStatusFromAdmin(requestId, status) {
+  if (!ensureAdminSessionForPartnerRequests()) return;
+  if (state.admin.partnerRequests.statusSubmitting) return;
+
+  const cleanRequestId = String(requestId || "").trim();
+  const cleanStatus = String(status || "").trim().toLowerCase();
+  if (!cleanRequestId || !cleanStatus) return;
+
+  const requestState = state.admin.partnerRequests;
+  requestState.statusSubmitting = true;
+  requestState.statusMessage = "กำลังอัปเดตสถานะ...";
+  requestState.error = "";
+  renderPartnerRequestsSheet();
+
+  try {
+    const form = new URLSearchParams();
+    form.append("action", "updatePartnerRequestStatus");
+    form.append("token", state.admin.token);
+    form.append("requestId", cleanRequestId);
+    form.append("status", cleanStatus);
+
+    const res = await fetchWithTimeout(API_URL, {
+      method: "POST",
+      body: form
+    }, 30000);
+    const json = await res.json();
+
+    if (json?.success !== true) {
+      if (isAuthError(json?.error)) {
+        showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
+        exitAdmin({ silent: true });
+        return;
+      }
+      throw new Error(json?.error || json?.message || "อัปเดตสถานะคำขอไม่สำเร็จ");
+    }
+
+    const updatedRequest = json.data?.request || null;
+    if (updatedRequest) {
+      if (requestState.detail?.request?.requestId === updatedRequest.requestId) {
+        requestState.detail.request = {
+          ...requestState.detail.request,
+          ...updatedRequest
+        };
+      }
+      requestState.requests = requestState.requests.map(request =>
+        request.requestId === updatedRequest.requestId
+          ? { ...request, ...updatedRequest }
+          : request
+      );
+    }
+
+    requestState.statusMessage = "อัปเดตสถานะแล้ว";
+    showToast("อัปเดตสถานะคำขอแล้ว", "success");
+  } catch (err) {
+    console.error(err);
+    requestState.statusMessage = "";
+    requestState.error = err.message || "อัปเดตสถานะคำขอไม่สำเร็จ";
+    showToast(requestState.error, "error");
+  } finally {
+    requestState.statusSubmitting = false;
+    renderPartnerRequestsSheet();
+  }
 }
 
 async function loadPartnerRequests() {
@@ -12757,6 +12879,7 @@ function renderPartnerRequestDetail() {
         <span>${esc(formatPartnerRequestMoney(request.estimatedTotal))}</span>
       </div>
       ${request.message ? `<div class="helper-text" style="margin-top:10px">ข้อความ: ${esc(request.message)}</div>` : ""}
+      ${renderPartnerRequestStatusActions(request)}
     </div>
 
     <div class="admin-detail-title" style="margin-top:14px">รายการสินค้า</div>
