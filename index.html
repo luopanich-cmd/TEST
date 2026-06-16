@@ -3488,6 +3488,14 @@ Object.assign(window, {
   clearPartnerCatalogSelection,
   createPartnerCatalogLink,
   copyPartnerCatalogLink,
+  setPartnerCatalogView,
+  refreshPartnerLinks,
+  setPartnerLinkStatusFilter,
+  setPartnerLinkSearch,
+  setPartnerLinkPartnerFilter,
+  openPartnerLinkDetail,
+  updatePartnerLinkStatusFromAdmin,
+  backToPartnerLinkList,
   backToAdminMenuFromPartnerCatalog,
   openPartnerRequestsSheet,
   closePartnerRequestsSheet,
@@ -3596,6 +3604,7 @@ const state = {
       previewValid: false
     },
     partnerCatalog: {
+      view: "create",
       partnerId: "",
       expiryMode: "14",
       customExpiresAt: "",
@@ -3604,7 +3613,19 @@ const state = {
       pickerSearch: "",
       pickerStatus: "all",
       result: null,
-      error: ""
+      error: "",
+      linkStatus: "all",
+      linkPartnerId: "",
+      linkQ: "",
+      linkLimit: 50,
+      linkOffset: 0,
+      links: [],
+      linkTotal: 0,
+      linkDetail: null,
+      linkLoading: false,
+      linkError: "",
+      linkStatusSubmitting: false,
+      linkStatusMessage: ""
     },
     partnerRequests: {
       status: "all",
@@ -11904,6 +11925,7 @@ function ensureAdminSessionForPartnerCatalog() {
 
 function resetPartnerCatalogState() {
   const partnerState = state.admin.partnerCatalog;
+  partnerState.view = "create";
   partnerState.partnerId = "";
   partnerState.expiryMode = "14";
   partnerState.customExpiresAt = "";
@@ -11913,6 +11935,18 @@ function resetPartnerCatalogState() {
   partnerState.pickerStatus = "all";
   partnerState.result = null;
   partnerState.error = "";
+  partnerState.linkStatus = "all";
+  partnerState.linkPartnerId = "";
+  partnerState.linkQ = "";
+  partnerState.linkLimit = 50;
+  partnerState.linkOffset = 0;
+  partnerState.links = [];
+  partnerState.linkTotal = 0;
+  partnerState.linkDetail = null;
+  partnerState.linkLoading = false;
+  partnerState.linkError = "";
+  partnerState.linkStatusSubmitting = false;
+  partnerState.linkStatusMessage = "";
 }
 
 function openPartnerCatalogSheet() {
@@ -11934,6 +11968,48 @@ function backToAdminMenuFromPartnerCatalog() {
     openMainMenu();
     syncOverlayBackdropState();
   });
+}
+
+function setPartnerCatalogView(view) {
+  const partnerState = state.admin.partnerCatalog;
+  partnerState.view = view === "links" ? "links" : "create";
+  partnerState.error = "";
+  partnerState.linkError = "";
+  partnerState.linkStatusMessage = "";
+  partnerState.linkDetail = null;
+  renderPartnerCatalogSheet();
+
+  if (partnerState.view === "links" && !partnerState.links.length) {
+    loadPartnerLinks();
+  }
+}
+
+function setPartnerLinkStatusFilter(value) {
+  state.admin.partnerCatalog.linkStatus = value || "all";
+  state.admin.partnerCatalog.linkOffset = 0;
+  loadPartnerLinks();
+}
+
+function setPartnerLinkSearch(value) {
+  state.admin.partnerCatalog.linkQ = value || "";
+}
+
+function setPartnerLinkPartnerFilter(value) {
+  state.admin.partnerCatalog.linkPartnerId = value || "";
+}
+
+function refreshPartnerLinks() {
+  state.admin.partnerCatalog.linkOffset = 0;
+  loadPartnerLinks();
+}
+
+function backToPartnerLinkList() {
+  const partnerState = state.admin.partnerCatalog;
+  partnerState.view = "links";
+  partnerState.linkDetail = null;
+  partnerState.linkError = "";
+  partnerState.linkStatusMessage = "";
+  renderPartnerCatalogSheet();
 }
 
 function getPartnerCatalogSelectedSkus() {
@@ -12186,9 +12262,9 @@ function renderPartnerCatalogSheet() {
   adminPartnerCatalogSheet.innerHTML = `
     <div class="sheet-topbar">
       <button class="btn btn-outline sheet-nav-btn"
-        onclick="closePartnerCatalogSheet()"
-        aria-label="ปิดหน้าต่างลิงก์คู่ค้า">×</button>
-      <h3 id="adminPartnerCatalogSheetTitle">ลิงก์คู่ค้า</h3>
+        onclick="${partnerState.view === "linkDetail" ? "backToPartnerLinkList()" : "closePartnerCatalogSheet()"}"
+        aria-label="ปิดหน้าต่างลิงก์คู่ค้า">${partnerState.view === "linkDetail" ? "←" : "×"}</button>
+      <h3 id="adminPartnerCatalogSheetTitle">${partnerState.view === "linkDetail" ? "รายละเอียดลิงก์คู่ค้า" : "ลิงก์คู่ค้า"}</h3>
       <div aria-hidden="true"></div>
     </div>
 
@@ -12196,7 +12272,13 @@ function renderPartnerCatalogSheet() {
       สร้างลิงก์ Private Catalog สำหรับคู่ค้า โดยเลือกเฉพาะสินค้าที่ต้องการให้เห็น ลิงก์นี้ใช้สำหรับส่งรายการสนใจเท่านั้น ไม่สร้างออเดอร์และไม่ตัดสต็อก
     </div>
 
-    ${result ? renderPartnerCatalogSuccessCard() : `
+    ${renderPartnerCatalogTabs()}
+
+    ${partnerState.view === "linkDetail"
+      ? renderPartnerLinkDetail()
+      : partnerState.view === "links"
+        ? renderPartnerLinksView()
+        : (result ? renderPartnerCatalogSuccessCard() : `
       <div class="form-group">
         <label for="partnerCatalogPartnerId">Partner ID</label>
         <input
@@ -12261,7 +12343,7 @@ function renderPartnerCatalogSheet() {
           ยกเลิก
         </button>
       </div>
-    `}
+    `)}
   `;
 }
 
@@ -12384,6 +12466,427 @@ async function copyPartnerCatalogLink() {
     console.error(err);
     showToast("คัดลอกลิงก์ไม่สำเร็จ กรุณาคัดลอกจากช่องข้อความ", "warning");
   }
+}
+
+function getPartnerLinkStatusClass(link) {
+  const status = String(link?.status || "").trim().toLowerCase();
+  if (link?.isExpired) return "status-pending";
+  if (status === "active") return "status-approved";
+  if (status === "disabled") return "status-neutral";
+  return "status-neutral";
+}
+
+function getPartnerLinkStatusLabel(link) {
+  const status = String(link?.status || "").trim().toLowerCase();
+  if (link?.isExpired) return "หมดอายุ";
+  return {
+    active: "ใช้งานอยู่",
+    disabled: "ปิดใช้งาน"
+  }[status] || (status || "-");
+}
+
+function renderPartnerCatalogTabs() {
+  const view = state.admin.partnerCatalog.view || "create";
+  return `
+    <div class="bulk-product-picker-actions" style="margin-bottom:12px">
+      <button class="btn ${view === "create" ? "btn-primary" : "btn-outline"}" type="button"
+        onclick="setPartnerCatalogView('create')">
+        สร้างลิงก์ใหม่
+      </button>
+      <button class="btn ${view === "links" || view === "linkDetail" ? "btn-primary" : "btn-outline"}" type="button"
+        onclick="setPartnerCatalogView('links')">
+        จัดการลิงก์เดิม
+      </button>
+    </div>
+  `;
+}
+
+async function loadPartnerLinks() {
+  if (!ensureAdminSessionForPartnerCatalog()) return;
+
+  const partnerState = state.admin.partnerCatalog;
+  partnerState.linkLoading = true;
+  partnerState.linkError = "";
+  partnerState.linkStatusMessage = "";
+  partnerState.view = "links";
+  partnerState.linkDetail = null;
+  renderPartnerCatalogSheet();
+
+  try {
+    const form = new URLSearchParams();
+    form.append("action", "listPartnerLinks");
+    form.append("token", state.admin.token);
+    form.append("limit", String(partnerState.linkLimit || 50));
+    form.append("offset", String(partnerState.linkOffset || 0));
+    if (partnerState.linkStatus && partnerState.linkStatus !== "all") {
+      form.append("status", partnerState.linkStatus);
+    }
+    if (String(partnerState.linkPartnerId || "").trim()) {
+      form.append("partnerId", partnerState.linkPartnerId.trim());
+    }
+    if (String(partnerState.linkQ || "").trim()) {
+      form.append("q", partnerState.linkQ.trim());
+    }
+
+    const res = await fetchWithTimeout(API_URL, {
+      method: "POST",
+      body: form
+    }, 30000);
+    const json = await res.json();
+
+    if (json?.success !== true) {
+      if (isAuthError(json?.error)) {
+        showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
+        exitAdmin({ silent: true });
+        return;
+      }
+      throw new Error(json?.error || json?.message || "โหลดลิงก์คู่ค้าไม่สำเร็จ");
+    }
+
+    partnerState.links = Array.isArray(json.data?.links)
+      ? json.data.links
+      : [];
+    partnerState.linkTotal = Number(json.data?.total || 0);
+    partnerState.linkLimit = Number(json.data?.limit || partnerState.linkLimit || 50);
+    partnerState.linkOffset = Number(json.data?.offset || 0);
+    partnerState.linkError = "";
+  } catch (err) {
+    console.error(err);
+    partnerState.links = [];
+    partnerState.linkTotal = 0;
+    partnerState.linkError = err.message || "โหลดลิงก์คู่ค้าไม่สำเร็จ";
+  } finally {
+    partnerState.linkLoading = false;
+    renderPartnerCatalogSheet();
+  }
+}
+
+async function openPartnerLinkDetail(linkId) {
+  if (!ensureAdminSessionForPartnerCatalog()) return;
+
+  const cleanLinkId = String(linkId || "").trim();
+  if (!cleanLinkId) return;
+
+  const partnerState = state.admin.partnerCatalog;
+  partnerState.linkLoading = true;
+  partnerState.linkError = "";
+  partnerState.linkStatusMessage = "";
+  partnerState.view = "linkDetail";
+  partnerState.linkDetail = null;
+  renderPartnerCatalogSheet();
+
+  try {
+    const form = new URLSearchParams();
+    form.append("action", "getPartnerLinkDetail");
+    form.append("token", state.admin.token);
+    form.append("linkId", cleanLinkId);
+
+    const res = await fetchWithTimeout(API_URL, {
+      method: "POST",
+      body: form
+    }, 30000);
+    const json = await res.json();
+
+    if (json?.success !== true) {
+      if (isAuthError(json?.error)) {
+        showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
+        exitAdmin({ silent: true });
+        return;
+      }
+      throw new Error(json?.error || json?.message || "โหลดรายละเอียดลิงก์ไม่สำเร็จ");
+    }
+
+    partnerState.linkDetail = json.data || null;
+    partnerState.linkError = "";
+  } catch (err) {
+    console.error(err);
+    partnerState.linkDetail = null;
+    partnerState.linkError = err.message || "โหลดรายละเอียดลิงก์ไม่สำเร็จ";
+  } finally {
+    partnerState.linkLoading = false;
+    renderPartnerCatalogSheet();
+  }
+}
+
+async function updatePartnerLinkStatusFromAdmin(linkId, status) {
+  if (!ensureAdminSessionForPartnerCatalog()) return;
+
+  const partnerState = state.admin.partnerCatalog;
+  if (partnerState.linkStatusSubmitting) return;
+
+  const cleanLinkId = String(linkId || "").trim();
+  const cleanStatus = String(status || "").trim().toLowerCase();
+  if (!cleanLinkId || !cleanStatus) return;
+
+  partnerState.linkStatusSubmitting = true;
+  partnerState.linkStatusMessage = "กำลังอัปเดตสถานะลิงก์...";
+  partnerState.linkError = "";
+  renderPartnerCatalogSheet();
+
+  try {
+    const form = new URLSearchParams();
+    form.append("action", "updatePartnerLinkStatus");
+    form.append("token", state.admin.token);
+    form.append("linkId", cleanLinkId);
+    form.append("status", cleanStatus);
+
+    const res = await fetchWithTimeout(API_URL, {
+      method: "POST",
+      body: form
+    }, 30000);
+    const json = await res.json();
+
+    if (json?.success !== true) {
+      if (isAuthError(json?.error)) {
+        showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
+        exitAdmin({ silent: true });
+        return;
+      }
+      throw new Error(json?.error || json?.message || "อัปเดตสถานะลิงก์ไม่สำเร็จ");
+    }
+
+    const updatedLink = json.data?.link || null;
+    if (updatedLink) {
+      if (partnerState.linkDetail?.link?.linkId === updatedLink.linkId) {
+        partnerState.linkDetail.link = {
+          ...partnerState.linkDetail.link,
+          ...updatedLink
+        };
+      }
+      partnerState.links = partnerState.links.map(link =>
+        link.linkId === updatedLink.linkId
+          ? { ...link, ...updatedLink }
+          : link
+      );
+    }
+
+    partnerState.linkStatusMessage = "อัปเดตสถานะลิงก์แล้ว";
+    showToast("อัปเดตสถานะลิงก์แล้ว", "success");
+  } catch (err) {
+    console.error(err);
+    partnerState.linkStatusMessage = "";
+    partnerState.linkError = err.message || "อัปเดตสถานะลิงก์ไม่สำเร็จ";
+    showToast(partnerState.linkError, "error");
+  } finally {
+    partnerState.linkStatusSubmitting = false;
+    renderPartnerCatalogSheet();
+  }
+}
+
+function renderPartnerLinkFilters() {
+  const partnerState = state.admin.partnerCatalog;
+  const status = partnerState.linkStatus || "all";
+
+  return `
+    <div class="bulk-product-picker-controls">
+      <input
+        id="partnerLinkSearch"
+        type="search"
+        value="${escAttr(partnerState.linkQ || "")}"
+        placeholder="ค้นหา linkId / Partner / label"
+        oninput="setPartnerLinkSearch(this.value)"
+        onkeydown="if(event.key === 'Enter') refreshPartnerLinks();">
+      <input
+        id="partnerLinkPartnerId"
+        value="${escAttr(partnerState.linkPartnerId || "")}"
+        placeholder="Partner ID"
+        oninput="setPartnerLinkPartnerFilter(this.value)"
+        onkeydown="if(event.key === 'Enter') refreshPartnerLinks();">
+      <select
+        id="partnerLinkStatus"
+        onchange="setPartnerLinkStatusFilter(this.value)">
+        <option value="all" ${status === "all" ? "selected" : ""}>ทุกสถานะ</option>
+        <option value="active" ${status === "active" ? "selected" : ""}>ใช้งานอยู่</option>
+        <option value="disabled" ${status === "disabled" ? "selected" : ""}>ปิดใช้งาน</option>
+      </select>
+    </div>
+    <div class="bulk-product-picker-actions">
+      <button class="btn btn-outline" type="button" onclick="refreshPartnerLinks()">
+        รีเฟรช / ค้นหา
+      </button>
+      <button class="btn btn-outline" type="button"
+        onclick="state.admin.partnerCatalog.linkQ=''; state.admin.partnerCatalog.linkPartnerId=''; state.admin.partnerCatalog.linkStatus='all'; refreshPartnerLinks();">
+        ล้างตัวกรอง
+      </button>
+    </div>
+  `;
+}
+
+function renderPartnerLinkCard(link) {
+  return `
+    <div class="bulk-preview-card">
+      <div>
+        <div class="name">${esc(link.partnerNameSnapshot || link.partnerId || "-")}</div>
+        <div class="bulk-preview-meta">
+          Link ID: ${esc(link.linkId || "-")}<br>
+          Partner ID: ${esc(link.partnerId || "-")}<br>
+          Label: ${esc(link.label || "-")}<br>
+          สร้างโดย: ${esc(link.createdBy || "-")}<br>
+          สร้างเมื่อ: ${esc(formatThaiDate(link.createdAt || ""))}<br>
+          หมดอายุ: ${esc(formatThaiDate(link.expiresAt || ""))}
+        </div>
+        <div class="bulk-product-picker-meta" style="margin-top:8px">
+          <span class="status-badge compact ${getPartnerLinkStatusClass(link)}">
+            ${esc(getPartnerLinkStatusLabel(link))}
+          </span>
+          <span>${Number(link.itemCount || 0)} รายการ</span>
+        </div>
+        <div class="bulk-product-picker-actions">
+          <button class="btn btn-primary" type="button"
+            onclick="openPartnerLinkDetail(${toInlineJsStringLiteral(link.linkId || "")})">
+            ดูรายละเอียด
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPartnerLinksList() {
+  const partnerState = state.admin.partnerCatalog;
+  if (partnerState.linkLoading) {
+    return `<div class="loading">กำลังโหลดลิงก์คู่ค้า...</div>`;
+  }
+  if (partnerState.linkError) {
+    return `
+      <div class="empty-state">
+        ${esc(partnerState.linkError)}
+        <div style="margin-top:10px">
+          <button class="btn btn-outline" type="button" onclick="refreshPartnerLinks()">ลองใหม่</button>
+        </div>
+      </div>
+    `;
+  }
+  if (!partnerState.links.length) {
+    return `<div class="empty-state">ยังไม่มีลิงก์คู่ค้าตามเงื่อนไขที่เลือก</div>`;
+  }
+
+  return `
+    <div class="helper-text" style="margin:10px 0">
+      พบ ${Number(partnerState.linkTotal || 0).toLocaleString("th-TH")} ลิงก์
+    </div>
+    <div class="bulk-preview-list">
+      ${partnerState.links.map(renderPartnerLinkCard).join("")}
+    </div>
+  `;
+}
+
+function renderPartnerLinkStatusActions(link) {
+  const partnerState = state.admin.partnerCatalog;
+  const linkId = String(link?.linkId || "").trim();
+  const status = String(link?.status || "").trim().toLowerCase();
+  if (!linkId) return "";
+
+  const nextStatus = status === "disabled" ? "active" : "disabled";
+  const label = nextStatus === "active" ? "เปิดใช้งานลิงก์" : "ปิดลิงก์";
+
+  return `
+    <div class="bulk-product-picker-actions" style="margin-top:12px">
+      <button class="btn ${nextStatus === "disabled" ? "btn-danger" : "btn-outline"}" type="button"
+        ${partnerState.linkStatusSubmitting ? "disabled" : ""}
+        onclick="updatePartnerLinkStatusFromAdmin(${toInlineJsStringLiteral(linkId)}, ${toInlineJsStringLiteral(nextStatus)})">
+        ${esc(label)}
+      </button>
+    </div>
+    ${
+      partnerState.linkStatusMessage
+        ? `<div class="helper-text" style="margin-top:8px">${esc(partnerState.linkStatusMessage)}</div>`
+        : ""
+    }
+  `;
+}
+
+function renderPartnerLinkDetailItem(item) {
+  return `
+    <div class="bulk-preview-card">
+      ${renderCartItemThumb({
+        productId: item.productId,
+        name: item.nameSnapshot || item.productId || "สินค้า",
+        image: item.imageSnapshot || ""
+      })}
+      <div>
+        <div class="name">${esc(item.nameSnapshot || item.productId || "-")}</div>
+        <div class="bulk-preview-meta">
+          SKU: ${esc(item.productId || "-")}<br>
+          ราคา: ${esc(formatPartnerRequestMoney(item.priceSnapshot || 0))}
+        </div>
+        <div class="bulk-product-picker-meta" style="margin-top:8px">
+          ${renderBulkProductUpdateValueDisplay("status", item.statusSnapshot)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPartnerLinkDetail() {
+  const partnerState = state.admin.partnerCatalog;
+  if (partnerState.linkLoading) {
+    return `<div class="loading">กำลังโหลดรายละเอียดลิงก์...</div>`;
+  }
+  if (partnerState.linkError) {
+    return `
+      <div class="empty-state">
+        ${esc(partnerState.linkError)}
+        <div style="margin-top:10px">
+          <button class="btn btn-outline" type="button" onclick="backToPartnerLinkList()">กลับรายการลิงก์</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const detail = partnerState.linkDetail || {};
+  const link = detail.link || {};
+  const items = Array.isArray(detail.items) ? detail.items : [];
+
+  return `
+    <div class="admin-detail-card">
+      <div class="admin-detail-title">${esc(link.partnerNameSnapshot || link.partnerId || "ลิงก์คู่ค้า")}</div>
+      <div class="bulk-preview-meta">
+        Link ID: ${esc(link.linkId || "-")}<br>
+        Partner ID: ${esc(link.partnerId || "-")}<br>
+        Label: ${esc(link.label || "-")}<br>
+        สร้างโดย: ${esc(link.createdBy || "-")}<br>
+        สร้างเมื่อ: ${esc(formatThaiDate(link.createdAt || ""))}<br>
+        หมดอายุ: ${esc(formatThaiDate(link.expiresAt || ""))}
+      </div>
+      <div class="bulk-product-picker-meta" style="margin-top:8px">
+        <span class="status-badge compact ${getPartnerLinkStatusClass(link)}">
+          ${esc(getPartnerLinkStatusLabel(link))}
+        </span>
+        <span>${Number(link.itemCount || items.length || 0)} รายการ</span>
+        ${link.isExpired ? `<span>หมดอายุแล้ว</span>` : ``}
+      </div>
+      <div class="bulk-error-list" style="margin-top:12px">
+        ลิงก์เดิมไม่สามารถคัดลอกซ้ำได้ เพราะระบบไม่เก็บ token จริงไว้ หากต้องการส่งลิงก์ใหม่ ให้สร้างลิงก์ใหม่
+      </div>
+      ${renderPartnerLinkStatusActions(link)}
+    </div>
+
+    <div class="admin-detail-title" style="margin-top:14px">สินค้าในลิงก์</div>
+    ${
+      items.length
+        ? `<div class="bulk-preview-list">${items.map(renderPartnerLinkDetailItem).join("")}</div>`
+        : `<div class="empty-state">ไม่มีสินค้าในลิงก์นี้</div>`
+    }
+  `;
+}
+
+function renderPartnerLinksView() {
+  return `
+    <div class="helper-text" style="margin-bottom:10px">
+      จัดการสถานะลิงก์คู่ค้าที่เคยสร้างไว้ ระบบไม่แสดง token จริงและไม่สามารถคัดลอกลิงก์เก่าซ้ำได้
+    </div>
+    <div class="bulk-product-picker-actions" style="margin-bottom:10px">
+      <button class="btn btn-outline" type="button" onclick="setPartnerCatalogView('create')">
+        กลับหน้าสร้างลิงก์
+      </button>
+      <button class="btn btn-outline" type="button" onclick="backToAdminMenuFromPartnerCatalog()">
+        กลับเมนูแอดมิน
+      </button>
+    </div>
+    ${renderPartnerLinkFilters()}
+    ${renderPartnerLinksList()}
+  `;
 }
 
 function ensureAdminSessionForPartnerRequests() {
