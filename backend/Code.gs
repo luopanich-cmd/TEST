@@ -220,6 +220,41 @@ function ensureOrdersExtendedHeaders_(ss) {
   };
 }
 
+function findOrderByPartnerRequestId_(orderSheet, orderCol, requestId) {
+  if (
+    !orderSheet ||
+    !orderCol ||
+    orderCol.partnerRequestId === undefined
+  ) {
+    return null;
+  }
+
+  const targetRequestId = String(requestId || "").trim();
+  if (!targetRequestId || orderSheet.getLastRow() < 2) {
+    return null;
+  }
+
+  const values = orderSheet
+    .getRange(
+      2,
+      orderCol.partnerRequestId + 1,
+      orderSheet.getLastRow() - 1,
+      1
+    )
+    .getValues();
+  const matchIndex = values.findIndex(row =>
+    String(row[0] || "").trim() === targetRequestId
+  );
+
+  if (matchIndex === -1) {
+    return null;
+  }
+
+  return {
+    rowNumber: matchIndex + 2
+  };
+}
+
 function createPartnerLink(params, auth) {
   if (!auth || !auth.username) {
     throw new Error("Unauthorized");
@@ -688,6 +723,191 @@ function updatePartnerRequestStatus(params, auth) {
       success: true,
       data: {
         request: mapPartnerRequestRow_(requestData, updatedRow)
+      }
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function convertPartnerRequestToOrder(params, auth) {
+  if (!auth || !auth.username) {
+    throw new Error("Unauthorized");
+  }
+
+  const requestId = String(params.requestId || "").trim();
+  const poNumber = String(params.poNumber || "").trim();
+
+  if (!requestId) {
+    throw new Error("Request ID is required");
+  }
+
+  if (!poNumber) {
+    throw new Error("PO number is required");
+  }
+
+  if (poNumber.length > CREATE_ORDER_MAX_PO_LENGTH) {
+    throw new Error(
+      `PO number cannot exceed ${CREATE_ORDER_MAX_PO_LENGTH} characters`
+    );
+  }
+
+  if (/^[=+\-@]/.test(poNumber)) {
+    throw new Error("PO number contains an unsafe leading character");
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = getSS();
+    const requestData = getSheetDataBySchema_(
+      ss,
+      PARTNER_SHEET_NAMES.partnerRequests
+    );
+    const itemData = getSheetDataBySchema_(
+      ss,
+      PARTNER_SHEET_NAMES.partnerRequestItems
+    );
+    const productSheet = ss.getSheetByName("Products");
+    const orderSheet = ss.getSheetByName("Orders");
+
+    if (!productSheet) {
+      throw new Error("Products sheet not found");
+    }
+
+    if (!orderSheet) {
+      throw new Error("Orders sheet not found");
+    }
+
+    const orderHeaders = ensureOrdersExtendedHeaders_(ss).headers;
+    const orderCol = {};
+    orderHeaders.forEach((header, index) => {
+      orderCol[header] = index;
+    });
+
+    const requestRow = requestData.rows.find(row =>
+      String(row[requestData.col.requestId] || "").trim() === requestId
+    );
+
+    if (!requestRow) {
+      throw new Error("Partner request not found");
+    }
+
+    const request = mapPartnerRequestRow_(requestData, requestRow);
+    const requestStatus = String(request.status || "").trim().toLowerCase();
+
+    if (requestStatus === "cancelled") {
+      throw new Error("Cancelled partner request cannot be converted");
+    }
+
+    const duplicateOrder = findOrderByPartnerRequestId_(
+      orderSheet,
+      orderCol,
+      requestId
+    );
+
+    if (duplicateOrder) {
+      throw new Error("Partner request has already been converted");
+    }
+
+    const requestItems = itemData.rows
+      .filter(row =>
+        String(row[itemData.col.requestId] || "").trim() === requestId
+      )
+      .map(row => mapPartnerRequestItemRow_(itemData, row))
+      .sort((left, right) =>
+        (Number(left.sortOrder) || 0) - (Number(right.sortOrder) || 0)
+      );
+
+    if (!requestItems.length) {
+      throw new Error("Partner request has no items");
+    }
+
+    const productMap = getProductRowMap_(productSheet);
+    const cleanItems = [];
+    let total = 0;
+
+    requestItems.forEach((item, index) => {
+      const productId = String(item.productId || "").trim().toUpperCase();
+      const qty = Number(item.qty);
+
+      if (!productId || !Number.isInteger(qty) || qty <= 0) {
+        throw new Error("Invalid partner request item at index " + index);
+      }
+
+      const productRow = productMap.get(productId);
+      if (!productRow) {
+        throw new Error("Product not found: " + productId);
+      }
+
+      if (!isProductActive_(productRow)) {
+        throw new Error("Product is not active: " + productId);
+      }
+
+      const name = String(productRow[1] || "").trim();
+      const price = Number(productRow[2]);
+      const currentStock = Number(productRow[3]);
+      const costPrice = Number(productRow[12]);
+
+      if (
+        !name ||
+        !Number.isFinite(price) ||
+        price < 0 ||
+        !Number.isFinite(costPrice) ||
+        costPrice < 0
+      ) {
+        throw new Error("Invalid product data: " + productId);
+      }
+
+      if (!Number.isFinite(currentStock) || currentStock < qty) {
+        throw new Error(
+          `Stock not enough for ${productId} (remain ${currentStock})`
+        );
+      }
+
+      cleanItems.push({
+        productId,
+        name,
+        qty,
+        price,
+        costPrice
+      });
+
+      total += qty * price;
+    });
+
+    const orderId = "ORD-" + Utilities.getUuid();
+    const status = "PENDING";
+    const createdAt = new Date();
+    const row = new Array(orderHeaders.length).fill("");
+
+    row[orderCol.orderId] = orderId;
+    row[orderCol.items] = JSON.stringify(cleanItems);
+    row[orderCol.total] = total;
+    row[orderCol.status] = status;
+    row[orderCol.createdAt] = createdAt;
+    row[orderCol.approvedAt] = "";
+    row[orderCol.approvedBy] = "";
+    row[orderCol.poNumber] = poNumber;
+    row[orderCol.source] = "partner_request";
+    row[orderCol.partnerRequestId] = requestId;
+    row[orderCol.partnerId] = request.partnerId;
+    row[orderCol.partnerNameSnapshot] = request.partnerNameSnapshot;
+
+    orderSheet.appendRow(row);
+
+    return {
+      success: true,
+      data: {
+        orderId,
+        status,
+        partnerRequestId: requestId,
+        partnerId: request.partnerId,
+        partnerNameSnapshot: request.partnerNameSnapshot,
+        poNumber,
+        total,
+        itemCount: cleanItems.length
       }
     };
   } finally {
@@ -2029,6 +2249,12 @@ function doPost(e) {
     if (action === "updatePartnerRequestStatus") {
       return json(
         updatePartnerRequestStatus(params, auth)
+      );
+    }
+
+    if (action === "convertPartnerRequestToOrder") {
+      return json(
+        convertPartnerRequestToOrder(params, auth)
       );
     }
 
