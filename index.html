@@ -12035,7 +12035,18 @@ function ensureAdminSessionForLandedCost() {
 }
 
 function createEmptyLandedCostRow() {
-  return { productId: "", qty: "", chinaUnitCost: "" };
+  return {
+    productId: "",
+    name: "",
+    currentPrice: null,
+    currentCostPrice: null,
+    image: "",
+    stock: null,
+    status: "",
+    active: true,
+    qty: "",
+    chinaUnitCost: ""
+  };
 }
 
 function getLandedCostProductName(productId) {
@@ -12044,6 +12055,50 @@ function getLandedCostProductName(productId) {
   const products = Array.isArray(state.products) ? state.products : [];
   const product = products.find(item => normalizeProductId(item.productId) === cleanId);
   return product ? String(product.name || "").trim() : "";
+}
+
+function getLandedCostProductSnapshot(productId) {
+  const cleanId = normalizeProductId(productId);
+  if (!cleanId) return null;
+  const products = Array.isArray(state.products) ? state.products : [];
+  return products.find(item => normalizeProductId(item.productId) === cleanId) || null;
+}
+
+function getLandedCostRowProductName(row) {
+  const rowName = String(row?.name || "").trim();
+  if (rowName) return rowName;
+  return getLandedCostProductName(row?.productId);
+}
+
+function isEmptyLandedCostRow(row) {
+  return (
+    !normalizeProductId(row?.productId) &&
+    String(row?.qty ?? "").trim() === "" &&
+    String(row?.chinaUnitCost ?? "").trim() === ""
+  );
+}
+
+function createLandedCostRowFromProduct(product) {
+  const productId = normalizeProductId(product?.productId);
+  const costPrice =
+    product?.costPrice !== null &&
+    product?.costPrice !== undefined &&
+    product?.costPrice !== ""
+      ? Number(product.costPrice) || 0
+      : 0;
+
+  return {
+    productId,
+    name: String(product?.name || "").trim(),
+    currentPrice: Number(product?.price || 0),
+    currentCostPrice: costPrice,
+    image: product?.image || "",
+    stock: product?.stock !== null && product?.stock !== undefined ? Number(product.stock || 0) : null,
+    status: product?.status || "",
+    active: product?.active !== false,
+    qty: "1",
+    chinaUnitCost: String(costPrice)
+  };
 }
 
 function parseNonNegativeNumber(value) {
@@ -12075,7 +12130,20 @@ function updateLandedCostRow(index, field, value) {
   const rowIndex = Number(index);
   const row = state.admin.landedCost.rows[rowIndex];
   if (!row || !["productId", "qty", "chinaUnitCost"].includes(field)) return;
-  row[field] = field === "productId" ? normalizeProductId(value) : value;
+  if (field === "productId") {
+    const productId = normalizeProductId(value);
+    const product = getLandedCostProductSnapshot(productId);
+    row.productId = productId;
+    row.name = product ? String(product.name || "").trim() : "";
+    row.currentPrice = product ? Number(product.price || 0) : null;
+    row.currentCostPrice = product ? Number(product.costPrice || 0) : null;
+    row.image = product?.image || "";
+    row.stock = product ? Number(product.stock || 0) : null;
+    row.status = product?.status || "";
+    row.active = product ? product.active !== false : true;
+  } else {
+    row[field] = value;
+  }
   state.admin.landedCost.result = null;
   state.admin.landedCost.errors = [];
   state.admin.landedCost.applyPreviewRows = [];
@@ -12201,10 +12269,17 @@ function clearLandedCostSelection() {
 function addSelectedLandedCostProducts() {
   const calcState = state.admin.landedCost;
   const selectedSkus = getLandedCostSelectedSkus();
-  const existingSkus = getLandedCostExistingSkus();
   const products = Array.isArray(state.products) ? state.products : [];
   const productMap = new Map(
     products.map(product => [normalizeProductId(product.productId), product])
+  );
+  const nextRows = Array.isArray(calcState.rows)
+    ? calcState.rows.filter(row => !isEmptyLandedCostRow(row))
+    : [];
+  const existingSkus = new Set(
+    nextRows
+      .map(row => normalizeProductId(row.productId))
+      .filter(Boolean)
   );
 
   let added = 0;
@@ -12215,21 +12290,18 @@ function addSelectedLandedCostProducts() {
       return;
     }
 
-    const product = productMap.get(productId) || {};
-    calcState.rows.push({
-      productId,
-      qty: "1",
-      chinaUnitCost:
-        product.costPrice !== null &&
-        product.costPrice !== undefined &&
-        product.costPrice !== ""
-          ? String(Number(product.costPrice) || 0)
-          : "0"
-    });
+    const product = productMap.get(productId);
+    if (!product) {
+      skipped += 1;
+      return;
+    }
+
+    nextRows.push(createLandedCostRowFromProduct(product));
     existingSkus.add(productId);
     added += 1;
   });
 
+  calcState.rows = nextRows.length ? nextRows : [createEmptyLandedCostRow()];
   calcState.selectedSkus = [];
   calcState.result = null;
   calcState.errors = [];
@@ -12291,6 +12363,7 @@ function validateLandedCostInput() {
   const rows = calcState.rows.map((row, index) => {
     const rowNumber = index + 1;
     const productId = normalizeProductId(row.productId);
+    const productSnapshot = getLandedCostProductSnapshot(productId);
     const qty = Number(row.qty);
     const chinaUnitCost = Number(row.chinaUnitCost);
 
@@ -12303,7 +12376,13 @@ function validateLandedCostInput() {
 
     return {
       productId,
-      name: getLandedCostProductName(productId),
+      name: getLandedCostRowProductName(row) || String(productSnapshot?.name || "").trim(),
+      currentPrice: Number(row.currentPrice ?? productSnapshot?.price ?? 0),
+      currentCostPrice: Number(row.currentCostPrice ?? productSnapshot?.costPrice ?? 0),
+      image: row.image || productSnapshot?.image || "",
+      stock: row.stock ?? productSnapshot?.stock ?? null,
+      status: row.status || productSnapshot?.status || "",
+      active: row.active !== false && productSnapshot?.active !== false,
       qty,
       chinaUnitCost,
       itemBaseCost: Number.isFinite(chinaUnitCost) && Number.isFinite(qty)
@@ -12407,20 +12486,20 @@ function prepareLandedCostApplyPreview() {
   const skippedRows = [];
   resultRows.forEach(row => {
     const productId = normalizeProductId(row.productId);
-    const product = productMap.get(productId);
+    const product = productMap.get(productId) || row;
     if (!productId || !product) {
       skippedRows.push(productId || "(ไม่มี SKU)");
       return;
     }
 
-    const currentCostPrice = Number(product.costPrice || 0);
-    const currentPrice = Number(product.price || 0);
+    const currentCostPrice = Number(product.costPrice ?? product.currentCostPrice ?? 0);
+    const currentPrice = Number(product.price ?? product.currentPrice ?? 0);
     const suggestedCostPrice = Number(row.suggestedCostPrice || 0);
     const suggestedPrice = Number(row.suggestedSellingPrice || 0);
 
     previewRows.push({
       productId,
-      name: product.name || row.name || "",
+      name: row.name || product.name || "",
       qty: Number(row.qty || 0),
       currentCostPrice,
       suggestedCostPrice,
@@ -12578,9 +12657,35 @@ function renderLandedCostPicker() {
 function renderLandedCostRows() {
   const rows = state.admin.landedCost.rows;
   return rows.map((row, index) => {
-    const productName = getLandedCostProductName(row.productId);
+    const productId = normalizeProductId(row.productId);
+    const productSnapshot = getLandedCostProductSnapshot(productId);
+    const productName = getLandedCostRowProductName(row) || String(productSnapshot?.name || "").trim();
+    const productImage = row.image || productSnapshot?.image || "";
+    const currentCostPrice = row.currentCostPrice ?? productSnapshot?.costPrice;
+    const currentPrice = row.currentPrice ?? productSnapshot?.price;
+    const stock = row.stock ?? productSnapshot?.stock;
+    const status = row.status || productSnapshot?.status || "";
+    const hasProductIdentity = Boolean(productId || productName);
+    const identityItem = { productId, name: productName, image: productImage };
     return `
       <div class="bulk-preview-card">
+        ${
+          hasProductIdentity
+            ? `<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px">
+                ${renderCartItemThumb(identityItem)}
+                <div style="min-width:0;flex:1">
+                  <div class="name">${esc(productId || "-")}</div>
+                  ${productName ? `<div class="helper-text">${esc(productName)}</div>` : ""}
+                  <div class="bulk-preview-meta">
+                    costPrice: ${Number(currentCostPrice || 0).toLocaleString("th-TH")} |
+                    price: ${Number(currentPrice || 0).toLocaleString("th-TH")} |
+                    stock: ${stock !== null && stock !== undefined ? Number(stock || 0).toLocaleString("th-TH") : "-"}
+                    ${status ? ` | ${esc(status)}` : ""}
+                  </div>
+                </div>
+              </div>`
+            : ""
+        }
         <div class="form-group">
           <label>SKU / Product ID</label>
           <input value="${escAttr(row.productId || "")}" placeholder="เช่น BN007"
