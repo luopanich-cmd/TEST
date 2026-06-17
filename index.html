@@ -3513,6 +3513,13 @@ Object.assign(window, {
   removeLandedCostRow,
   updateLandedCostField,
   updateLandedCostRow,
+  toggleLandedCostPicker,
+  setLandedCostPickerSearch,
+  setLandedCostPickerStatus,
+  toggleLandedCostProduct,
+  selectVisibleLandedCostProducts,
+  clearLandedCostSelection,
+  addSelectedLandedCostProducts,
   calculateLandedCost,
   resetLandedCostCalculator,
   openPartnerCatalogSheet,
@@ -3656,6 +3663,11 @@ const state = {
           chinaUnitCost: ""
         }
       ],
+      pickerOpen: false,
+      pickerSearch: "",
+      pickerStatus: "all",
+      selectedSkus: [],
+      pickerMessage: "",
       result: null,
       errors: []
     },
@@ -12078,6 +12090,140 @@ function removeLandedCostRow(index) {
   renderLandedCostSheet();
 }
 
+function getLandedCostSelectedSkus() {
+  const selectedSkus = Array.isArray(state.admin.landedCost.selectedSkus)
+    ? state.admin.landedCost.selectedSkus
+    : [];
+  const seen = new Set();
+  return selectedSkus
+    .map(normalizeProductId)
+    .filter(productId => {
+      if (!productId || seen.has(productId)) return false;
+      seen.add(productId);
+      return true;
+    });
+}
+
+function getLandedCostExistingSkus() {
+  return new Set(
+    (Array.isArray(state.admin.landedCost.rows) ? state.admin.landedCost.rows : [])
+      .map(row => normalizeProductId(row.productId))
+      .filter(Boolean)
+  );
+}
+
+function getLandedCostPickerProducts() {
+  const calcState = state.admin.landedCost;
+  const searchText = String(calcState.pickerSearch || "").trim().toLowerCase();
+  const rawStatusFilter = String(calcState.pickerStatus || "all").trim().toLowerCase();
+  const statusFilter = rawStatusFilter === "all" ? "all" : normalizeProductStatus(rawStatusFilter);
+  const products = Array.isArray(state.products) ? state.products : [];
+
+  return products.filter(product => {
+    const productId = normalizeProductId(product.productId);
+    const name = String(product.name || "").toLowerCase();
+    const status = normalizeProductStatus(product.status);
+    const matchesSearch = !searchText ||
+      productId.toLowerCase().includes(searchText) ||
+      name.includes(searchText);
+    const matchesStatus = statusFilter === "all" || status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+}
+
+function toggleLandedCostPicker() {
+  state.admin.landedCost.pickerOpen = !state.admin.landedCost.pickerOpen;
+  state.admin.landedCost.pickerMessage = "";
+  renderLandedCostSheet();
+}
+
+function setLandedCostPickerSearch(value) {
+  state.admin.landedCost.pickerSearch = value || "";
+  state.admin.landedCost.pickerMessage = "";
+  renderLandedCostSheet();
+}
+
+function setLandedCostPickerStatus(value) {
+  state.admin.landedCost.pickerStatus = value || "all";
+  state.admin.landedCost.pickerMessage = "";
+  renderLandedCostSheet();
+}
+
+function toggleLandedCostProduct(productId, checked) {
+  const normalizedId = normalizeProductId(productId);
+  if (!normalizedId) return;
+
+  const selected = new Set(getLandedCostSelectedSkus());
+  if (checked) {
+    selected.add(normalizedId);
+  } else {
+    selected.delete(normalizedId);
+  }
+  state.admin.landedCost.selectedSkus = Array.from(selected);
+  state.admin.landedCost.pickerMessage = "";
+  renderLandedCostSheet();
+}
+
+function selectVisibleLandedCostProducts() {
+  const selected = new Set(getLandedCostSelectedSkus());
+  getLandedCostPickerProducts().forEach(product => {
+    const productId = normalizeProductId(product.productId);
+    if (productId) selected.add(productId);
+  });
+  state.admin.landedCost.selectedSkus = Array.from(selected);
+  state.admin.landedCost.pickerMessage = "";
+  renderLandedCostSheet();
+}
+
+function clearLandedCostSelection() {
+  state.admin.landedCost.selectedSkus = [];
+  state.admin.landedCost.pickerMessage = "";
+  renderLandedCostSheet();
+}
+
+function addSelectedLandedCostProducts() {
+  const calcState = state.admin.landedCost;
+  const selectedSkus = getLandedCostSelectedSkus();
+  const existingSkus = getLandedCostExistingSkus();
+  const products = Array.isArray(state.products) ? state.products : [];
+  const productMap = new Map(
+    products.map(product => [normalizeProductId(product.productId), product])
+  );
+
+  let added = 0;
+  let skipped = 0;
+  selectedSkus.forEach(productId => {
+    if (!productId || existingSkus.has(productId)) {
+      skipped += 1;
+      return;
+    }
+
+    const product = productMap.get(productId) || {};
+    calcState.rows.push({
+      productId,
+      qty: "1",
+      chinaUnitCost:
+        product.costPrice !== null &&
+        product.costPrice !== undefined &&
+        product.costPrice !== ""
+          ? String(Number(product.costPrice) || 0)
+          : "0"
+    });
+    existingSkus.add(productId);
+    added += 1;
+  });
+
+  calcState.selectedSkus = [];
+  calcState.result = null;
+  calcState.errors = [];
+  calcState.pickerMessage = added
+    ? `เพิ่มสินค้าเข้ารอบคำนวณแล้ว ${added} รายการ${skipped ? ` · ข้ามรายการซ้ำ ${skipped} รายการ` : ""}`
+    : skipped
+      ? "สินค้านี้อยู่ในรายการแล้ว"
+      : "กรุณาเลือกสินค้าอย่างน้อย 1 รายการ";
+  renderLandedCostSheet();
+}
+
 function resetLandedCostCalculator() {
   state.admin.landedCost = {
     batchName: "",
@@ -12088,6 +12234,11 @@ function resetLandedCostCalculator() {
     profitPercent: "",
     roundingMode: "ceil",
     rows: [createEmptyLandedCostRow()],
+    pickerOpen: false,
+    pickerSearch: "",
+    pickerStatus: "all",
+    selectedSkus: [],
+    pickerMessage: "",
     result: null,
     errors: []
   };
@@ -12219,6 +12370,106 @@ function renderLandedCostErrors() {
   `;
 }
 
+function renderLandedCostPicker() {
+  const calcState = state.admin.landedCost;
+  const selectedSkus = new Set(getLandedCostSelectedSkus());
+  const existingSkus = getLandedCostExistingSkus();
+  const products = getLandedCostPickerProducts();
+
+  if (!calcState.pickerOpen) {
+    return `
+      <button class="btn btn-outline" type="button" onclick="toggleLandedCostPicker()">
+        เลือกสินค้า
+      </button>
+    `;
+  }
+
+  return `
+    <div class="bulk-product-picker" style="margin-top:10px">
+      <div class="admin-detail-title">เลือกสินค้า</div>
+      <div class="helper-text">
+        เลือกสินค้าจากรายการที่โหลดอยู่ ระบบจะเติม SKU ให้อัตโนมัติ ตั้งจำนวนเริ่มต้นเป็น 1 และใช้ต้นทุนปัจจุบันเป็นค่าเริ่มต้น
+      </div>
+      <div class="bulk-product-picker-controls">
+        <input
+          type="search"
+          value="${escAttr(calcState.pickerSearch || "")}"
+          placeholder="ค้นหา SKU หรือชื่อสินค้า"
+          oninput="setLandedCostPickerSearch(this.value)">
+        <select onchange="setLandedCostPickerStatus(this.value)">
+          <option value="all" ${calcState.pickerStatus === "all" ? "selected" : ""}>ทุกสถานะ</option>
+          <option value="ready" ${calcState.pickerStatus === "ready" ? "selected" : ""}>พร้อมส่ง</option>
+          <option value="ready_plus" ${calcState.pickerStatus === "ready_plus" ? "selected" : ""}>พร้อมส่ง + เพิ่มได้</option>
+          <option value="shipping" ${calcState.pickerStatus === "shipping" ? "selected" : ""}>อยู่ระหว่างจัดส่ง</option>
+          <option value="warehouse" ${calcState.pickerStatus === "warehouse" ? "selected" : ""}>อยู่โกดังไทย</option>
+          <option value="out" ${calcState.pickerStatus === "out" ? "selected" : ""}>หมด</option>
+        </select>
+      </div>
+      <div class="bulk-product-picker-actions">
+        <button class="btn btn-outline" type="button" onclick="selectVisibleLandedCostProducts()">
+          เลือกทั้งหมดที่แสดง
+        </button>
+        <button class="btn btn-outline" type="button" onclick="clearLandedCostSelection()">
+          ล้างที่เลือก
+        </button>
+        <button class="btn btn-secondary" type="button" onclick="toggleLandedCostPicker()">
+          ซ่อนตัวเลือก
+        </button>
+      </div>
+      ${
+        calcState.pickerMessage
+          ? `<div class="helper-text" style="margin-top:8px">${esc(calcState.pickerMessage)}</div>`
+          : ""
+      }
+      <div class="bulk-product-picker-list">
+        ${
+          products.length
+            ? products.map(product => {
+                const productId = normalizeProductId(product.productId);
+                const selected = selectedSkus.has(productId);
+                const alreadyAdded = existingSkus.has(productId);
+                const isActive = product.active !== false;
+                return `
+                  <label class="bulk-product-picker-row ${selected ? "is-selected" : ""}">
+                    <input
+                      type="checkbox"
+                      ${selected ? "checked" : ""}
+                      ${alreadyAdded ? "disabled" : ""}
+                      onchange="toggleLandedCostProduct(${toInlineJsStringLiteral(productId)}, this.checked)">
+                    ${renderCartItemThumb({
+                      productId,
+                      name: product.name || productId || "สินค้า",
+                      image: product.image || ""
+                    })}
+                    <div class="bulk-product-picker-main">
+                      <div class="name">${esc(product.name || productId || "-")}</div>
+                      <div class="bulk-product-picker-meta">
+                        <span>SKU: ${esc(productId || "-")}</span>
+                        <span>ราคา: ${esc(formatBulkProductUpdateValue("price", product.price))}</span>
+                        <span>ต้นทุน: ${esc(formatBulkProductUpdateValue("costPrice", product.costPrice))}</span>
+                        <span>สต๊อก: ${Number(product.stock || 0).toLocaleString("th-TH")}</span>
+                      </div>
+                      <div class="bulk-product-picker-meta">
+                        ${renderBulkProductUpdateValueDisplay("status", product.status)}
+                        ${renderBulkProductUpdateValueDisplay("active", isActive)}
+                        ${alreadyAdded ? `<span class="status-badge compact status-neutral">อยู่ในรายการแล้ว</span>` : ""}
+                      </div>
+                    </div>
+                  </label>
+                `;
+              }).join("")
+            : `<div class="bulk-product-picker-empty">ไม่พบสินค้าตามเงื่อนไขที่ค้นหา</div>`
+        }
+      </div>
+      <div class="bulk-product-picker-actions" style="margin-top:10px">
+        <button class="btn btn-primary" type="button" onclick="addSelectedLandedCostProducts()">
+          เพิ่มเข้ารอบคำนวณ (${selectedSkus.size})
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 function renderLandedCostRows() {
   const rows = state.admin.landedCost.rows;
   return rows.map((row, index) => {
@@ -12316,6 +12567,7 @@ function renderLandedCostSheet() {
     <div class="admin-detail-section">
       <div class="admin-detail-title">รายการสินค้า</div>
       <div class="helper-text">เพิ่ม SKU, จำนวน และต้นทุนจีนต่อชิ้น ระบบจะเฉลี่ยค่าใช้จ่ายตามมูลค่าสินค้า</div>
+      ${renderLandedCostPicker()}
       <div class="bulk-preview-list" style="margin-top:10px">${renderLandedCostRows()}</div>
       <button class="btn btn-outline" type="button" onclick="addLandedCostRow()" style="margin-top:10px">เพิ่มแถวสินค้า</button>
     </div>
