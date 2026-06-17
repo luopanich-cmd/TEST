@@ -3416,6 +3416,7 @@ textarea.input{
  <div id="adminAddProductSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminAddProductSheetTitle" tabindex="-1"></div>
  <div id="adminBulkProductImportSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminBulkProductImportSheetTitle" tabindex="-1"></div>
  <div id="adminBulkProductUpdateSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminBulkProductUpdateSheetTitle" tabindex="-1"></div>
+ <div id="adminLandedCostSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminLandedCostSheetTitle" tabindex="-1"></div>
  <div id="adminPartnerCatalogSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminPartnerCatalogSheetTitle" tabindex="-1"></div>
  <div id="adminPartnerRequestsSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminPartnerRequestsSheetTitle" tabindex="-1"></div>
 
@@ -3454,6 +3455,8 @@ const adminBulkProductImportSheet =
   document.getElementById("adminBulkProductImportSheet");
 const adminBulkProductUpdateSheet =
   document.getElementById("adminBulkProductUpdateSheet");
+const adminLandedCostSheet =
+  document.getElementById("adminLandedCostSheet");
 const adminPartnerCatalogSheet =
   document.getElementById("adminPartnerCatalogSheet");
 const adminPartnerRequestsSheet =
@@ -3474,6 +3477,7 @@ const ADMIN_SHEETS = Object.freeze({
   addProduct: adminAddProductSheet,
   bulkProductImport: adminBulkProductImportSheet,
   bulkProductUpdate: adminBulkProductUpdateSheet,
+  landedCost: adminLandedCostSheet,
   partnerCatalog: adminPartnerCatalogSheet,
   partnerRequests: adminPartnerRequestsSheet,
   bulkPending: bulkPendingDeliverySheet
@@ -3502,6 +3506,15 @@ Object.assign(window, {
   toggleBulkProductUpdateProduct,
   selectVisibleBulkProductUpdateProducts,
   clearBulkProductUpdateSelection,
+  openLandedCostSheet,
+  closeLandedCostSheet,
+  backToAdminMenuFromLandedCost,
+  addLandedCostRow,
+  removeLandedCostRow,
+  updateLandedCostField,
+  updateLandedCostRow,
+  calculateLandedCost,
+  resetLandedCostCalculator,
   openPartnerCatalogSheet,
   closePartnerCatalogSheet,
   setPartnerCatalogPickerSearch,
@@ -3627,6 +3640,24 @@ const state = {
       updatedCount: 0,
       hasPreview: false,
       previewValid: false
+    },
+    landedCost: {
+      batchName: "",
+      chinaDomesticShipping: "",
+      chinaToThailandShipping: "",
+      thailandShipping: "",
+      otherFees: "",
+      profitPercent: "",
+      roundingMode: "ceil",
+      rows: [
+        {
+          productId: "",
+          qty: "",
+          chinaUnitCost: ""
+        }
+      ],
+      result: null,
+      errors: []
     },
     partnerCatalog: {
       view: "create",
@@ -5741,6 +5772,7 @@ function closeTopSheet(){
     document.getElementById("adminAddProductSheet"),
     document.getElementById("adminBulkProductImportSheet"),
     document.getElementById("adminBulkProductUpdateSheet"),
+    document.getElementById("adminLandedCostSheet"),
     document.getElementById("adminPartnerCatalogSheet"),
     document.getElementById("adminPartnerRequestsSheet"),
     document.getElementById("adminProductActionSheet"),
@@ -8940,6 +8972,11 @@ function openMainMenu(triggerEl){
                 </button>
 
                 <button class="btn btn-secondary"
+                  onclick="closeMainMenu(); openLandedCostSheet();">
+                  คำนวณต้นทุนนำเข้า
+                </button>
+
+                <button class="btn btn-secondary"
                   onclick="closeMainMenu(); openPartnerCatalogSheet();">
                   ลิงก์คู่ค้า
                 </button>
@@ -11964,6 +12001,357 @@ async function submitBulkProductUpdate(btn) {
     renderBulkProductUpdateSheet();
     requestAnimationFrame(syncOverlayBackdropState);
   }
+}
+
+function ensureAdminSessionForLandedCost() {
+  if (
+    state.mode !== "admin" ||
+    !state.admin.loggedIn ||
+    !state.admin.token ||
+    isAdminSessionExpired()
+  ) {
+    showToast("Session หมดอายุ กรุณา login ใหม่", "warning");
+    exitAdmin();
+    return false;
+  }
+  return true;
+}
+
+function createEmptyLandedCostRow() {
+  return { productId: "", qty: "", chinaUnitCost: "" };
+}
+
+function getLandedCostProductName(productId) {
+  const cleanId = normalizeProductId(productId);
+  if (!cleanId) return "";
+  const products = Array.isArray(state.products) ? state.products : [];
+  const product = products.find(item => normalizeProductId(item.productId) === cleanId);
+  return product ? String(product.name || "").trim() : "";
+}
+
+function parseNonNegativeNumber(value) {
+  const text = String(value ?? "").trim();
+  if (text === "") return { valid: true, value: 0 };
+  const number = Number(text);
+  return { valid: Number.isFinite(number) && number >= 0, value: number };
+}
+
+function roundLandedCostValue(value, mode) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  if (mode === "floor") return Math.floor(safeValue);
+  if (mode === "round") return Math.round(safeValue);
+  return Math.ceil(safeValue);
+}
+
+function updateLandedCostField(field, value) {
+  const calcState = state.admin.landedCost;
+  if (!Object.prototype.hasOwnProperty.call(calcState, field)) return;
+  calcState[field] = value;
+  calcState.result = null;
+  calcState.errors = [];
+}
+
+function updateLandedCostRow(index, field, value) {
+  const rowIndex = Number(index);
+  const row = state.admin.landedCost.rows[rowIndex];
+  if (!row || !["productId", "qty", "chinaUnitCost"].includes(field)) return;
+  row[field] = field === "productId" ? normalizeProductId(value) : value;
+  state.admin.landedCost.result = null;
+  state.admin.landedCost.errors = [];
+}
+
+function addLandedCostRow() {
+  state.admin.landedCost.rows.push(createEmptyLandedCostRow());
+  state.admin.landedCost.result = null;
+  state.admin.landedCost.errors = [];
+  renderLandedCostSheet();
+}
+
+function removeLandedCostRow(index) {
+  const rowIndex = Number(index);
+  if (!Number.isInteger(rowIndex)) return;
+  const rows = state.admin.landedCost.rows;
+  rows.splice(rowIndex, 1);
+  if (!rows.length) rows.push(createEmptyLandedCostRow());
+  state.admin.landedCost.result = null;
+  state.admin.landedCost.errors = [];
+  renderLandedCostSheet();
+}
+
+function resetLandedCostCalculator() {
+  state.admin.landedCost = {
+    batchName: "",
+    chinaDomesticShipping: "",
+    chinaToThailandShipping: "",
+    thailandShipping: "",
+    otherFees: "",
+    profitPercent: "",
+    roundingMode: "ceil",
+    rows: [createEmptyLandedCostRow()],
+    result: null,
+    errors: []
+  };
+  renderLandedCostSheet();
+}
+
+function validateLandedCostInput() {
+  const calcState = state.admin.landedCost;
+  const errors = [];
+  const feeFields = [
+    ["chinaDomesticShipping", "ค่าส่งในจีน"],
+    ["chinaToThailandShipping", "ค่าส่งจีนมาไทย"],
+    ["thailandShipping", "ค่าส่งในไทย"],
+    ["otherFees", "ค่าใช้จ่ายอื่น ๆ"]
+  ];
+  const fees = {};
+
+  feeFields.forEach(([field, label]) => {
+    const parsed = parseNonNegativeNumber(calcState[field]);
+    if (!parsed.valid) errors.push(`${label} ต้องเป็นตัวเลข 0 ขึ้นไป`);
+    fees[field] = parsed.value;
+  });
+
+  const profit = parseNonNegativeNumber(calcState.profitPercent);
+  if (!profit.valid) errors.push("% กำไรที่ต้องการต้องเป็นตัวเลข 0 ขึ้นไป");
+
+  const rows = calcState.rows.map((row, index) => {
+    const rowNumber = index + 1;
+    const productId = normalizeProductId(row.productId);
+    const qty = Number(row.qty);
+    const chinaUnitCost = Number(row.chinaUnitCost);
+
+    if (!Number.isInteger(qty) || qty <= 0) {
+      errors.push(`แถว ${rowNumber}: จำนวนต้องเป็นจำนวนเต็มมากกว่า 0`);
+    }
+    if (!Number.isFinite(chinaUnitCost) || chinaUnitCost < 0) {
+      errors.push(`แถว ${rowNumber}: ต้นทุนจีน/ชิ้นต้องเป็นตัวเลข 0 ขึ้นไป`);
+    }
+
+    return {
+      productId,
+      name: getLandedCostProductName(productId),
+      qty,
+      chinaUnitCost,
+      itemBaseCost: Number.isFinite(chinaUnitCost) && Number.isFinite(qty)
+        ? chinaUnitCost * qty
+        : 0
+    };
+  });
+
+  const usableRows = rows.filter(row =>
+    Number.isInteger(row.qty) &&
+    row.qty > 0 &&
+    Number.isFinite(row.chinaUnitCost) &&
+    row.chinaUnitCost >= 0
+  );
+  const batchBaseCost = usableRows.reduce((sum, row) => sum + row.itemBaseCost, 0);
+
+  if (!usableRows.length) errors.push("กรุณาเพิ่มสินค้าอย่างน้อย 1 แถว");
+  if (batchBaseCost <= 0) errors.push("มูลค่าสินค้ารวมต้องมากกว่า 0 ก่อนคำนวณ");
+
+  return { errors, fees, profitPercent: profit.value, rows: usableRows, batchBaseCost };
+}
+
+function calculateLandedCost() {
+  if (!ensureAdminSessionForLandedCost()) return;
+
+  const calcState = state.admin.landedCost;
+  const validation = validateLandedCostInput();
+  calcState.errors = validation.errors;
+  calcState.result = null;
+
+  if (validation.errors.length) {
+    renderLandedCostSheet();
+    return;
+  }
+
+  const sharedFees =
+    validation.fees.chinaDomesticShipping +
+    validation.fees.chinaToThailandShipping +
+    validation.fees.thailandShipping +
+    validation.fees.otherFees;
+  const roundingMode = calcState.roundingMode || "ceil";
+  const rows = validation.rows.map(row => {
+    const allocationRatio = row.itemBaseCost / validation.batchBaseCost;
+    const allocatedFee = sharedFees * allocationRatio;
+    const landedCostPerItem = (row.itemBaseCost + allocatedFee) / row.qty;
+    const suggestedCostPrice = roundLandedCostValue(landedCostPerItem, roundingMode);
+    const suggestedSellingPrice = roundLandedCostValue(
+      suggestedCostPrice * (1 + validation.profitPercent / 100),
+      roundingMode
+    );
+
+    return {
+      ...row,
+      allocatedFee,
+      landedCostPerItem,
+      suggestedCostPrice,
+      suggestedSellingPrice
+    };
+  });
+
+  calcState.result = {
+    batchName: String(calcState.batchName || "").trim(),
+    batchBaseCost: validation.batchBaseCost,
+    sharedFees,
+    totalLandedCost: validation.batchBaseCost + sharedFees,
+    profitPercent: validation.profitPercent,
+    roundingMode,
+    rows
+  };
+  renderLandedCostSheet();
+}
+
+function formatLandedCostMoney(value, digits = 2) {
+  return `฿${Number(value || 0).toLocaleString("th-TH", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  })}`;
+}
+
+function renderLandedCostErrors() {
+  const errors = state.admin.landedCost.errors || [];
+  if (!errors.length) return "";
+  return `
+    <ul class="bulk-error-list" role="alert" style="margin-top:10px">
+      ${errors.map(error => `<li>${esc(error)}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function renderLandedCostRows() {
+  const rows = state.admin.landedCost.rows;
+  return rows.map((row, index) => {
+    const productName = getLandedCostProductName(row.productId);
+    return `
+      <div class="bulk-preview-card">
+        <div class="form-group">
+          <label>SKU / Product ID</label>
+          <input value="${escAttr(row.productId || "")}" placeholder="เช่น BN007"
+            oninput="updateLandedCostRow(${index}, 'productId', this.value)">
+          ${productName ? `<div class="helper-text">สินค้า: ${esc(productName)}</div>` : ""}
+        </div>
+        <div class="form-group">
+          <label>จำนวน</label>
+          <input type="number" min="1" step="1" value="${escAttr(row.qty || "")}" placeholder="0"
+            oninput="updateLandedCostRow(${index}, 'qty', this.value)">
+        </div>
+        <div class="form-group">
+          <label>ต้นทุนจีน/ชิ้น</label>
+          <input type="number" min="0" step="0.01" value="${escAttr(row.chinaUnitCost || "")}" placeholder="0"
+            oninput="updateLandedCostRow(${index}, 'chinaUnitCost', this.value)">
+        </div>
+        <button class="btn btn-outline" type="button" onclick="removeLandedCostRow(${index})">
+          ลบแถว
+        </button>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderLandedCostResult() {
+  const result = state.admin.landedCost.result;
+  if (!result) {
+    return `<div class="empty-state">กรอกต้นทุนและกดคำนวณ เพื่อดูต้นทุนจริงต่อชิ้นและราคาขายแนะนำ</div>`;
+  }
+
+  return `
+    <div class="cart-summary">
+      <div class="summary-row"><span>ต้นทุนสินค้ารวม</span><strong>${formatLandedCostMoney(result.batchBaseCost)}</strong></div>
+      <div class="summary-row"><span>ค่าใช้จ่ายรวม</span><strong>${formatLandedCostMoney(result.sharedFees)}</strong></div>
+      <div class="summary-row"><span>ต้นทุนรวมหลังลงค่าใช้จ่าย</span><strong>${formatLandedCostMoney(result.totalLandedCost)}</strong></div>
+      <div class="summary-row"><span>% กำไรที่ต้องการ</span><strong>${Number(result.profitPercent || 0).toLocaleString("th-TH")}%</strong></div>
+    </div>
+
+    <div class="bulk-preview-list">
+      ${result.rows.map(row => `
+        <div class="bulk-preview-card">
+          <div class="name">${esc(row.productId || "-")}</div>
+          ${row.name ? `<div class="helper-text">${esc(row.name)}</div>` : ""}
+          <div class="bulk-preview-meta">
+            จำนวน: ${Number(row.qty || 0).toLocaleString("th-TH")}<br>
+            ต้นทุนสินค้า: ${formatLandedCostMoney(row.itemBaseCost)}<br>
+            ค่าใช้จ่ายที่เฉลี่ย: ${formatLandedCostMoney(row.allocatedFee)}<br>
+            ต้นทุนจริง/ชิ้น: ${formatLandedCostMoney(row.landedCostPerItem)}<br>
+            suggested costPrice: <strong>${Number(row.suggestedCostPrice || 0).toLocaleString("th-TH")}</strong><br>
+            suggested selling price: <strong>${Number(row.suggestedSellingPrice || 0).toLocaleString("th-TH")}</strong>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderLandedCostSheet() {
+  const calcState = state.admin.landedCost;
+  adminLandedCostSheet.innerHTML = `
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn" onclick="closeLandedCostSheet()" aria-label="ปิดหน้าต่างคำนวณต้นทุนนำเข้า">×</button>
+      <h3 id="adminLandedCostSheetTitle">คำนวณต้นทุนนำเข้า</h3>
+      <div aria-hidden="true"></div>
+    </div>
+
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">รอบนำเข้า</div>
+      <div class="helper-text">รอบนี้เป็นการคำนวณตัวอย่าง ยังไม่บันทึกเข้า Products</div>
+      <div class="form-group" style="margin-top:10px">
+        <label>ชื่อรอบ</label>
+        <input value="${escAttr(calcState.batchName || "")}" placeholder="รอบจีน 2026-06-17" oninput="updateLandedCostField('batchName', this.value)">
+      </div>
+      <div class="form-group"><label>ค่าส่งในจีน</label><input type="number" min="0" step="0.01" value="${escAttr(calcState.chinaDomesticShipping || "")}" placeholder="0" oninput="updateLandedCostField('chinaDomesticShipping', this.value)"></div>
+      <div class="form-group"><label>ค่าส่งจีนมาไทย</label><input type="number" min="0" step="0.01" value="${escAttr(calcState.chinaToThailandShipping || "")}" placeholder="0" oninput="updateLandedCostField('chinaToThailandShipping', this.value)"></div>
+      <div class="form-group"><label>ค่าส่งในไทย</label><input type="number" min="0" step="0.01" value="${escAttr(calcState.thailandShipping || "")}" placeholder="0" oninput="updateLandedCostField('thailandShipping', this.value)"></div>
+      <div class="form-group"><label>ค่าใช้จ่ายอื่น ๆ</label><input type="number" min="0" step="0.01" value="${escAttr(calcState.otherFees || "")}" placeholder="0" oninput="updateLandedCostField('otherFees', this.value)"></div>
+      <div class="form-group"><label>% กำไรที่ต้องการ</label><input type="number" min="0" step="0.01" value="${escAttr(calcState.profitPercent || "")}" placeholder="เช่น 30" oninput="updateLandedCostField('profitPercent', this.value)"></div>
+      <div class="form-group">
+        <label>วิธีปัดเศษ</label>
+        <select onchange="updateLandedCostField('roundingMode', this.value)">
+          <option value="ceil" ${calcState.roundingMode === "ceil" ? "selected" : ""}>ปัดขึ้น (ceil)</option>
+          <option value="round" ${calcState.roundingMode === "round" ? "selected" : ""}>ปัดใกล้สุด (round)</option>
+          <option value="floor" ${calcState.roundingMode === "floor" ? "selected" : ""}>ปัดลง (floor)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">รายการสินค้า</div>
+      <div class="helper-text">เพิ่ม SKU, จำนวน และต้นทุนจีนต่อชิ้น ระบบจะเฉลี่ยค่าใช้จ่ายตามมูลค่าสินค้า</div>
+      <div class="bulk-preview-list" style="margin-top:10px">${renderLandedCostRows()}</div>
+      <button class="btn btn-outline" type="button" onclick="addLandedCostRow()" style="margin-top:10px">เพิ่มแถวสินค้า</button>
+    </div>
+
+    ${renderLandedCostErrors()}
+
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">ผลคำนวณ</div>
+      ${renderLandedCostResult()}
+    </div>
+
+    <div class="sheet-action-footer">
+      <button class="btn btn-primary" type="button" onclick="calculateLandedCost()">คำนวณ</button>
+      <button class="btn btn-outline" type="button" onclick="resetLandedCostCalculator()">ล้างข้อมูล</button>
+      <button class="btn btn-outline" type="button" onclick="backToAdminMenuFromLandedCost()">กลับเมนูแอดมิน</button>
+    </div>
+  `;
+}
+
+function openLandedCostSheet() {
+  if (!ensureAdminSessionForLandedCost()) return;
+  renderLandedCostSheet();
+  openOverlay(adminLandedCostSheet);
+}
+
+function closeLandedCostSheet() {
+  closeOverlay(adminLandedCostSheet);
+}
+
+function backToAdminMenuFromLandedCost() {
+  closeLandedCostSheet();
+  syncOverlayBackdropState();
+  requestAnimationFrame(() => {
+    openMainMenu();
+    syncOverlayBackdropState();
+  });
 }
 
 function ensureAdminSessionForPartnerCatalog() {
