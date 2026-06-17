@@ -3588,6 +3588,7 @@ Object.assign(window, {
   addSelectedLandedCostProducts,
   prepareLandedCostApplyPreview,
   toggleLandedCostApplyRow,
+  applyLandedCostPreview,
   calculateLandedCost,
   resetLandedCostCalculator,
   openPartnerCatalogSheet,
@@ -3739,6 +3740,9 @@ const state = {
       applyPreviewRows: [],
       applySelectedIds: [],
       applyMessage: "",
+      applyStatus: "",
+      applyError: "",
+      appliedCount: 0,
       result: null,
       errors: []
     },
@@ -12167,6 +12171,12 @@ function createLandedCostRowFromProduct(product) {
   };
 }
 
+function clearLandedCostApplyStatus(calcState = state.admin.landedCost) {
+  calcState.applyStatus = "";
+  calcState.applyError = "";
+  calcState.appliedCount = 0;
+}
+
 function parseNonNegativeNumber(value) {
   const text = String(value ?? "").trim();
   if (text === "") return { valid: true, value: 0 };
@@ -12190,6 +12200,7 @@ function updateLandedCostField(field, value) {
   calcState.applyPreviewRows = [];
   calcState.applySelectedIds = [];
   calcState.applyMessage = "";
+  clearLandedCostApplyStatus(calcState);
 }
 
 function updateLandedCostRow(index, field, value) {
@@ -12215,6 +12226,7 @@ function updateLandedCostRow(index, field, value) {
   state.admin.landedCost.applyPreviewRows = [];
   state.admin.landedCost.applySelectedIds = [];
   state.admin.landedCost.applyMessage = "";
+  clearLandedCostApplyStatus();
 }
 
 function addLandedCostRow() {
@@ -12224,6 +12236,7 @@ function addLandedCostRow() {
   state.admin.landedCost.applyPreviewRows = [];
   state.admin.landedCost.applySelectedIds = [];
   state.admin.landedCost.applyMessage = "";
+  clearLandedCostApplyStatus();
   renderLandedCostSheet();
 }
 
@@ -12238,6 +12251,7 @@ function removeLandedCostRow(index) {
   state.admin.landedCost.applyPreviewRows = [];
   state.admin.landedCost.applySelectedIds = [];
   state.admin.landedCost.applyMessage = "";
+  clearLandedCostApplyStatus();
   renderLandedCostSheet();
 }
 
@@ -12374,6 +12388,7 @@ function addSelectedLandedCostProducts() {
   calcState.applyPreviewRows = [];
   calcState.applySelectedIds = [];
   calcState.applyMessage = "";
+  clearLandedCostApplyStatus(calcState);
   calcState.pickerMessage = added
     ? `เพิ่มสินค้าเข้ารอบคำนวณแล้ว ${added} รายการ${skipped ? ` · ข้ามรายการซ้ำ ${skipped} รายการ` : ""}`
     : skipped
@@ -12400,6 +12415,9 @@ function resetLandedCostCalculator() {
     applyPreviewRows: [],
     applySelectedIds: [],
     applyMessage: "",
+    applyStatus: "",
+    applyError: "",
+    appliedCount: 0,
     result: null,
     errors: []
   };
@@ -12521,6 +12539,7 @@ function calculateLandedCost() {
   calcState.applyPreviewRows = [];
   calcState.applySelectedIds = [];
   calcState.applyMessage = "";
+  clearLandedCostApplyStatus(calcState);
   renderLandedCostSheet();
 }
 
@@ -12582,6 +12601,7 @@ function prepareLandedCostApplyPreview() {
   calcState.applyMessage = previewRows.length
     ? `เตรียมรายการอัปเดตแล้ว ${previewRows.length} รายการ${skippedRows.length ? ` · ข้าม ${skippedRows.length} รายการที่ไม่พบสินค้าในระบบ` : ""}`
     : "ไม่มีรายการที่พร้อมอัปเดต กรุณาตรวจสอบ SKU ในรอบคำนวณ";
+  clearLandedCostApplyStatus(calcState);
   renderLandedCostSheet();
 }
 
@@ -12600,7 +12620,147 @@ function toggleLandedCostApplyRow(productId, checked) {
     selected.delete(normalizedId);
   }
   state.admin.landedCost.applySelectedIds = Array.from(selected);
+  clearLandedCostApplyStatus();
   renderLandedCostSheet();
+}
+
+function getSelectedLandedCostApplyRows() {
+  const calcState = state.admin.landedCost;
+  const selected = new Set(
+    Array.isArray(calcState.applySelectedIds)
+      ? calcState.applySelectedIds.map(normalizeProductId).filter(Boolean)
+      : []
+  );
+  const rows = Array.isArray(calcState.applyPreviewRows)
+    ? calcState.applyPreviewRows
+    : [];
+  return rows.filter(row => selected.has(normalizeProductId(row.productId)));
+}
+
+function buildLandedCostApplyItems() {
+  const productMap = getLandedCostProductMap();
+  const errors = [];
+  const items = [];
+  const seen = new Set();
+
+  getSelectedLandedCostApplyRows().forEach(row => {
+    const productId = normalizeProductId(row.productId);
+    const suggestedCostPrice = Number(row.suggestedCostPrice);
+    const suggestedPrice = Number(row.suggestedPrice);
+
+    if (!productId) {
+      errors.push("พบรายการที่ไม่มี SKU / Product ID");
+      return;
+    }
+    if (seen.has(productId)) {
+      errors.push(`SKU ${productId} ซ้ำในรายการที่จะบันทึก`);
+      return;
+    }
+    if (!productMap.has(productId)) {
+      errors.push(`ไม่พบสินค้า ${productId} ในระบบ จึงไม่สามารถบันทึกได้`);
+      return;
+    }
+    if (!Number.isInteger(suggestedCostPrice) || suggestedCostPrice < 0) {
+      errors.push(`ต้นทุนใหม่ของ ${productId} ต้องเป็นจำนวนเต็ม 0 ขึ้นไป`);
+      return;
+    }
+    if (!Number.isInteger(suggestedPrice) || suggestedPrice < 0) {
+      errors.push(`ราคาขายใหม่ของ ${productId} ต้องเป็นจำนวนเต็ม 0 ขึ้นไป`);
+      return;
+    }
+
+    seen.add(productId);
+    items.push({
+      productId,
+      costPrice: suggestedCostPrice,
+      price: suggestedPrice
+    });
+  });
+
+  if (!items.length && !errors.length) {
+    errors.push("กรุณาเลือกรายการอย่างน้อย 1 รายการก่อนบันทึก");
+  }
+
+  return { items, errors };
+}
+
+async function applyLandedCostPreview() {
+  if (!ensureAdminSessionForLandedCost()) return;
+  if (state.admin.isSubmitting) return;
+
+  const calcState = state.admin.landedCost;
+  const { items, errors } = buildLandedCostApplyItems();
+  if (errors.length) {
+    calcState.applyError = errors.join(" · ");
+    calcState.applyStatus = "";
+    calcState.appliedCount = 0;
+    renderLandedCostSheet();
+    showToast(calcState.applyError, "warning");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `ยืนยันบันทึกราคาทุน/ราคาขายจริง ${items.length} รายการ?\n\nระบบจะอัปเดต costPrice และ price ใน Products จริง\nกรุณาตรวจสอบก่อนบันทึกจริง`
+  );
+  if (!confirmed) return;
+
+  state.admin.isSubmitting = true;
+  calcState.applyError = "";
+  calcState.applyStatus = "";
+  calcState.appliedCount = 0;
+  renderLandedCostSheet();
+
+  try {
+    showLoading("กำลังบันทึกราคาทุน/ราคาขาย...");
+    const form = new URLSearchParams();
+    form.append("action", "bulkUpdateProducts");
+    form.append("token", state.admin.token);
+    form.append("items", JSON.stringify(items));
+
+    const res = await fetchWithTimeout(API_URL, {
+      method: "POST",
+      body: form
+    }, 45000);
+    const json = await res.json();
+
+    if (json?.success === true) {
+      const updated = Number(json.updated || json.data?.updated || items.length);
+      calcState.applyStatus = `บันทึกสำเร็จ ${updated} รายการ`;
+      calcState.applyError = "";
+      calcState.appliedCount = updated;
+      showToast(calcState.applyStatus, "success");
+      await refreshProducts();
+      renderLandedCostSheet();
+      return;
+    }
+
+    const backendErrors = Array.isArray(json?.data?.errors)
+      ? json.data.errors.join(" · ")
+      : "";
+    calcState.applyError = backendErrors || json?.message || json?.error || "บันทึกราคาทุน/ราคาขายไม่สำเร็จ";
+    calcState.applyStatus = "";
+    calcState.appliedCount = 0;
+    renderLandedCostSheet();
+    if (isAuthError(json?.error)) {
+      showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
+      exitAdmin({ silent: true });
+      return;
+    }
+    showToast(calcState.applyError, "error");
+  } catch (err) {
+    console.error(err);
+    calcState.applyError = "บันทึกราคาทุน/ราคาขายไม่สำเร็จ กรุณาลองใหม่อีกครั้ง";
+    calcState.applyStatus = "";
+    calcState.appliedCount = 0;
+    renderLandedCostSheet();
+    showToast(calcState.applyError, "error");
+  } finally {
+    safeHideLoading();
+    state.ui.backdropLocked = false;
+    state.admin.isSubmitting = false;
+    renderLandedCostSheet();
+    requestAnimationFrame(syncOverlayBackdropState);
+  }
 }
 
 function formatLandedCostMoney(value, digits = 2) {
@@ -12912,8 +13072,24 @@ function renderLandedCostApplyPreview() {
           `;
         }).join("")}
       </div>
-      <button class="btn btn-outline" type="button" disabled style="margin-top:10px">
-        บันทึกจริงจะทำในขั้นตอนถัดไป
+      ${
+        calcState.applyStatus
+          ? `<div class="success-box" style="margin-top:10px">${esc(calcState.applyStatus)}</div>`
+          : ""
+      }
+      ${
+        calcState.applyError
+          ? `<div class="bulk-error-list" role="alert" style="margin-top:10px">${esc(calcState.applyError)}</div>`
+          : ""
+      }
+      <div class="helper-text" style="margin-top:10px">
+        ยืนยันก่อนบันทึกจริง ระบบจะอัปเดตต้นทุนและราคาขายใน Products เฉพาะรายการที่เลือก
+      </div>
+      <button class="btn btn-primary" type="button"
+        onclick="applyLandedCostPreview()"
+        ${state.admin.isSubmitting || !selectedRows.length ? "disabled" : ""}
+        style="margin-top:10px">
+        ${state.admin.isSubmitting ? "กำลังบันทึก..." : "บันทึกราคาทุน/ราคาขาย"}
       </button>
     </div>
   `;
