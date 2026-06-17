@@ -3268,6 +3268,72 @@ textarea.input{
   font-size:14px;
 }
 
+.landed-cost-apply-list{
+  width:100%;
+  max-width:100%;
+  overflow-x:hidden;
+}
+
+.landed-cost-apply-card{
+  display:block;
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+  overflow:hidden;
+}
+
+.landed-cost-apply-head{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:10px;
+  align-items:start;
+}
+
+.landed-cost-apply-head input{
+  margin-top:3px;
+}
+
+.landed-cost-apply-body{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+
+.landed-cost-apply-values{
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+}
+
+.landed-cost-apply-value{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:4px;
+  padding:9px 10px;
+  border-radius:12px;
+  background:var(--bg-soft);
+  border:1px solid var(--border);
+  color:var(--text-soft);
+  font-size:12px;
+  line-height:1.35;
+  box-sizing:border-box;
+  min-width:0;
+}
+
+.landed-cost-apply-value strong{
+  color:var(--text);
+  font-size:14px;
+  overflow-wrap:anywhere;
+}
+
+.landed-cost-apply-diff{
+  color:var(--muted);
+  font-size:12px;
+}
+
+.landed-cost-apply-legacy{
+  display:none;
+}
+
 .bulk-product-picker{
   margin:12px 0 14px;
   padding:12px;
@@ -12801,20 +12867,36 @@ function renderLandedCostApplyPreview() {
           <strong>${formatLandedCostMoney(totalNewCost)}</strong>
         </div>
       </div>
-      <div class="bulk-preview-list">
+      <div class="bulk-preview-list landed-cost-apply-list">
         ${rows.map(row => {
           const checked = selected.has(row.productId);
           return `
-            <label class="bulk-preview-card ${checked ? "is-selected" : ""}">
-              <div style="display:flex;gap:10px;align-items:flex-start">
+            <label class="bulk-preview-card landed-cost-apply-card ${checked ? "is-selected" : ""}">
+              <div class="landed-cost-apply-head">
                 <input
                   type="checkbox"
                   ${checked ? "checked" : ""}
                   onchange="toggleLandedCostApplyRow(${toInlineJsStringLiteral(row.productId)}, this.checked)">
-                <div style="flex:1;min-width:0">
+                <div class="landed-cost-apply-body">
                   <div class="name">${esc(row.productId || "-")}</div>
                   ${row.name ? `<div class="helper-text">${esc(row.name)}</div>` : ""}
-                  <div class="bulk-preview-meta">
+                  <div class="landed-cost-apply-values">
+                    <div class="landed-cost-apply-value">
+                      <span>Qty: ${Number(row.qty || 0).toLocaleString("th-TH")}</span>
+                      <strong>Landed cost/item: ${formatLandedCostMoney(row.landedCostPerItem)}</strong>
+                    </div>
+                    <div class="landed-cost-apply-value">
+                      <span>costPrice current: ${Number(row.currentCostPrice || 0).toLocaleString("th-TH")}</span>
+                      <strong>suggested: ${Number(row.suggestedCostPrice || 0).toLocaleString("th-TH")}</strong>
+                      <span class="landed-cost-apply-diff">diff: ${formatLandedCostDiff(row.costPriceDiff)}</span>
+                    </div>
+                    <div class="landed-cost-apply-value">
+                      <span>price current: ${Number(row.currentPrice || 0).toLocaleString("th-TH")}</span>
+                      <strong>suggested: ${Number(row.suggestedPrice || 0).toLocaleString("th-TH")}</strong>
+                      <span class="landed-cost-apply-diff">diff: ${formatLandedCostDiff(row.priceDiff)}</span>
+                    </div>
+                  </div>
+                  <div class="bulk-preview-meta landed-cost-apply-legacy">
                     จำนวนในรอบ: ${Number(row.qty || 0).toLocaleString("th-TH")}<br>
                     ต้นทุนจริง/ชิ้น: ${formatLandedCostMoney(row.landedCostPerItem)}<br>
                     costPrice เดิม: ${Number(row.currentCostPrice || 0).toLocaleString("th-TH")}
