@@ -7723,6 +7723,95 @@ function renderPartnerOrderSourceBadge(order, options = {}) {
   `;
 }
 
+function getAdminOrderStatusClass(status) {
+  return {
+    PENDING: "status-pending",
+    APPROVED: "status-approved",
+    REJECTED: "status-rejected"
+  }[String(status || "").toUpperCase()] || "status-neutral";
+}
+
+function getAdminOrderSourceLabel(order) {
+  const source = String(order?.source || "").trim();
+  if (!source) return "Viewer";
+  if (source === "partner_request") return "คำขอคู่ค้า";
+  return source;
+}
+
+function renderAdminOrderSummary(order) {
+  const partnerRequestId = String(order?.partnerRequestId || "").trim();
+  const partnerName = String(order?.partnerNameSnapshot || order?.partnerId || "").trim();
+  const createdAt = getOrderDateValue(order);
+  const approvedAt = order?.approvedAt || "";
+  const status = String(order?.status || "-").trim();
+
+  return `
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">สรุปออเดอร์ / PO</div>
+      <div class="cart-summary" style="margin-top:0">
+        <div class="summary-row">
+          <span>PO</span>
+          <strong>${esc(order?.poNumber || "-")}</strong>
+        </div>
+        <div class="summary-row">
+          <span>Order ID</span>
+          <strong>${esc(order?.orderId || "-")}</strong>
+        </div>
+        <div class="summary-row">
+          <span>สถานะ</span>
+          <span class="status-badge ${getAdminOrderStatusClass(status)}">
+            ${esc(status || "-")}
+          </span>
+        </div>
+        <div class="summary-row">
+          <span>ที่มา</span>
+          <strong>${esc(getAdminOrderSourceLabel(order))}</strong>
+        </div>
+        ${
+          partnerRequestId
+            ? `
+              <div class="summary-row">
+                <span>Partner Request ID</span>
+                <strong>${esc(partnerRequestId)}</strong>
+              </div>
+            `
+            : ""
+        }
+        ${
+          partnerName
+            ? `
+              <div class="summary-row">
+                <span>Partner</span>
+                <strong>${esc(partnerName)}</strong>
+              </div>
+            `
+            : ""
+        }
+        ${
+          createdAt
+            ? `
+              <div class="summary-row">
+                <span>สร้างเมื่อ</span>
+                <strong>${esc(formatThaiDate(createdAt))}</strong>
+              </div>
+            `
+            : ""
+        }
+        ${
+          approvedAt
+            ? `
+              <div class="summary-row">
+                <span>อนุมัติเมื่อ</span>
+                <strong>${esc(formatThaiDate(approvedAt))}</strong>
+              </div>
+            `
+            : ""
+        }
+      </div>
+    </div>
+  `;
+}
+
 
 function handleOpenStockTimeline(){
   allowOpenStockTimeline = true;
@@ -8179,7 +8268,7 @@ adminOrderSheet.innerHTML = `
 
   <h3 id="adminOrderSheetTitle">${esc(order.orderId)}</h3>
 
-  ${renderPartnerOrderSourceBadge(order)}
+  ${renderAdminOrderSummary(order)}
 
  ${
    order.status !== "PENDING" &&
