@@ -5063,6 +5063,7 @@ if (
       <div class="info">
         <div class="name">${escapeHTML(p.name)}</div>
         <div class="sku">รหัส: ${escapeHTML(p.productId)}</div>
+        ${renderAdminProductVariantMeta(p)}
         <div class="price">ราคา: ฿${Number(p.price).toLocaleString()}</div>
 
         <div class="meta">
@@ -9152,6 +9153,13 @@ function openAddProduct(force = false){
   const safeDraftCostPrice = escAttr(draft.costPrice || "");
   const safeDraftStock = escAttr(draft.stock || "");
   const safeNote = esc(draft.note || "");
+  const draftVariant = {
+    parentProductId: draft.parentProductId || "",
+    variantType: draft.variantType || "",
+    variantValue: draft.variantValue || "",
+    displayName: draft.displayName || "",
+    variantSortOrder: draft.variantSortOrder || ""
+  };
  
   adminAddProductSheet.innerHTML = `
     <div class="sheet-topbar">
@@ -9223,6 +9231,8 @@ function openAddProduct(force = false){
       </select>
     </div>
     </div>
+
+${renderProductVariantFields("add", draftVariant)}
 
 <!-- 📝 NEW: NOTE FIELD -->
 <div class="admin-detail-section">
@@ -9338,6 +9348,10 @@ function closeAddProduct(){
    if (document.getElementById("addNote")) {
      document.getElementById("addNote").value = "";
    }
+   PRODUCT_VARIANT_FIELDS.forEach(field => {
+     const input = document.getElementById(`add${field}`);
+     if (input) input.value = "";
+   });
    if (document.getElementById("addContinueMode")) {
      document.getElementById("addContinueMode").checked = false;
    }
@@ -9347,7 +9361,12 @@ function closeAddProduct(){
      costPrice: "",
      stock: "",
      status: "ready",
-     note: ""
+     note: "",
+     parentProductId: "",
+     variantType: "",
+     variantValue: "",
+     displayName: "",
+     variantSortOrder: ""
    };
  } 
 
@@ -9630,6 +9649,13 @@ function openProductEdit(p){
   const safeEditStock = escAttr(latestProduct.stock ?? "");
   const safeEditNote = esc(latestProduct.note || "");
   const safeEditDetailsText = esc(latestProduct.detailsText || "");
+  const editVariant = {
+    parentProductId: latestProduct.parentProductId || "",
+    variantType: latestProduct.variantType || "",
+    variantValue: latestProduct.variantValue || "",
+    displayName: latestProduct.displayName || "",
+    variantSortOrder: latestProduct.variantSortOrder || ""
+  };
   const editStockQty = Number(latestProduct.stock) || 0;
   const editStatusKey = normalizeProductStatus(
     latestProduct.status || (editStockQty <= 0 ? "out" : "ready")
@@ -9728,6 +9754,8 @@ function openProductEdit(p){
         </option>
       </select>
     </div>
+
+    ${renderProductVariantFields("edit", editVariant)}
 
     <!-- 📝 NEW: NOTE FIELD -->
     <div class="form-group">
@@ -10098,6 +10126,7 @@ async function submitProductEdit(){
   );
   const oldProductId = normalizeProductId(p.productId);
   const note   = document.getElementById("editNote")?.value.trim() || "";
+  const variantMetadata = getProductVariantFormValues("edit");
   const detailsText =
   document.getElementById("editDetailsText")?.value.trim() || "";
 
@@ -10130,6 +10159,18 @@ async function submitProductEdit(){
   }
 
   // 🔒 SKU Duplicate Check (วางตรงนี้เท่านั้น)
+  try {
+    validateProductVariantFormValues(variantMetadata);
+  } catch (err) {
+    showToast(err.message || "ข้อมูลตัวเลือกสินค้าไม่ถูกต้อง", "error");
+    state.admin.isSubmitting = false;
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalText;
+    }
+    return;
+  }
+
  const duplicate = state.products.find(x =>
    normalizeProductId(x.productId) === newProductId &&
    normalizeProductId(x.productId) !== oldProductId
@@ -10176,6 +10217,7 @@ async function submitProductEdit(){
     form.append("status", status);
     form.append("image", imageUrl);
     form.append("note", note);
+    appendProductVariantFieldsToForm(form, variantMetadata);
     form.append("detailsText", detailsText);
     form.append("compareImages", compareImages);
 
@@ -10294,10 +10336,94 @@ function normalizeProductId(value = "") {
  }
 
 const ALLOWED_PRODUCT_STATUS = ["ready", "ready_plus", "shipping", "warehouse", "out"];
+const PRODUCT_VARIANT_FIELDS = [
+  "parentProductId",
+  "variantType",
+  "variantValue",
+  "displayName",
+  "variantSortOrder"
+];
 
 function normalizeProductStatus(value = "") {
   const normalized = String(value || "").trim().toLowerCase();
   return ALLOWED_PRODUCT_STATUS.includes(normalized) ? normalized : "ready";
+}
+
+function getProductVariantFormValues(prefix) {
+  const values = {};
+  PRODUCT_VARIANT_FIELDS.forEach(field => {
+    const input = document.getElementById(`${prefix}${field}`);
+    values[field] = input ? input.value.trim() : "";
+  });
+  return values;
+}
+
+function validateProductVariantFormValues(values) {
+  const sortValue = String(values?.variantSortOrder || "").trim();
+  if (sortValue !== "" && !Number.isInteger(Number(sortValue))) {
+    throw new Error("ลำดับไซส์ต้องเป็นตัวเลขจำนวนเต็ม");
+  }
+}
+
+function appendProductVariantFieldsToForm(form, values) {
+  PRODUCT_VARIANT_FIELDS.forEach(field => {
+    form.append(field, values?.[field] || "");
+  });
+}
+
+function renderProductVariantFields(prefix, values = {}) {
+  const id = field => `${prefix}${field}`;
+  return `
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">ข้อมูลสินค้าแบบมีไซส์/ตัวเลือก</div>
+      <div class="helper-text">
+        กรอกเฉพาะสินค้าที่ต้องการจัดกลุ่มเป็นสินค้าแม่ + ตัวเลือก เช่น ไซส์ S/M/L/XL
+      </div>
+      <div class="form-group">
+        <label for="${id("parentProductId")}">รหัสสินค้าแม่ / รหัสกลุ่ม</label>
+        <input id="${id("parentProductId")}" value="${escAttr(values.parentProductId || "")}" placeholder="เช่น BY506">
+      </div>
+      <div class="form-group">
+        <label for="${id("variantType")}">ประเภทตัวเลือก</label>
+        <input id="${id("variantType")}" value="${escAttr(values.variantType || "")}" placeholder="เช่น size">
+      </div>
+      <div class="form-group">
+        <label for="${id("variantValue")}">ค่าไซส์/ตัวเลือก</label>
+        <input id="${id("variantValue")}" value="${escAttr(values.variantValue || "")}" placeholder="เช่น S, M, L, XL">
+      </div>
+      <div class="form-group">
+        <label for="${id("displayName")}">ชื่อแสดงรวม</label>
+        <input id="${id("displayName")}" value="${escAttr(values.displayName || "")}" placeholder="เช่น เสื้อ Human Made Bangkok Animal Graphic สีดำ">
+      </div>
+      <div class="form-group">
+        <label for="${id("variantSortOrder")}">ลำดับไซส์</label>
+        <input id="${id("variantSortOrder")}" type="number" step="1" value="${escAttr(values.variantSortOrder || "")}" placeholder="เช่น 1, 2, 3, 4">
+      </div>
+    </div>
+  `;
+}
+
+function renderAdminProductVariantMeta(product) {
+  if (state.mode !== "admin" || !product) return "";
+
+  const parentProductId = String(product.parentProductId || "").trim();
+  const variantType = String(product.variantType || "").trim();
+  const variantValue = String(product.variantValue || "").trim();
+  const displayName = String(product.displayName || "").trim();
+  const variantSortOrder = String(product.variantSortOrder || "").trim();
+
+  if (!parentProductId && !variantType && !variantValue && !displayName && !variantSortOrder) {
+    return "";
+  }
+
+  return `
+    <div class="sku">
+      ${parentProductId ? `กลุ่ม: ${escapeHTML(parentProductId)}` : ""}
+      ${variantType || variantValue ? `${parentProductId ? " · " : ""}${escapeHTML(variantType || "ตัวเลือก")}: ${escapeHTML(variantValue || "-")}` : ""}
+      ${variantSortOrder ? ` · ลำดับ: ${escapeHTML(variantSortOrder)}` : ""}
+      ${displayName ? `<br>ชื่อรวม: ${escapeHTML(displayName)}` : ""}
+    </div>
+  `;
 }
 
 function validateProductImageFile(file) {
@@ -10348,6 +10474,7 @@ async function submitAddProduct(btn){
    document.getElementById("addStatus").value
  );
  const note      = document.getElementById("addNote")?.value.trim() || "";
+ const variantMetadata = getProductVariantFormValues("add");
  const continueMode =
    document.getElementById("addContinueMode")?.checked === true;   
  const active    = true; // 🔒 เพิ่มสินค้าใหม่ = ยังขายอยู่เสมอ
@@ -10371,6 +10498,8 @@ async function submitAddProduct(btn){
     if (price < 0 || costPrice < 0 || stock < 0) {
       throw new Error("ราคา ราคาต้นทุน และจำนวน ต้องมากกว่าหรือเท่ากับ 0");
     }
+
+    validateProductVariantFormValues(variantMetadata);
 
     const dup = state.products.find(
       p => normalizeProductId(p.productId) === productId
@@ -10409,9 +10538,10 @@ async function submitAddProduct(btn){
     form.append("costPrice", costPrice);
     form.append("stock", stock);
   form.append("active", active);
-  form.append("status", status);
+    form.append("status", status);
     form.append("image", imageUrl);
     form.append("note", note);
+    appendProductVariantFieldsToForm(form, variantMetadata);
 
     const res = await postFormAction(form);
 
@@ -10429,7 +10559,8 @@ async function submitAddProduct(btn){
    costPrice,
    stock,
    status,
-   note
+   note,
+   ...variantMetadata
  };
  await refreshProducts();
 
@@ -10444,6 +10575,10 @@ async function submitAddProduct(btn){
    document.getElementById("addStock").value = state.smartAddDraft.stock ?? "";
    document.getElementById("addStatus").value = state.smartAddDraft.status ?? "ready";
    document.getElementById("addNote").value = state.smartAddDraft.note ?? "";
+   PRODUCT_VARIANT_FIELDS.forEach(field => {
+     const input = document.getElementById(`add${field}`);
+     if (input) input.value = state.smartAddDraft[field] ?? "";
+   });
 
    const img = document.getElementById("addImagePreview");
    if (img) {
@@ -10488,13 +10623,18 @@ const BULK_PRODUCT_COLUMNS = [
   "active",
   "note",
   "detailsText",
-  "compareImages"
+  "compareImages",
+  "parentProductId",
+  "variantType",
+  "variantValue",
+  "displayName",
+  "variantSortOrder"
 ];
 
 const BULK_PRODUCT_SAMPLE =
   BULK_PRODUCT_COLUMNS.join("\t") +
-  "\nSKU001\tสินค้าตัวอย่าง 1\t100\t70\t10\tready\thttps://example.com/image.jpg\ttrue\tหมายเหตุ\tรายละเอียด\thttps://example.com/compare.jpg" +
-  "\nSKU002\tสินค้าตัวอย่าง 2\t250\t180\t0\tout\t\ttrue\t\t\t";
+  "\nSKU001\tสินค้าตัวอย่าง 1\t100\t70\t10\tready\thttps://example.com/image.jpg\ttrue\tหมายเหตุ\tรายละเอียด\thttps://example.com/compare.jpg\tBY506\tsize\tS\tเสื้อ Human Made Bangkok Animal Graphic สีดำ\t1" +
+  "\nSKU002\tสินค้าตัวอย่าง 2\t250\t180\t0\tout\t\ttrue\t\t\t\tBY506\tsize\tM\tเสื้อ Human Made Bangkok Animal Graphic สีดำ\t2";
 
 function ensureAdminSessionForBulkImport() {
   if (
@@ -10946,7 +11086,17 @@ function normalizeBulkHeader(value) {
     note: "note",
     detailstext: "detailsText",
     details: "detailsText",
-    compareimages: "compareImages"
+    compareimages: "compareImages",
+    parentproductid: "parentProductId",
+    parent: "parentProductId",
+    groupid: "parentProductId",
+    varianttype: "variantType",
+    variantvalue: "variantValue",
+    size: "variantValue",
+    displayname: "displayName",
+    groupname: "displayName",
+    variantsortorder: "variantSortOrder",
+    sortorder: "variantSortOrder"
   };
   return map[key] || "";
 }
@@ -10968,7 +11118,12 @@ function normalizeBulkProductImportRow(row) {
     active: String(row.active || "").trim(),
     note: String(row.note || "").trim(),
     detailsText: String(row.detailsText || "").trim(),
-    compareImages: String(row.compareImages || "").trim()
+    compareImages: String(row.compareImages || "").trim(),
+    parentProductId: String(row.parentProductId || "").trim(),
+    variantType: String(row.variantType || "").trim(),
+    variantValue: String(row.variantValue || "").trim(),
+    displayName: String(row.displayName || "").trim(),
+    variantSortOrder: String(row.variantSortOrder || "").trim()
   };
 }
 
@@ -11014,6 +11169,12 @@ function validateBulkProductImportRow(item, rowNumber, seenSkus, errors) {
     !["true", "false", "1", "0"].includes(item.active.toLowerCase())
   ) {
     errors.push(bulkImportError(rowNumber, productId, "active", "active ต้องเป็น true/false/1/0 หรือเว้นว่าง"));
+  }
+  if (
+    item.variantSortOrder !== "" &&
+    !Number.isInteger(Number(item.variantSortOrder))
+  ) {
+    errors.push(bulkImportError(rowNumber, productId, "variantSortOrder", "ลำดับไซส์ต้องเป็นตัวเลขจำนวนเต็ม"));
   }
 }
 

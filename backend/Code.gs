@@ -299,6 +299,45 @@ function getProductVariantValue_(row, index) {
   return String(value).trim();
 }
 
+function parseProductVariantMetadata_(params) {
+  const source = params || {};
+  const rawSortOrder = String(source.variantSortOrder ?? "").trim();
+  let variantSortOrder = "";
+
+  if (rawSortOrder !== "") {
+    const sortOrder = Number(rawSortOrder);
+    if (!Number.isInteger(sortOrder)) {
+      throw new Error("Variant sort order must be an integer");
+    }
+    variantSortOrder = sortOrder;
+  }
+
+  return {
+    parentProductId: String(source.parentProductId || "").trim(),
+    variantType: String(source.variantType || "").trim(),
+    variantValue: String(source.variantValue || "").trim(),
+    displayName: String(source.displayName || "").trim(),
+    variantSortOrder
+  };
+}
+
+function writeProductVariantMetadata_(sheet, rowNumber, metadata, headers) {
+  if (!sheet || !rowNumber || !metadata) return;
+
+  const sourceHeaders = Array.isArray(headers) && headers.length
+    ? headers
+    : ensureProductsVariantHeaders_(getSS()).headers;
+
+  PRODUCT_OPTIONAL_VARIANT_HEADERS.forEach(header => {
+    const columnIndex = sourceHeaders.indexOf(header);
+    if (columnIndex === -1) return;
+    const value = metadata[header] === undefined || metadata[header] === null
+      ? ""
+      : metadata[header];
+    sheet.getRange(rowNumber, columnIndex + 1).setValue(value);
+  });
+}
+
 function findOrderByPartnerRequestId_(orderSheet, orderCol, requestId) {
   if (
     !orderSheet ||
@@ -3673,6 +3712,7 @@ function updateProduct(e, auth) {
     const note   = String(e.parameter.note || "").trim();
     const detailsText   = String(e.parameter.detailsText || "").trim();
     const compareImages = String(e.parameter.compareImages || "").trim();
+    const variantMetadata = parseProductVariantMetadata_(e.parameter);
 
 
     /* ================= VALIDATE ================= */
@@ -3697,6 +3737,7 @@ function updateProduct(e, auth) {
       if (!sh) {
         throw new Error("Sheet Products not found");
       }
+      const productHeaders = ensureProductsVariantHeaders_(ss).headers;
 
       const data = sh.getDataRange().getValues();
 
@@ -3748,6 +3789,12 @@ function updateProduct(e, auth) {
             sh.getRange(i + 1, 11).setValue(detailsText);   // K: detailsText
             sh.getRange(i + 1, 12).setValue(compareImages); // L: compareImages
             sh.getRange(i + 1, 13).setValue(costPrice);     // M: costPrice
+            writeProductVariantMetadata_(
+              sh,
+              i + 1,
+              variantMetadata,
+              productHeaders
+            );
 
             if (stockChanged) {
               logSheet.appendRow([
@@ -4538,6 +4585,7 @@ function addProduct(e, auth) {
   const image  = String(e.parameter.image || "").trim();
   let   status = String(e.parameter.status || "ready").trim();
   const note   = String(e.parameter.note || "").trim();
+  const variantMetadata = parseProductVariantMetadata_(e.parameter);
 
   /* ================= VALIDATE ================= */
   if (!id || !name ||
@@ -4566,6 +4614,7 @@ function addProduct(e, auth) {
 
     const sh = ss.getSheetByName("Products");
     if (!sh) throw new Error("Products sheet not found");
+    const productHeaders = ensureProductsVariantHeaders_(ss).headers;
 
     // 🆕 LOG SHEET
     const logSheet = ss.getSheetByName("stock_logs");
@@ -4598,6 +4647,13 @@ function addProduct(e, auth) {
     ]);
 
     try {
+      writeProductVariantMetadata_(
+        sh,
+        createdRowNumber,
+        variantMetadata,
+        productHeaders
+      );
+
       /* ================= LOG CREATE ================= */
       logSheet.appendRow([
         "LOG-" + Date.now(), // logId
@@ -4672,6 +4728,7 @@ function bulkAddProducts(e, auth) {
     if (!productSheet) {
       throw new Error("Products sheet not found");
     }
+    const productHeaders = ensureProductsVariantHeaders_(ss).headers;
 
     const logSheet = ss.getSheetByName("stock_logs");
     if (!logSheet) {
@@ -4719,6 +4776,12 @@ function bulkAddProducts(e, auth) {
           product.compareImages,
           product.costPrice
         ]);
+        writeProductVariantMetadata_(
+          productSheet,
+          productSheet.getLastRow(),
+          product.variantMetadata,
+          productHeaders
+        );
         createdProductIds.push(product.productId);
       });
 
@@ -5141,9 +5204,24 @@ function validateBulkProductItems(items, existingSkus) {
     const note = String(item && item.note || "").trim();
     const detailsText = String(item && item.detailsText || "").trim();
     const compareImages = String(item && item.compareImages || "").trim();
+    let variantMetadata;
     const activeResult = parseBulkProductActive(item ? item.active : undefined);
     const allowedStatuses = ["ready", "ready_plus", "shipping", "warehouse", "out"];
     let status = rawStatus;
+
+    try {
+      variantMetadata = parseProductVariantMetadata_(item || {});
+    } catch (err) {
+      variantMetadata = parseProductVariantMetadata_({});
+      errors.push(
+        bulkProductError(
+          rowNumber,
+          productId,
+          "variantSortOrder",
+          err && err.message ? err.message : "Variant sort order must be an integer"
+        )
+      );
+    }
 
     if (!productId) {
       errors.push(bulkProductError(rowNumber, productId, "productId", "SKU is required"));
@@ -5214,7 +5292,8 @@ function validateBulkProductItems(items, existingSkus) {
       status,
       note,
       detailsText,
-      compareImages
+      compareImages,
+      variantMetadata
     });
   });
 
