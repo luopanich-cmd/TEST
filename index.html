@@ -1785,10 +1785,11 @@ textarea:focus-visible {
 }
 
 .variant-size-options{
-  display:flex;
-  flex-wrap:wrap;
+  display:grid;
+  grid-template-columns:1fr;
   gap:8px;
   margin-top:10px;
+  max-width:100%;
 }
 
 .variant-size-chip{
@@ -1800,7 +1801,9 @@ textarea:focus-visible {
   font-size:12px;
   line-height:1.25;
   cursor:pointer;
+  text-align:left;
   max-width:100%;
+  width:100%;
 }
 
 .variant-size-chip.selected{
