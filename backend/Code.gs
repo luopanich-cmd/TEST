@@ -4860,10 +4860,13 @@ function bulkUpdateProducts(e, auth) {
       throw new Error("Products sheet not found");
     }
 
+    const variantHeaderResult = ensureProductsVariantHeaders_(ss);
+    const productHeaders = variantHeaderResult.headers;
     const productRows = productSheet.getDataRange().getValues();
     const validation = validateBulkUpdateProductItems(
       parsedItems.items,
-      productRows
+      productRows,
+      productHeaders
     );
 
     if (validation.errors.length) {
@@ -4889,6 +4892,18 @@ function bulkUpdateProducts(e, auth) {
         }
         if (update.hasOwnProperty("costPrice")) {
           nextRow[12] = update.costPrice;
+        }
+        if (update.variantMetadata) {
+          const variantColumns = getProductVariantColumnMap_(productHeaders);
+          PRODUCT_OPTIONAL_VARIANT_HEADERS.forEach(header => {
+            if (!Object.prototype.hasOwnProperty.call(update.variantMetadata, header)) return;
+            const columnIndex = variantColumns[header];
+            if (columnIndex === undefined || columnIndex < 0) return;
+            nextRow[columnIndex] = update.variantMetadata[header] === undefined ||
+              update.variantMetadata[header] === null
+                ? ""
+                : update.variantMetadata[header];
+          });
         }
 
         productSheet
@@ -4961,14 +4976,29 @@ function parseBulkUpdateProductItems(rawItems) {
   };
 }
 
-function validateBulkUpdateProductItems(items, productRows) {
+function validateBulkUpdateProductItems(items, productRows, productHeaders) {
   const errors = [];
   const updates = [];
   const batchSkus = new Set();
-  const allowedFields = ["productId", "price", "costPrice", "status", "active"];
-  const updateFields = ["price", "costPrice", "status", "active"];
+  const allowedFields = [
+    "productId",
+    "price",
+    "costPrice",
+    "status",
+    "active"
+  ].concat(PRODUCT_OPTIONAL_VARIANT_HEADERS);
+  const updateFields = [
+    "price",
+    "costPrice",
+    "status",
+    "active"
+  ].concat(PRODUCT_OPTIONAL_VARIANT_HEADERS);
   const allowedStatuses = ["ready", "ready_plus", "shipping", "warehouse", "out"];
   const productMap = new Map();
+  const variantHeaders = Array.isArray(productHeaders) && productHeaders.length
+    ? productHeaders
+    : [];
+  const variantColumns = getProductVariantColumnMap_(variantHeaders);
 
   productRows.slice(1).forEach((row, index) => {
     const productId = String(row[0] || "").trim().toUpperCase();
@@ -5070,6 +5100,34 @@ function validateBulkUpdateProductItems(items, productRows) {
         errors.push(bulkProductError(rowNumber, productId, "active", "Active must be true/false or 1/0"));
       } else {
         update.active = activeResult.value;
+      }
+    }
+
+    const hasVariantMetadata = PRODUCT_OPTIONAL_VARIANT_HEADERS.some(field =>
+      Object.prototype.hasOwnProperty.call(item, field)
+    );
+    if (hasVariantMetadata) {
+      try {
+        const variantMetadata = parseProductVariantMetadata_(item);
+        const selectedVariantMetadata = {};
+        PRODUCT_OPTIONAL_VARIANT_HEADERS.forEach(field => {
+          if (Object.prototype.hasOwnProperty.call(item, field)) {
+            if (variantColumns[field] === undefined || variantColumns[field] < 0) {
+              errors.push(bulkProductError(rowNumber, productId, field, "Variant metadata column is missing"));
+            }
+            selectedVariantMetadata[field] = variantMetadata[field];
+          }
+        });
+        update.variantMetadata = selectedVariantMetadata;
+      } catch (err) {
+        errors.push(
+          bulkProductError(
+            rowNumber,
+            productId,
+            "variantSortOrder",
+            err && err.message ? err.message : "Variant sort order must be an integer"
+          )
+        );
       }
     }
 
