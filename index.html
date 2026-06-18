@@ -3578,6 +3578,8 @@ Object.assign(window, {
   clearBulkProductUpdateSelection,
   openMultiSizeProductSheet,
   closeMultiSizeProductSheet,
+  backToAdminMenuFromMultiSizeProduct,
+  startNewMultiSizeProductBatch,
   addMultiSizeProductRow,
   removeMultiSizeProductRow,
   updateMultiSizeProductField,
@@ -10719,6 +10721,21 @@ function closeMultiSizeProductSheet() {
   requestAnimationFrame(syncOverlayBackdropState);
 }
 
+function backToAdminMenuFromMultiSizeProduct() {
+  closeOverlay(adminMultiSizeProductSheet);
+  resetMultiSizeProductState();
+  state.ui.backdropLocked = false;
+  syncOverlayBackdropState();
+  requestAnimationFrame(() => openMainMenu());
+}
+
+function startNewMultiSizeProductBatch() {
+  resetMultiSizeProductState();
+  renderMultiSizeProductSheet();
+  state.ui.backdropLocked = false;
+  requestAnimationFrame(syncOverlayBackdropState);
+}
+
 function updateMultiSizeProductField(field, value) {
   if (!state.admin.multiSizeProduct) resetMultiSizeProductState();
   state.admin.multiSizeProduct[field] =
@@ -10923,7 +10940,8 @@ function renderMultiSizeProductSheet() {
   const multiState = state.admin.multiSizeProduct;
   const items = getMultiSizePreviewItems();
   const errors = Array.isArray(multiState.errors) ? multiState.errors : [];
-  const canSubmit = multiState.hasPreview && items.length > 0 && errors.length === 0 && !state.admin.isSubmitting;
+  const isSaved = Number(multiState.createdCount || 0) > 0;
+  const canSubmit = !isSaved && multiState.hasPreview && items.length > 0 && errors.length === 0 && !state.admin.isSubmitting;
 
   adminMultiSizeProductSheet.innerHTML = `
     <div class="sheet-topbar">
@@ -11055,19 +11073,30 @@ function renderMultiSizeProductSheet() {
       ${renderMultiSizeProductPreview(items, errors)}
     </div>
 
-    <button class="btn btn-outline" type="button" onclick="previewMultiSizeProducts()">
-      ตรวจสอบรายการ
-    </button>
+    ${isSaved ? `
+      <div class="sheet-action-footer">
+        <button class="btn btn-primary" type="button" onclick="backToAdminMenuFromMultiSizeProduct()">
+          กลับเมนูแอดมิน
+        </button>
+        <button class="btn btn-outline" type="button" onclick="startNewMultiSizeProductBatch()">
+          เพิ่มสินค้าแบบหลายไซส์ชุดใหม่
+        </button>
+      </div>
+    ` : `
+      <button class="btn btn-outline" type="button" onclick="previewMultiSizeProducts()">
+        ตรวจสอบรายการ
+      </button>
 
-    <div class="sheet-action-footer">
-      <button class="btn btn-primary" ${canSubmit ? "" : "disabled"}
-        onclick="submitMultiSizeProducts(this)">
-        ${state.admin.isSubmitting ? "กำลังสร้างสินค้า..." : "บันทึกสินค้าแบบหลายไซส์"}
-      </button>
-      <button class="btn btn-outline" onclick="closeMultiSizeProductSheet()">
-        ยกเลิก
-      </button>
-    </div>
+      <div class="sheet-action-footer">
+        <button class="btn btn-primary" ${canSubmit ? "" : "disabled"}
+          onclick="submitMultiSizeProducts(this)">
+          ${state.admin.isSubmitting ? "กำลังสร้างสินค้า..." : "บันทึกสินค้าแบบหลายไซส์"}
+        </button>
+        <button class="btn btn-outline" onclick="closeMultiSizeProductSheet()">
+          ยกเลิก
+        </button>
+      </div>
+    `}
   `;
 }
 
