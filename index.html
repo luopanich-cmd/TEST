@@ -1784,6 +1784,57 @@ textarea:focus-visible {
   color: var(--text-soft);
 }
 
+.variant-size-options{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+
+.variant-size-chip{
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--panel-2);
+  color:var(--text);
+  padding:7px 10px;
+  font-size:12px;
+  line-height:1.25;
+  cursor:pointer;
+  max-width:100%;
+}
+
+.variant-size-chip.selected{
+  border-color:var(--accent);
+  background:rgba(255,255,255,.14);
+  box-shadow:0 0 0 2px rgba(125,92,255,.18);
+}
+
+.variant-size-chip:disabled,
+.variant-size-chip.disabled{
+  cursor:not-allowed;
+  opacity:.48;
+}
+
+.variant-group-summary,
+.variant-selected-summary{
+  margin-top:10px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.45;
+}
+
+.variant-selected-summary{
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--panel-2);
+}
+
+.variant-add-btn{
+  margin-top:10px;
+  width:100%;
+}
+
 .product-card:active {
   transform: scale(var(--tap-scale-card));
   box-shadow: var(--shadow-card-pressed);
@@ -3678,6 +3729,7 @@ const state = {
   viewerFilter: {
     status: "all"
   },
+  viewerVariantSelections: {},
 
   search: "",
   viewerSearchOpen: false,
@@ -4965,6 +5017,214 @@ function closeProductInfoSheet(){
     closeOverlay(sheet);
   }
 }  
+
+function getResolvedProductStatus(product) {
+  const stockNum = Number(product?.stock);
+  return stockNum <= 0
+    ? "out"
+    : String(product?.status || "ready").trim().toLowerCase();
+}
+
+function isViewerVariantProduct(product) {
+  return !!(
+    product &&
+    String(product.parentProductId || "").trim() &&
+    String(product.displayName || "").trim() &&
+    String(product.variantType || "").trim().toLowerCase() === "size" &&
+    String(product.variantValue || "").trim()
+  );
+}
+
+function getVariantGroupKey(product) {
+  return [
+    String(product?.parentProductId || "").trim(),
+    String(product?.displayName || "").trim(),
+    String(product?.variantType || "").trim().toLowerCase()
+  ].join("::");
+}
+
+function sortVariantsByOrder(variants) {
+  return [...(variants || [])].sort((a, b) => {
+    const aOrder = Number(a.variantSortOrder);
+    const bOrder = Number(b.variantSortOrder);
+    const safeA = Number.isFinite(aOrder) ? aOrder : 9999;
+    const safeB = Number.isFinite(bOrder) ? bOrder : 9999;
+    if (safeA !== safeB) return safeA - safeB;
+    return String(a.variantValue || "").localeCompare(String(b.variantValue || ""));
+  });
+}
+
+function buildViewerProductGroups(products) {
+  const groups = new Map();
+  const output = [];
+
+  (Array.isArray(products) ? products : []).forEach(product => {
+    if (!product || product.active === false) return;
+    const resolvedStatus = getResolvedProductStatus(product);
+    const safeProduct = { ...product, resolvedStatus };
+
+    if (!isViewerVariantProduct(safeProduct)) {
+      output.push(safeProduct);
+      return;
+    }
+
+    const groupKey = getVariantGroupKey(safeProduct);
+    if (!groups.has(groupKey)) {
+      const group = {
+        isVariantGroup: true,
+        groupKey,
+        parentProductId: String(safeProduct.parentProductId || "").trim(),
+        displayName: String(safeProduct.displayName || safeProduct.name || "").trim(),
+        variantType: "size",
+        variants: [],
+        image: "",
+        resolvedStatus: "ready"
+      };
+      groups.set(groupKey, group);
+      output.push(group);
+    }
+
+    groups.get(groupKey).variants.push(safeProduct);
+  });
+
+  groups.forEach(group => {
+    group.variants = sortVariantsByOrder(group.variants);
+    group.image = String(group.variants.find(item => item.image)?.image || "").trim();
+    group.resolvedStatus = getVariantGroupResolvedStatus(group);
+  });
+
+  return output;
+}
+
+function getVariantGroupResolvedStatus(group) {
+  const variants = group?.variants || [];
+  if (!variants.length) return "out";
+  const available = variants.find(variant => getResolvedProductStatus(variant) !== "out" && Number(variant.stock) > 0);
+  return available ? getResolvedProductStatus(available) : "out";
+}
+
+function getVariantGroupPriceLabel(group) {
+  const prices = (group?.variants || [])
+    .map(variant => Number(variant.price))
+    .filter(price => Number.isFinite(price));
+  if (!prices.length) return "฿0";
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  return min === max
+    ? `฿${min.toLocaleString()}`
+    : `฿${min.toLocaleString()} - ฿${max.toLocaleString()}`;
+}
+
+function getVariantGroupTotalStock(group) {
+  return (group?.variants || []).reduce((sum, variant) => sum + (Number(variant.stock) || 0), 0);
+}
+
+function getSelectedVariantFromGroup(group) {
+  if (!group?.isVariantGroup) return null;
+  const selectedId = state.viewerVariantSelections[group.groupKey];
+  return group.variants.find(variant => String(variant.productId) === String(selectedId)) || null;
+}
+
+function getViewerItemSearchText(item) {
+  if (item?.isVariantGroup) {
+    return [
+      item.displayName,
+      item.parentProductId,
+      ...(item.variants || []).flatMap(variant => [
+        variant.productId,
+        variant.name,
+        variant.variantValue,
+        variant.displayName,
+        variant.parentProductId
+      ])
+    ].join(" ").toLowerCase();
+  }
+  return [
+    item?.name,
+    item?.productId,
+    item?.displayName,
+    item?.parentProductId,
+    item?.variantValue
+  ].join(" ").toLowerCase();
+}
+
+function matchesViewerFilters(item) {
+  const search = String(state.search || "").trim().toLowerCase();
+  if (search && !getViewerItemSearchText(item).includes(search)) return false;
+
+  const statusFilter = state.viewerFilter?.status || "all";
+  if (statusFilter === "all") return true;
+
+  if (item?.isVariantGroup) {
+    return (item.variants || []).some(variant => getResolvedProductStatus(variant) === statusFilter);
+  }
+  return item.resolvedStatus === statusFilter;
+}
+
+function selectViewerVariant(groupKey, productId, event) {
+  if (event) event.stopPropagation();
+  state.viewerVariantSelections[groupKey] = productId;
+  if (
+    productSheet?.classList.contains("show") &&
+    state.selectedProduct?.isVariantGroup &&
+    state.selectedProduct.groupKey === groupKey
+  ) {
+    renderProductSheet();
+    return;
+  }
+  renderProducts();
+}
+
+function addVariantGroupToCart(groupKey, event) {
+  if (event) event.stopPropagation();
+  const group = buildViewerProductGroups(state.products)
+    .find(item => item.isVariantGroup && item.groupKey === groupKey);
+  const selected = getSelectedVariantFromGroup(group);
+  if (!selected) {
+    showToast("กรุณาเลือกไซส์ก่อน", "warning");
+    return;
+  }
+  state.selectedProduct = selected;
+  openQtySheet();
+}
+
+function openQtyForSelectedVariantFromDetail() {
+  const group = state.selectedProduct;
+  if (!group?.isVariantGroup) {
+    openQtySheet();
+    return;
+  }
+  const selected = getSelectedVariantFromGroup(group);
+  if (!selected) {
+    showToast("กรุณาเลือกไซส์ก่อน", "warning");
+    return;
+  }
+  state.selectedProduct = selected;
+  openQtySheet();
+}
+
+function renderVariantSizeOptions(group) {
+  const selected = getSelectedVariantFromGroup(group);
+  return `
+    <div class="variant-size-options">
+      ${(group?.variants || []).map(variant => {
+        const status = getResolvedProductStatus(variant);
+        const disabled = status === "out" || Number(variant.stock) <= 0;
+        const selectedClass = selected && String(selected.productId) === String(variant.productId) ? "selected" : "";
+        return `
+          <button
+            type="button"
+            class="variant-size-chip ${selectedClass}"
+            ${disabled ? "disabled" : ""}
+            onclick="selectViewerVariant(${toInlineJsStringLiteral(group.groupKey)}, ${toInlineJsStringLiteral(variant.productId)}, event)">
+            ${esc(variant.variantValue || variant.productId)}
+            <span>เหลือ ${Number(variant.stock) || 0}</span>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
   
 function renderProducts(){
   const app = document.getElementById("app");
@@ -4995,47 +5255,34 @@ function renderProducts(){
 
   const filteredProducts = [];
 
-  state.products.forEach(p => {
-    const stockNum = Number(p.stock);
+  if (state.mode === "viewer") {
+    buildViewerProductGroups(state.products)
+      .filter(matchesViewerFilters)
+      .forEach(item => filteredProducts.push(item));
+  } else {
+    state.products.forEach(p => {
+      const resolvedStatus = getResolvedProductStatus(p);
 
-  // 🔍 STATUS RESOLVE (ต้องมาก่อน filter ทุกครั้ง)
-    const resolvedStatus =
-      stockNum <= 0
-        ? "out"
-        : String(p.status || "ready").trim().toLowerCase();  
+      // 🔍 SEARCH FILTER (ชื่อ + รหัส)
+      if (state.search) {
+        const text = (p.name + p.productId).toLowerCase();
+        if (!text.includes(String(state.search).toLowerCase())) return;
+      }
 
-    // ❌ ไม่แสดงสินค้าที่ปิดขาย (viewer เท่านั้น)
-    if (state.mode === "viewer" && !p.active) return;
+      // 🔴 CHANGED: admin filter (ต้องอยู่หลัง resolvedStatus เสมอ)
+      if (
+        state.admin.filters &&
+        state.admin.filters.status !== "all"
+      ) {
+        if (resolvedStatus !== state.admin.filters.status) return;
+      }
 
-    // 🔍 SEARCH FILTER (ชื่อ + รหัส)
-    if (state.search) {
-      const text = (p.name + p.productId).toLowerCase();
-      if (!text.includes(String(state.search).toLowerCase())) return;
-    }
-
-// 🔍 STATUS FILTER (Viewer/Admin use resolved status)
-if (
-  state.mode === "viewer" &&
-  state.viewerFilter &&
-  state.viewerFilter.status !== "all"
-) {
-  if (resolvedStatus !== state.viewerFilter.status) return;
-}
-
-// 🔴 CHANGED: admin filter (ต้องอยู่หลัง resolvedStatus เสมอ)
-    if (
-      state.mode === "admin" &&
-      state.admin.filters &&
-      state.admin.filters.status !== "all"
-    ) {
-      if (resolvedStatus !== state.admin.filters.status) return;
-    } 
-
-    filteredProducts.push({
-      ...p,
-      resolvedStatus
+      filteredProducts.push({
+        ...p,
+        resolvedStatus
+      });
     });
-  });
+  }
 
   const pageSize = Number(state.pagination?.pageSize) || 100;
   const totalItems = filteredProducts.length;
@@ -5059,7 +5306,7 @@ if (
       out:       "หมด"
     };
  
-    const statusKey = p.resolvedStatus;
+    const statusKey = p.isVariantGroup ? getVariantGroupResolvedStatus(p) : p.resolvedStatus;
     const allowedStatusClasses = new Set([
       "ready",
       "ready_plus",
@@ -5087,7 +5334,35 @@ if (
     };
     card.onkeydown = event => handleKeyboardActivation(event, card);
 
-    card.innerHTML = `
+    if (p.isVariantGroup) {
+      const selectedVariant = getSelectedVariantFromGroup(p);
+      card.innerHTML = `
+        <img class="thumb"
+          src="${p.image ? escAttr(p.image) : "about:blank"}"
+          alt="${escAttr(p.displayName)}"
+          onerror="this.style.display='none'">
+
+        <div class="info">
+          <div class="name">${escapeHTML(p.displayName)}</div>
+          <div class="sku">กลุ่ม: ${escapeHTML(p.parentProductId)}</div>
+          <div class="price">ราคา: ${escapeHTML(getVariantGroupPriceLabel(p))}</div>
+          <div class="variant-group-summary">
+            เลือกไซส์ · สต็อกรวม ${getVariantGroupTotalStock(p)} ชิ้น
+          </div>
+          ${renderVariantSizeOptions(p)}
+          ${
+            selectedVariant
+              ? `<div class="variant-selected-summary">เลือก: ${escapeHTML(selectedVariant.variantValue || "-")} · SKU ${escapeHTML(selectedVariant.productId || "-")} · เหลือ ${Number(selectedVariant.stock) || 0}</div>`
+              : `<div class="variant-selected-summary">กรุณาเลือกไซส์ก่อน</div>`
+          }
+          <button class="btn btn-primary variant-add-btn" type="button"
+            onclick="addVariantGroupToCart(${toInlineJsStringLiteral(p.groupKey)}, event)">
+            เพิ่มลงตะกร้า
+          </button>
+        </div>
+      `;
+    } else {
+      card.innerHTML = `
       <img class="thumb"
         src="${p.image ? escAttr(p.image) : "about:blank"}"
         alt="${escAttr(p.name)}"
@@ -5107,6 +5382,7 @@ if (
         </div>
       </div>
     `;
+    }
 
     app.appendChild(card);
     found = true;
@@ -5214,6 +5490,67 @@ Object.assign(window, {
 function renderProductSheet(){
   const p = state.selectedProduct;
   if (!productSheet || !p) return;
+
+  if (p.isVariantGroup) {
+    const selectedVariant = getSelectedVariantFromGroup(p);
+    const detailProduct = selectedVariant || p.variants?.[0] || {};
+
+    productSheet.innerHTML = `
+      <button
+        class="sheet-close sheet-close-btn"
+        onclick="closeProduct()"
+        aria-label="Close"
+      >
+        ×
+      </button>
+
+      <h3 id="productSheetTitle" class="product-title">${esc(p.displayName)}</h3>
+
+      <div class="product-sku">
+        กลุ่มสินค้า: ${esc(p.parentProductId)}
+      </div>
+
+      <img
+        src="${escAttr(p.image || detailProduct.image || '')}"
+        alt="${escAttr(p.displayName)}"
+        class="product-image product-info-zoom"
+        onclick="openImageViewer(${toInlineJsStringLiteral(p.image || detailProduct.image || "")})"
+      >
+
+      <div class="price">${esc(getVariantGroupPriceLabel(p))}</div>
+      <div class="stock">สต็อกรวม ${getVariantGroupTotalStock(p)} ชิ้น</div>
+
+      <div class="variant-selected-summary">
+        เลือกไซส์:
+        ${selectedVariant
+          ? `${esc(selectedVariant.variantValue || "-")} · SKU ${esc(selectedVariant.productId || "-")} · เหลือ ${Number(selectedVariant.stock) || 0}`
+          : "กรุณาเลือกไซส์ก่อน"}
+      </div>
+      ${renderVariantSizeOptions(p)}
+
+      ${
+        detailProduct.detailsText || detailProduct.compareImages
+          ? `
+            <button
+              class="btn btn-outline product-detail-btn"
+              onclick="openProductInfoSheet(${selectedVariant ? "getSelectedVariantFromGroup(state.selectedProduct)" : "state.selectedProduct.variants[0]"})">
+              รายละเอียดสินค้า
+            </button>
+          `
+          : ""
+      }
+
+      <div class="product-action-zone">
+        <button
+          class="btn btn-primary"
+          onclick="openQtyForSelectedVariantFromDetail()"
+        >
+          เพิ่มลงตะกร้า
+        </button>
+      </div>
+    `;
+    return;
+  }
 
   productSheet.innerHTML = `
     <!-- ❌ CLOSE BUTTON (TOP-RIGHT) -->
