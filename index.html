@@ -3480,6 +3480,7 @@ textarea.input{
  <div id="adminProductEditSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminProductEditSheetTitle" tabindex="-1"></div>
  <div id="adminStockActionSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminStockActionSheetTitle" tabindex="-1"></div>
  <div id="adminAddProductSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminAddProductSheetTitle" tabindex="-1"></div>
+ <div id="adminMultiSizeProductSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminMultiSizeProductSheetTitle" tabindex="-1"></div>
  <div id="adminBulkProductImportSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminBulkProductImportSheetTitle" tabindex="-1"></div>
  <div id="adminBulkProductUpdateSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminBulkProductUpdateSheetTitle" tabindex="-1"></div>
  <div id="adminLandedCostSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="adminLandedCostSheetTitle" tabindex="-1"></div>
@@ -3517,6 +3518,8 @@ const adminProductActionSheet = document.getElementById("adminProductActionSheet
 const adminProductEditSheet = document.getElementById("adminProductEditSheet");
 const adminStockActionSheet = document.getElementById("adminStockActionSheet");
 const adminAddProductSheet = document.getElementById("adminAddProductSheet");
+const adminMultiSizeProductSheet =
+  document.getElementById("adminMultiSizeProductSheet");
 const adminBulkProductImportSheet =
   document.getElementById("adminBulkProductImportSheet");
 const adminBulkProductUpdateSheet =
@@ -3541,6 +3544,7 @@ const ADMIN_SHEETS = Object.freeze({
   productEdit: adminProductEditSheet,
   stockAction: adminStockActionSheet,
   addProduct: adminAddProductSheet,
+  multiSizeProduct: adminMultiSizeProductSheet,
   bulkProductImport: adminBulkProductImportSheet,
   bulkProductUpdate: adminBulkProductUpdateSheet,
   landedCost: adminLandedCostSheet,
@@ -3572,6 +3576,14 @@ Object.assign(window, {
   toggleBulkProductUpdateProduct,
   selectVisibleBulkProductUpdateProducts,
   clearBulkProductUpdateSelection,
+  openMultiSizeProductSheet,
+  closeMultiSizeProductSheet,
+  addMultiSizeProductRow,
+  removeMultiSizeProductRow,
+  updateMultiSizeProductField,
+  updateMultiSizeProductRowField,
+  previewMultiSizeProducts,
+  submitMultiSizeProducts,
   openLandedCostSheet,
   closeLandedCostSheet,
   backToAdminMenuFromLandedCost,
@@ -3716,6 +3728,23 @@ const state = {
       updatedCount: 0,
       hasPreview: false,
       previewValid: false
+    },
+    multiSizeProduct: {
+      parentProductId: "",
+      displayName: "",
+      nameTemplate: "",
+      price: "",
+      costPrice: "",
+      image: "",
+      status: "ready",
+      active: true,
+      note: "",
+      detailsText: "",
+      rows: [],
+      hasPreview: false,
+      errors: [],
+      summary: "",
+      createdCount: 0
     },
     landedCost: {
       batchName: "",
@@ -5858,6 +5887,7 @@ function closeTopSheet(){
     document.getElementById("bulkPendingDeliverySheet"),
     document.getElementById("pendingDeliverySheet"),
     document.getElementById("adminAddProductSheet"),
+    document.getElementById("adminMultiSizeProductSheet"),
     document.getElementById("adminBulkProductImportSheet"),
     document.getElementById("adminBulkProductUpdateSheet"),
     document.getElementById("adminLandedCostSheet"),
@@ -6811,6 +6841,11 @@ function renderAdminMenuInStockSheet() {
       <button class="btn btn-secondary"
         onclick="closeStockMenuSheetThen(handleOpenAddProduct)">
         ➕ เพิ่มสินค้าใหม่
+      </button>
+
+      <button class="btn btn-secondary"
+        onclick="closeStockMenuSheetThen(openMultiSizeProductSheet)">
+        เพิ่มสินค้าแบบหลายไซส์
       </button>
 
       <button class="btn btn-secondary"
@@ -9048,6 +9083,11 @@ function openMainMenu(triggerEl){
                   onclick="closeMainMenu(); handleOpenAddProduct();">
                   ➕ เพิ่มสินค้าใหม่
                 </button>
+
+                <button class="btn btn-secondary"
+                  onclick="closeMainMenu(); openMultiSizeProductSheet();">
+                  เพิ่มสินค้าแบบหลายไซส์
+                </button>
                 
                 <button class="btn btn-secondary"
                   onclick="closeMainMenu(); openBulkProductImportSheet();">
@@ -10614,6 +10654,433 @@ async function submitAddProduct(btn){
       btn.disabled = false;
       btn.textContent = "บันทึกสินค้า";
     }
+  }
+}
+
+function createDefaultMultiSizeRows() {
+  return [
+    { variantValue: "S / อก 44", stock: "", variantSortOrder: "1", nameOverride: "" },
+    { variantValue: "M / อก 46", stock: "", variantSortOrder: "2", nameOverride: "" },
+    { variantValue: "L / อก 48", stock: "", variantSortOrder: "3", nameOverride: "" },
+    { variantValue: "XL / อก 50", stock: "", variantSortOrder: "4", nameOverride: "" }
+  ];
+}
+
+function resetMultiSizeProductState() {
+  state.admin.multiSizeProduct = {
+    parentProductId: "",
+    displayName: "",
+    nameTemplate: "",
+    price: "",
+    costPrice: "",
+    image: "",
+    status: "ready",
+    active: true,
+    note: "",
+    detailsText: "",
+    rows: createDefaultMultiSizeRows(),
+    hasPreview: false,
+    errors: [],
+    summary: "",
+    createdCount: 0
+  };
+}
+
+function ensureAdminSessionForMultiSizeProduct() {
+  if (
+    state.mode !== "admin" ||
+    !state.admin.loggedIn ||
+    !state.admin.token ||
+    isAdminSessionExpired()
+  ) {
+    showToast("เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง", "warning");
+    exitAdmin();
+    return false;
+  }
+  return true;
+}
+
+function openMultiSizeProductSheet() {
+  if (!ensureAdminSessionForMultiSizeProduct()) return;
+  resetMultiSizeProductState();
+  renderMultiSizeProductSheet();
+  openOverlay(adminMultiSizeProductSheet);
+}
+
+function closeMultiSizeProductSheet() {
+  closeOverlay(adminMultiSizeProductSheet);
+}
+
+function updateMultiSizeProductField(field, value) {
+  if (!state.admin.multiSizeProduct) resetMultiSizeProductState();
+  state.admin.multiSizeProduct[field] =
+    field === "active" ? value === true : value || "";
+  state.admin.multiSizeProduct.hasPreview = false;
+  state.admin.multiSizeProduct.errors = [];
+  state.admin.multiSizeProduct.summary = "";
+  state.admin.multiSizeProduct.createdCount = 0;
+}
+
+function updateMultiSizeProductRowField(index, field, value) {
+  const rows = state.admin.multiSizeProduct.rows || [];
+  if (!rows[index]) return;
+  rows[index][field] = value || "";
+  state.admin.multiSizeProduct.hasPreview = false;
+  state.admin.multiSizeProduct.errors = [];
+  state.admin.multiSizeProduct.summary = "";
+  state.admin.multiSizeProduct.createdCount = 0;
+}
+
+function addMultiSizeProductRow() {
+  if (!Array.isArray(state.admin.multiSizeProduct.rows)) {
+    state.admin.multiSizeProduct.rows = [];
+  }
+  state.admin.multiSizeProduct.rows.push({
+    variantValue: "",
+    stock: "",
+    variantSortOrder: String(state.admin.multiSizeProduct.rows.length + 1),
+    nameOverride: ""
+  });
+  state.admin.multiSizeProduct.hasPreview = false;
+  renderMultiSizeProductSheet();
+}
+
+function removeMultiSizeProductRow(index) {
+  const rows = state.admin.multiSizeProduct.rows || [];
+  if (rows.length <= 1) {
+    showToast("ต้องมีไซส์อย่างน้อย 1 แถว", "warning");
+    return;
+  }
+  rows.splice(index, 1);
+  state.admin.multiSizeProduct.hasPreview = false;
+  state.admin.multiSizeProduct.errors = [];
+  renderMultiSizeProductSheet();
+}
+
+function getMultiSizeSkuSuffix(variantValue) {
+  const firstPart = String(variantValue || "")
+    .split("/")
+    .shift()
+    .trim();
+  return firstPart
+    .replace(/\s+/g, "")
+    .replace(/[^A-Za-z0-9ก-๙_-]/g, "")
+    .toUpperCase();
+}
+
+function getMultiSizeGeneratedSku(parentProductId, variantValue) {
+  return normalizeProductId(
+    String(parentProductId || "") + getMultiSizeSkuSuffix(variantValue)
+  );
+}
+
+function getMultiSizePreviewItems() {
+  const multiState = state.admin.multiSizeProduct;
+  const parentProductId = normalizeProductId(multiState.parentProductId);
+  const displayName = String(multiState.displayName || "").trim();
+  const nameTemplate = String(multiState.nameTemplate || "").trim();
+  const baseName = nameTemplate || displayName;
+
+  return (multiState.rows || [])
+    .map((row, index) => {
+      const variantValue = String(row.variantValue || "").trim();
+      const productId = getMultiSizeGeneratedSku(parentProductId, variantValue);
+      const nameOverride = String(row.nameOverride || "").trim();
+      return {
+        rowNumber: index + 1,
+        productId,
+        name: nameOverride || (variantValue ? `${baseName} ${variantValue}` : baseName),
+        price: String(multiState.price || "").trim(),
+        costPrice: String(multiState.costPrice || "").trim(),
+        stock: String(row.stock || "").trim(),
+        status: String(multiState.status || "ready").trim(),
+        image: String(multiState.image || "").trim(),
+        active: String(multiState.active !== false),
+        note: String(multiState.note || "").trim(),
+        detailsText: String(multiState.detailsText || "").trim(),
+        compareImages: "",
+        parentProductId,
+        variantType: "size",
+        variantValue,
+        displayName,
+        variantSortOrder: String(row.variantSortOrder || "").trim()
+      };
+    });
+}
+
+function validateMultiSizePreviewItems(items) {
+  const errors = [];
+  const multiState = state.admin.multiSizeProduct;
+  const parentProductId = normalizeProductId(multiState.parentProductId);
+  const displayName = String(multiState.displayName || "").trim();
+  const price = Number(multiState.price);
+  const costPrice = Number(multiState.costPrice);
+  const existingSkus = new Set(
+    (Array.isArray(state.products) ? state.products : [])
+      .map(product => normalizeProductId(product.productId))
+      .filter(Boolean)
+  );
+  const batchSkus = new Set();
+
+  if (!parentProductId) errors.push("กรุณากรอกรหัสสินค้าแม่ / รหัสกลุ่ม");
+  if (!displayName) errors.push("กรุณากรอกชื่อแสดงรวมของสินค้าแม่");
+  if (!Number.isInteger(price) || price < 0) errors.push("ราคาขายต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป");
+  if (!Number.isInteger(costPrice) || costPrice < 0) errors.push("ราคาต้นทุนต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป");
+  if (!items.length) errors.push("กรุณาเพิ่มไซส์อย่างน้อย 1 แถว");
+
+  items.forEach(item => {
+    const rowLabel = `แถว ${item.rowNumber}`;
+    const stock = Number(item.stock);
+    const sortOrder = Number(item.variantSortOrder);
+
+    if (!item.variantValue) errors.push(`${rowLabel}: กรุณากรอกไซส์/ตัวเลือก`);
+    if (!item.productId || item.productId === parentProductId) errors.push(`${rowLabel}: ไม่สามารถสร้าง SKU ได้`);
+    if (item.stock === "" || !Number.isInteger(stock) || stock < 0) errors.push(`${rowLabel}: สต็อกต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป`);
+    if (item.variantSortOrder === "" || !Number.isInteger(sortOrder)) errors.push(`${rowLabel}: ลำดับไซส์ต้องเป็นตัวเลขจำนวนเต็ม`);
+    if (existingSkus.has(item.productId)) errors.push(`${rowLabel}: SKU ${item.productId} มีอยู่แล้ว`);
+    if (batchSkus.has(item.productId)) errors.push(`${rowLabel}: SKU ${item.productId} ซ้ำในชุดนี้`);
+    if (!item.name) errors.push(`${rowLabel}: กรุณากรอกชื่อสินค้า`);
+    batchSkus.add(item.productId);
+  });
+
+  return errors;
+}
+
+function previewMultiSizeProducts() {
+  const items = getMultiSizePreviewItems();
+  const errors = validateMultiSizePreviewItems(items);
+  state.admin.multiSizeProduct.hasPreview = true;
+  state.admin.multiSizeProduct.errors = errors;
+  state.admin.multiSizeProduct.summary = "";
+  renderMultiSizeProductSheet();
+}
+
+function renderMultiSizeProductPreview(items, errors) {
+  if (!state.admin.multiSizeProduct.hasPreview) {
+    return `<div class="empty-state">กรอกข้อมูลแล้วกด “ตรวจสอบรายการ” เพื่อดู SKU ที่จะสร้าง</div>`;
+  }
+
+  return `
+    ${errors.length ? `<ul class="bulk-error-list">${errors.map(error => `<li>${esc(error)}</li>`).join("")}</ul>` : ""}
+    <div class="bulk-preview-list">
+      ${items.map(item => `
+        <div class="bulk-preview-card ${errors.length ? "" : "status-approved"}">
+          <div class="name">${esc(item.productId || "-")}</div>
+          <div class="bulk-preview-meta">
+            ${esc(item.name || "-")}<br>
+            กลุ่ม: ${esc(item.parentProductId || "-")} · ${esc(item.variantType)}: ${esc(item.variantValue || "-")} · ลำดับ: ${esc(item.variantSortOrder || "-")}<br>
+            ราคา: ฿${esc(item.price || "0")} · ต้นทุน: ฿${esc(item.costPrice || "0")} · สต็อก: ${esc(item.stock || "0")}
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderMultiSizeProductSheet() {
+  const multiState = state.admin.multiSizeProduct;
+  const items = getMultiSizePreviewItems();
+  const errors = Array.isArray(multiState.errors) ? multiState.errors : [];
+  const canSubmit = multiState.hasPreview && items.length > 0 && errors.length === 0 && !state.admin.isSubmitting;
+
+  adminMultiSizeProductSheet.innerHTML = `
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeMultiSizeProductSheet()"
+        aria-label="ปิดหน้าเพิ่มสินค้าแบบหลายไซส์">×</button>
+      <h3 id="adminMultiSizeProductSheetTitle">เพิ่มสินค้าแบบหลายไซส์</h3>
+      <div aria-hidden="true"></div>
+    </div>
+
+    <div class="helper-text" style="margin-bottom:10px">
+      ระบบจะสร้างสินค้าแยก 1 SKU ต่อ 1 ไซส์ โดยใช้รหัสสินค้าแม่เดียวกัน สต็อกยังแยกตาม SKU เหมือนเดิม
+    </div>
+
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">ข้อมูลสินค้าแม่</div>
+      <div class="form-group">
+        <label>รหัสสินค้าแม่ / รหัสกลุ่ม</label>
+        <input value="${escAttr(multiState.parentProductId || "")}" placeholder="เช่น BY506"
+          oninput="updateMultiSizeProductField('parentProductId', this.value)">
+      </div>
+      <div class="form-group">
+        <label>ชื่อแสดงรวมของสินค้าแม่</label>
+        <input value="${escAttr(multiState.displayName || "")}" placeholder="เช่น เสื้อ Human Made Bangkok Animal Graphic T-shirt สี Black"
+          oninput="updateMultiSizeProductField('displayName', this.value)">
+      </div>
+      <div class="form-group">
+        <label>เทมเพลตชื่อสินค้าแต่ละ SKU</label>
+        <input value="${escAttr(multiState.nameTemplate || "")}" placeholder="เว้นว่างเพื่อใช้ชื่อรวม + ไซส์"
+          oninput="updateMultiSizeProductField('nameTemplate', this.value)">
+      </div>
+      <div class="form-group">
+        <label>ราคาขาย</label>
+        <input type="number" value="${escAttr(multiState.price || "")}" placeholder="450"
+          oninput="updateMultiSizeProductField('price', this.value)">
+      </div>
+      <div class="form-group">
+        <label>ราคาต้นทุน</label>
+        <input type="number" value="${escAttr(multiState.costPrice || "")}" placeholder="250"
+          oninput="updateMultiSizeProductField('costPrice', this.value)">
+      </div>
+      <div class="form-group">
+        <label>รูปสินค้า URL</label>
+        <input value="${escAttr(multiState.image || "")}" placeholder="https://example.com/image.jpg"
+          oninput="updateMultiSizeProductField('image', this.value)">
+      </div>
+      <div class="form-group">
+        <label>สถานะสินค้า</label>
+        <select onchange="updateMultiSizeProductField('status', this.value)">
+          <option value="ready" ${multiState.status === "ready" ? "selected" : ""}>พร้อมส่ง</option>
+          <option value="ready_plus" ${multiState.status === "ready_plus" ? "selected" : ""}>พร้อมส่ง สามารถบวกเพิ่มได้</option>
+          <option value="shipping" ${multiState.status === "shipping" ? "selected" : ""}>ระหว่างจัดส่ง</option>
+          <option value="warehouse" ${multiState.status === "warehouse" ? "selected" : ""}>โกดังไทย</option>
+          <option value="out" ${multiState.status === "out" ? "selected" : ""}>หมด</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="continue-row">
+          <input type="checkbox" ${multiState.active !== false ? "checked" : ""}
+            onchange="updateMultiSizeProductField('active', this.checked)">
+          <span class="continue-text">เปิดใช้งานสินค้าเหล่านี้หลังสร้าง</span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label>หมายเหตุ</label>
+        <textarea rows="3" oninput="updateMultiSizeProductField('note', this.value)">${esc(multiState.note || "")}</textarea>
+      </div>
+      <div class="form-group">
+        <label>รายละเอียดสินค้า</label>
+        <textarea rows="3" oninput="updateMultiSizeProductField('detailsText', this.value)">${esc(multiState.detailsText || "")}</textarea>
+      </div>
+    </div>
+
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">ไซส์ / SKU ที่จะสร้าง</div>
+      <div class="helper-text">SKU จะสร้างจาก รหัสสินค้าแม่ + โค้ดไซส์ เช่น BY506 + S = BY506S</div>
+      <div class="bulk-preview-list">
+        ${(multiState.rows || []).map((row, index) => {
+          const sku = getMultiSizeGeneratedSku(multiState.parentProductId, row.variantValue);
+          return `
+            <div class="bulk-preview-card">
+              <div class="admin-product-summary-meta" style="margin-bottom:8px">
+                <span>SKU: ${esc(sku || "-")}</span>
+              </div>
+              <div class="form-group">
+                <label>ไซส์/ตัวเลือก</label>
+                <input value="${escAttr(row.variantValue || "")}" placeholder="เช่น S / อก 44"
+                  oninput="updateMultiSizeProductRowField(${index}, 'variantValue', this.value)">
+              </div>
+              <div class="form-group">
+                <label>สต็อก</label>
+                <input type="number" value="${escAttr(row.stock || "")}" placeholder="65"
+                  oninput="updateMultiSizeProductRowField(${index}, 'stock', this.value)">
+              </div>
+              <div class="form-group">
+                <label>ลำดับไซส์</label>
+                <input type="number" step="1" value="${escAttr(row.variantSortOrder || "")}" placeholder="${index + 1}"
+                  oninput="updateMultiSizeProductRowField(${index}, 'variantSortOrder', this.value)">
+              </div>
+              <div class="form-group">
+                <label>ชื่อสินค้าเฉพาะ SKU นี้ (ถ้ามี)</label>
+                <input value="${escAttr(row.nameOverride || "")}" placeholder="เว้นว่างเพื่อใช้ชื่อรวม + ไซส์"
+                  oninput="updateMultiSizeProductRowField(${index}, 'nameOverride', this.value)">
+              </div>
+              <button class="btn btn-outline" type="button" onclick="removeMultiSizeProductRow(${index})">
+                ลบแถวนี้
+              </button>
+            </div>
+          `;
+        }).join("")}
+      </div>
+      <button class="btn btn-outline" type="button" onclick="addMultiSizeProductRow()">
+        เพิ่มแถวไซส์
+      </button>
+    </div>
+
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">ตรวจสอบก่อนบันทึก</div>
+      ${multiState.summary ? `<div class="bulk-import-success-card">${esc(multiState.summary)}</div>` : ""}
+      ${renderMultiSizeProductPreview(items, errors)}
+    </div>
+
+    <button class="btn btn-outline" type="button" onclick="previewMultiSizeProducts()">
+      ตรวจสอบรายการ
+    </button>
+
+    <div class="sheet-action-footer">
+      <button class="btn btn-primary" ${canSubmit ? "" : "disabled"}
+        onclick="submitMultiSizeProducts(this)">
+        ${state.admin.isSubmitting ? "กำลังสร้างสินค้า..." : "บันทึกสินค้าแบบหลายไซส์"}
+      </button>
+      <button class="btn btn-outline" onclick="closeMultiSizeProductSheet()">
+        ยกเลิก
+      </button>
+    </div>
+  `;
+}
+
+async function submitMultiSizeProducts(btn) {
+  if (!ensureAdminSessionForMultiSizeProduct()) return;
+  if (state.admin.isSubmitting) return;
+  if (!state.admin.multiSizeProduct.hasPreview) {
+    state.admin.multiSizeProduct.errors = [
+      "กรุณากดตรวจสอบรายการก่อนบันทึก"
+    ];
+    renderMultiSizeProductSheet();
+    showToast("กรุณาตรวจสอบรายการก่อนบันทึก", "warning");
+    return;
+  }
+
+  const items = getMultiSizePreviewItems();
+  const errors = validateMultiSizePreviewItems(items);
+  state.admin.multiSizeProduct.hasPreview = true;
+  state.admin.multiSizeProduct.errors = errors;
+
+  if (errors.length) {
+    renderMultiSizeProductSheet();
+    showToast("กรุณาแก้ไขข้อมูลก่อนบันทึกสินค้า", "warning");
+    return;
+  }
+
+  state.admin.isSubmitting = true;
+  renderMultiSizeProductSheet();
+
+  try {
+    showLoading("กำลังสร้างสินค้าแบบหลายไซส์...");
+    const form = new URLSearchParams();
+    form.append("action", "bulkAddProducts");
+    form.append("token", state.admin.token);
+    form.append("items", JSON.stringify(items));
+
+    const json = await postFormAction(form);
+    if (!json || json.success === false) {
+      const backendErrors = Array.isArray(json?.data?.errors) ? json.data.errors : [];
+      state.admin.multiSizeProduct.errors = backendErrors.length
+        ? backendErrors.map(error => `${error.productId || error.row || "-"}: ${getBulkImportErrorMessage(error)}`)
+        : [json?.error || json?.message || "สร้างสินค้าแบบหลายไซส์ไม่สำเร็จ"];
+      renderMultiSizeProductSheet();
+      showToast("สร้างสินค้าแบบหลายไซส์ไม่สำเร็จ", "error");
+      return;
+    }
+
+    const created = Number(json.imported || json.created || items.length || 0);
+    state.admin.multiSizeProduct.summary = `สร้างสินค้าแบบหลายไซส์สำเร็จ ${created} รายการ`;
+    state.admin.multiSizeProduct.createdCount = created;
+    await refreshProducts();
+    renderMultiSizeProductSheet();
+    showToast("สร้างสินค้าแบบหลายไซส์สำเร็จ", "success");
+  } catch (err) {
+    console.error(err);
+    state.admin.multiSizeProduct.errors = [
+      err.message || "สร้างสินค้าแบบหลายไซส์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
+    ];
+    renderMultiSizeProductSheet();
+    showToast("สร้างสินค้าแบบหลายไซส์ไม่สำเร็จ", "error");
+  } finally {
+    safeHideLoading();
+    state.admin.isSubmitting = false;
+    renderMultiSizeProductSheet();
   }
 }
 
