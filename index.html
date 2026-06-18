@@ -3582,6 +3582,7 @@ Object.assign(window, {
   removeMultiSizeProductRow,
   updateMultiSizeProductField,
   updateMultiSizeProductRowField,
+  handleMultiSizeImagePreview,
   previewMultiSizeProducts,
   submitMultiSizeProducts,
   openLandedCostSheet,
@@ -3736,6 +3737,7 @@ const state = {
       price: "",
       costPrice: "",
       image: "",
+      imageFile: null,
       status: "ready",
       active: true,
       note: "",
@@ -10674,6 +10676,7 @@ function resetMultiSizeProductState() {
     price: "",
     costPrice: "",
     image: "",
+    imageFile: null,
     status: "ready",
     active: true,
     note: "",
@@ -10708,7 +10711,12 @@ function openMultiSizeProductSheet() {
 }
 
 function closeMultiSizeProductSheet() {
+  if (state.admin.multiSizeProduct?.createdCount > 0) {
+    resetMultiSizeProductState();
+  }
   closeOverlay(adminMultiSizeProductSheet);
+  state.ui.backdropLocked = false;
+  requestAnimationFrame(syncOverlayBackdropState);
 }
 
 function updateMultiSizeProductField(field, value) {
@@ -10719,6 +10727,40 @@ function updateMultiSizeProductField(field, value) {
   state.admin.multiSizeProduct.errors = [];
   state.admin.multiSizeProduct.summary = "";
   state.admin.multiSizeProduct.createdCount = 0;
+}
+
+function handleMultiSizeImagePreview(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    validateProductImageFile(file);
+  } catch (err) {
+    input.value = "";
+    state.admin.multiSizeProduct.imageFile = null;
+    const img = document.getElementById("multiSizeImagePreview");
+    if (img) {
+      img.removeAttribute("src");
+      img.style.display = "none";
+    }
+    showToast(err.message || "ไฟล์รูปไม่ถูกต้อง", "error");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = document.getElementById("multiSizeImagePreview");
+    if (img) {
+      img.src = reader.result;
+      img.style.display = "block";
+    }
+    state.admin.multiSizeProduct.imageFile = file;
+    state.admin.multiSizeProduct.hasPreview = false;
+    state.admin.multiSizeProduct.errors = [];
+    state.admin.multiSizeProduct.summary = "";
+    state.admin.multiSizeProduct.createdCount = 0;
+  };
+  reader.readAsDataURL(file);
 }
 
 function updateMultiSizeProductRowField(index, field, value) {
@@ -10925,6 +10967,15 @@ function renderMultiSizeProductSheet() {
       </div>
       <div class="form-group">
         <label>รูปสินค้า URL</label>
+        <img id="multiSizeImagePreview"
+          src="${escAttr(multiState.image || "")}"
+          style="width:120px;border-radius:12px;display:${multiState.image ? "block" : "none"};margin-bottom:6px">
+        <input
+          id="multiSizeImageFile"
+          type="file"
+          accept="image/*"
+          onchange="handleMultiSizeImagePreview(this)">
+        <div class="helper-text">อัปโหลดรูปเพื่อใช้กับทุก SKU หรือใส่ URL เองด้านล่าง</div>
         <input value="${escAttr(multiState.image || "")}" placeholder="https://example.com/image.jpg"
           oninput="updateMultiSizeProductField('image', this.value)">
       </div>
@@ -11047,6 +11098,20 @@ async function submitMultiSizeProducts(btn) {
   renderMultiSizeProductSheet();
 
   try {
+    if (state.admin.multiSizeProduct.imageFile) {
+      validateProductImageFile(state.admin.multiSizeProduct.imageFile);
+      showLoading("กำลังอัปโหลดรูปสินค้า...");
+      const uploadedImageUrl = await uploadProductImage(state.admin.multiSizeProduct.imageFile);
+      if (!uploadedImageUrl) {
+        throw new Error("อัปโหลดรูปไม่สำเร็จ");
+      }
+      state.admin.multiSizeProduct.image = uploadedImageUrl;
+      state.admin.multiSizeProduct.imageFile = null;
+      items.forEach(item => {
+        item.image = uploadedImageUrl;
+      });
+    }
+
     showLoading("กำลังสร้างสินค้าแบบหลายไซส์...");
     const form = new URLSearchParams();
     form.append("action", "bulkAddProducts");
@@ -11079,8 +11144,10 @@ async function submitMultiSizeProducts(btn) {
     showToast("สร้างสินค้าแบบหลายไซส์ไม่สำเร็จ", "error");
   } finally {
     safeHideLoading();
+    state.ui.backdropLocked = false;
     state.admin.isSubmitting = false;
     renderMultiSizeProductSheet();
+    requestAnimationFrame(syncOverlayBackdropState);
   }
 }
 
