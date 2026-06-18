@@ -3918,7 +3918,8 @@ const state = {
     filters: {
       status: "all",
       dashboardFrom: "",
-      dashboardTo: ""
+      dashboardTo: "",
+      poQuery: ""
     },
     bulkProductImport: {
       rawText: "",
@@ -7243,6 +7244,47 @@ function resetAdminDashboardRange() {
   openAdminDashboard("SUMMARY", true);
 }
 
+function getAdminOrderPoQuery() {
+  return String(state.admin.filters?.poQuery || "").trim().toLowerCase();
+}
+
+function orderMatchesAdminPoQuery(order) {
+  const query = getAdminOrderPoQuery();
+  if (!query) return true;
+
+  return String(order?.poNumber || "")
+    .trim()
+    .toLowerCase()
+    .includes(query);
+}
+
+function renderAdminOrderPoSearch() {
+  return `
+    <div class="form-group">
+      <label>ค้นหาเลข PO</label>
+      <input
+        id="adminOrderPoSearch"
+        type="search"
+        value="${escAttr(state.admin.filters?.poQuery || "")}"
+        placeholder="ค้นหาเลข PO"
+        oninput="setAdminOrderPoQuery(this.value)">
+    </div>
+  `;
+}
+
+let adminOrderPoSearchTimer = null;
+
+function setAdminOrderPoQuery(value) {
+  state.admin.filters.poQuery = value || "";
+  if (adminOrderPoSearchTimer) {
+    clearTimeout(adminOrderPoSearchTimer);
+  }
+  adminOrderPoSearchTimer = setTimeout(() => {
+    allowOpenOrders = true;
+    openAdminDashboard(state.admin.dashboardMode || "SUMMARY", true);
+  }, 250);
+}
+
 async function openAdminDashboard(mode = "SUMMARY", force = false) {
   if (!force && !allowOpenOrders) return;
 
@@ -7293,7 +7335,9 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
       : []
     ).filter(o => {
       const status = String(o.status || "").toUpperCase();
-      return status === "APPROVED" && isOrderInRange(o, from, to);
+      return status === "APPROVED" &&
+        isOrderInRange(o, from, to) &&
+        orderMatchesAdminPoQuery(o);
     });
 
    console.log(
@@ -7308,7 +7352,10 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
     const pendingOrders = (Array.isArray(state.admin.orders)
       ? state.admin.orders
       : []
-    ).filter(o => String(o.status || "").toUpperCase() === "PENDING");
+    ).filter(o =>
+      String(o.status || "").toUpperCase() === "PENDING" &&
+      orderMatchesAdminPoQuery(o)
+    );
 
     const pendingCount = (Array.isArray(state.admin.orders)
       ? state.admin.orders
@@ -7327,6 +7374,8 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
           <h3 id="adminDashboardSheetTitle">📦 Pending Orders</h3>
         </div>
 
+        ${renderAdminOrderPoSearch()}
+
         ${
           pendingOrders.length
             ? pendingOrders.map(o => `
@@ -7336,6 +7385,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
                   onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})"
                   onkeydown="handleKeyboardActivation(event, this)">
                   <div class="name">${esc(o.orderId)}</div>
+                  <div class="stock">PO: ${esc(o.poNumber || "-")}</div>
                   <div class="admin-card-meta">
                     <span class="status-badge compact status-pending">${esc(o.status)}</span>
                     <span>รวม ฿${Number(o.total || 0).toLocaleString("th-TH")}</span>
@@ -7379,6 +7429,8 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
           <label>ถึงวันที่</label>
           <input id="dashboardDateTo" type="date" value="${escAttr(to)}">
         </div>
+
+        ${renderAdminOrderPoSearch()}
       </div>
 
       <div class="action-row">
@@ -7430,6 +7482,7 @@ ${
               onclick="openAdminOrder(${toInlineJsStringLiteral(o.orderId)})"
               onkeydown="handleKeyboardActivation(event, this)">
               <div class="name">${esc(o.orderId)}</div>
+              <div class="stock">PO: ${esc(o.poNumber || "-")}</div>
               <div class="admin-card-meta">
                 <span class="status-badge compact status-approved">${esc(o.status)}</span>
                 <span>รวม ฿${Number(o.total || 0).toLocaleString("th-TH")}</span>
