@@ -10375,29 +10375,34 @@ function renderProductVariantFields(prefix, values = {}) {
   const id = field => `${prefix}${field}`;
   return `
     <div class="admin-detail-section">
-      <div class="admin-detail-title">ข้อมูลสินค้าแบบมีไซส์/ตัวเลือก</div>
+      <div class="admin-detail-title">ข้อมูลกลุ่มสินค้า / ไซส์ของ SKU นี้</div>
       <div class="helper-text">
-        กรอกเฉพาะสินค้าที่ต้องการจัดกลุ่มเป็นสินค้าแม่ + ตัวเลือก เช่น ไซส์ S/M/L/XL
+        หมายเหตุ: 1 รหัสสินค้า = 1 ไซส์ หากมี S/M/L/XL ให้สร้างสินค้าแยก 4 รหัส แต่ใช้รหัสสินค้าแม่เดียวกัน
       </div>
       <div class="form-group">
         <label for="${id("parentProductId")}">รหัสสินค้าแม่ / รหัสกลุ่ม</label>
         <input id="${id("parentProductId")}" value="${escAttr(values.parentProductId || "")}" placeholder="เช่น BY506">
+        <div class="helper-text">ใช้รหัสเดียวกันสำหรับสินค้าชุดเดียวกัน เช่น BY506</div>
       </div>
       <div class="form-group">
         <label for="${id("variantType")}">ประเภทตัวเลือก</label>
         <input id="${id("variantType")}" value="${escAttr(values.variantType || "")}" placeholder="เช่น size">
+        <div class="helper-text">เช่น size หรือ color</div>
       </div>
       <div class="form-group">
-        <label for="${id("variantValue")}">ค่าไซส์/ตัวเลือก</label>
-        <input id="${id("variantValue")}" value="${escAttr(values.variantValue || "")}" placeholder="เช่น S, M, L, XL">
+        <label for="${id("variantValue")}">ไซส์/ตัวเลือกของ SKU นี้</label>
+        <input id="${id("variantValue")}" value="${escAttr(values.variantValue || "")}" placeholder="เช่น S / อก 44">
+        <div class="helper-text">ใส่เฉพาะไซส์ของรหัสนี้ เช่น S / อก 44 หรือ M / อก 46 ห้ามใส่ S,M,L,XL รวมกันในช่องเดียว</div>
       </div>
       <div class="form-group">
-        <label for="${id("displayName")}">ชื่อแสดงรวม</label>
-        <input id="${id("displayName")}" value="${escAttr(values.displayName || "")}" placeholder="เช่น เสื้อ Human Made Bangkok Animal Graphic สีดำ">
+        <label for="${id("displayName")}">ชื่อแสดงรวมของสินค้าแม่</label>
+        <input id="${id("displayName")}" value="${escAttr(values.displayName || "")}" placeholder="เช่น เสื้อ Human Made Bangkok Animal Graphic T-shirt สี Black">
+        <div class="helper-text">ใช้ชื่อเดียวกันทุกไซส์ เพื่อให้อนาคตรวมเป็นการ์ดเดียวได้</div>
       </div>
       <div class="form-group">
-        <label for="${id("variantSortOrder")}">ลำดับไซส์</label>
-        <input id="${id("variantSortOrder")}" type="number" step="1" value="${escAttr(values.variantSortOrder || "")}" placeholder="เช่น 1, 2, 3, 4">
+        <label for="${id("variantSortOrder")}">ลำดับไซส์ของ SKU นี้</label>
+        <input id="${id("variantSortOrder")}" type="number" step="1" value="${escAttr(values.variantSortOrder || "")}" placeholder="เช่น 1">
+        <div class="helper-text">ใส่ตัวเลขของไซส์นี้เท่านั้น เช่น S=1, M=2, L=3, XL=4</div>
       </div>
     </div>
   `;
