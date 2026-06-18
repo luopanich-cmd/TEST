@@ -3645,6 +3645,10 @@ Object.assign(window, {
   openVariantScanSheet,
   closeVariantScanSheet,
   backToAdminMenuFromVariantScan,
+  toggleVariantScanGroup,
+  selectAllVariantScanGroups,
+  clearVariantScanGroups,
+  applySelectedVariantScanGroups,
   openLandedCostSheet,
   closeLandedCostSheet,
   backToAdminMenuFromLandedCost,
@@ -3808,6 +3812,12 @@ const state = {
       errors: [],
       summary: "",
       createdCount: 0
+    },
+    variantScan: {
+      selectedGroups: [],
+      message: "",
+      error: "",
+      appliedGroups: []
     },
     landedCost: {
       batchName: "",
@@ -11640,10 +11650,186 @@ function getVariantScanResults() {
   };
 }
 
+function ensureVariantScanState() {
+  if (!state.admin.variantScan) {
+    state.admin.variantScan = {
+      selectedGroups: [],
+      message: "",
+      error: "",
+      appliedGroups: []
+    };
+  }
+  if (!Array.isArray(state.admin.variantScan.selectedGroups)) {
+    state.admin.variantScan.selectedGroups = [];
+  }
+  if (!Array.isArray(state.admin.variantScan.appliedGroups)) {
+    state.admin.variantScan.appliedGroups = [];
+  }
+  return state.admin.variantScan;
+}
+
+function getSelectedVariantScanGroups(results = getVariantScanResults()) {
+  const scanState = ensureVariantScanState();
+  const selected = new Set(scanState.selectedGroups || []);
+  return (results.groups || []).filter(group => selected.has(group.parentProductId));
+}
+
+function getVariantScanApplyItems(groups) {
+  const seen = new Set();
+  const errors = [];
+  const items = [];
+
+  (groups || []).forEach(group => {
+    if (!group || !group.parentProductId || !group.displayName || !Array.isArray(group.items) || group.items.length < 2) {
+      errors.push(`กลุ่ม ${group?.parentProductId || "-"} ไม่พร้อมบันทึก`);
+      return;
+    }
+
+    group.items.forEach(item => {
+      const productId = normalizeProductId(item.product?.productId);
+      const sortOrder = Number(item.variantSortOrder);
+      if (!productId) errors.push(`กลุ่ม ${group.parentProductId}: ไม่พบ SKU`);
+      if (seen.has(productId)) errors.push(`SKU ${productId} ซ้ำในรายการบันทึก`);
+      if (!item.parentProductId) errors.push(`${productId}: ไม่พบ parentProductId`);
+      if (!item.variantValue) errors.push(`${productId}: ไม่พบไซส์/ตัวเลือก`);
+      if (!Number.isInteger(sortOrder)) errors.push(`${productId}: ลำดับไซส์ต้องเป็นตัวเลขจำนวนเต็ม`);
+      if (!group.displayName) errors.push(`${productId}: ไม่พบชื่อแสดงรวม`);
+      if (productId) seen.add(productId);
+
+      items.push({
+        productId,
+        parentProductId: item.parentProductId,
+        variantType: "size",
+        variantValue: item.variantValue,
+        displayName: group.displayName,
+        variantSortOrder: sortOrder
+      });
+    });
+  });
+
+  return { items, errors };
+}
+
+function toggleVariantScanGroup(parentProductId, checked) {
+  const scanState = ensureVariantScanState();
+  const selected = new Set(scanState.selectedGroups);
+  const cleanId = normalizeProductId(parentProductId);
+  if (checked) {
+    selected.add(cleanId);
+  } else {
+    selected.delete(cleanId);
+  }
+  scanState.selectedGroups = Array.from(selected);
+  scanState.message = "";
+  scanState.error = "";
+  renderVariantScanSheet();
+}
+
+function selectAllVariantScanGroups() {
+  const scanState = ensureVariantScanState();
+  const results = getVariantScanResults();
+  scanState.selectedGroups = results.groups.map(group => group.parentProductId);
+  scanState.message = "";
+  scanState.error = "";
+  renderVariantScanSheet();
+}
+
+function clearVariantScanGroups() {
+  const scanState = ensureVariantScanState();
+  scanState.selectedGroups = [];
+  scanState.message = "";
+  scanState.error = "";
+  renderVariantScanSheet();
+}
+
+async function applySelectedVariantScanGroups(btn) {
+  if (!ensureAdminSessionForMultiSizeProduct()) return;
+  if (state.admin.isSubmitting) return;
+
+  const scanState = ensureVariantScanState();
+  const results = getVariantScanResults();
+  const selectedGroups = getSelectedVariantScanGroups(results);
+  const { items, errors } = getVariantScanApplyItems(selectedGroups);
+
+  if (!selectedGroups.length) {
+    scanState.error = "กรุณาเลือกกลุ่มที่ต้องการบันทึก";
+    renderVariantScanSheet();
+    showToast(scanState.error, "warning");
+    return;
+  }
+
+  if (errors.length) {
+    scanState.error = errors.join(" / ");
+    renderVariantScanSheet();
+    showToast("ข้อมูลบางรายการยังไม่พร้อมบันทึก", "warning");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `ยืนยันบันทึกข้อมูลกลุ่มไซส์ ${selectedGroups.length} กลุ่ม (${items.length} SKU)?\n\nการบันทึกนี้จะแก้ข้อมูล Products จริง แต่จะไม่เปลี่ยน stock/ราคา/order`
+  );
+  if (!confirmed) return;
+
+  state.admin.isSubmitting = true;
+  scanState.error = "";
+  scanState.message = "";
+  renderVariantScanSheet();
+
+  try {
+    showLoading("กำลังบันทึกข้อมูลกลุ่มไซส์...");
+    const form = new URLSearchParams();
+    form.append("action", "bulkUpdateProducts");
+    form.append("token", state.admin.token);
+    form.append("items", JSON.stringify(items));
+
+    const res = await fetchWithTimeout(API_URL, {
+      method: "POST",
+      body: form
+    }, 45000);
+    const json = await res.json();
+
+    if (json?.success === true) {
+      const updated = Number(json.updated || json.data?.updated || items.length || 0);
+      scanState.message = `บันทึกข้อมูลกลุ่มไซส์สำเร็จ ${updated} SKU`;
+      scanState.appliedGroups = selectedGroups.map(group => group.parentProductId);
+      scanState.selectedGroups = [];
+      showToast(scanState.message, "success");
+      await refreshProducts();
+      renderVariantScanSheet();
+      return;
+    }
+
+    scanState.error = json?.error || json?.message || "บันทึกข้อมูลกลุ่มไซส์ไม่สำเร็จ";
+    renderVariantScanSheet();
+    showToast(scanState.error, "error");
+  } catch (err) {
+    console.error(err);
+    scanState.error = err.message || "บันทึกข้อมูลกลุ่มไซส์ไม่สำเร็จ";
+    renderVariantScanSheet();
+    showToast(scanState.error, "error");
+  } finally {
+    safeHideLoading();
+    state.ui.backdropLocked = false;
+    state.admin.isSubmitting = false;
+    renderVariantScanSheet();
+    requestAnimationFrame(syncOverlayBackdropState);
+  }
+}
+
 function renderVariantScanGroup(group) {
+  const scanState = ensureVariantScanState();
+  const selected = scanState.selectedGroups.includes(group.parentProductId);
+  const applied = scanState.appliedGroups.includes(group.parentProductId);
   return `
     <div class="bulk-preview-card">
-      <div class="name">กลุ่ม ${esc(group.parentProductId)}</div>
+      <label class="continue-row" style="margin-bottom:10px">
+        <input type="checkbox" ${selected ? "checked" : ""}
+          onchange="toggleVariantScanGroup(${toInlineJsStringLiteral(group.parentProductId)}, this.checked)">
+        <span class="continue-text">
+          <strong>กลุ่ม ${esc(group.parentProductId)}</strong>
+          ${applied ? " · บันทึกแล้ว" : ""}
+        </span>
+      </label>
       <div class="bulk-preview-meta">
         ชื่อแสดงรวมที่แนะนำ: ${esc(group.displayName || "-")}<br>
         จำนวนตัวเลือก: ${group.items.length}
@@ -11691,7 +11877,10 @@ function renderVariantScanSingles(items) {
 }
 
 function renderVariantScanSheet() {
+  const scanState = ensureVariantScanState();
   const results = getVariantScanResults();
+  const selectedGroups = getSelectedVariantScanGroups(results);
+  const selectedSkuCount = selectedGroups.reduce((sum, group) => sum + group.items.length, 0);
   adminVariantScanSheet.innerHTML = `
     <div class="sheet-topbar">
       <button class="btn btn-outline sheet-nav-btn"
@@ -11707,6 +11896,25 @@ function renderVariantScanSheet() {
         ขั้นตอนนี้เป็นการตรวจสอบเท่านั้น ยังไม่แก้ข้อมูลสินค้า<br>
         ระบบจะเดาจาก SKU เช่น BY506S / BY506M / BY506L / BY506XL และชื่อที่ขึ้นต้นด้วย Size/อก
       </div>
+      <div class="helper-text" style="margin-top:10px">
+        การบันทึกนี้จะแก้ข้อมูล Products จริง แต่จะไม่เปลี่ยน stock/ราคา/order
+      </div>
+      <div class="admin-product-summary-meta" style="margin-top:10px">
+        <span>เลือกแล้ว ${selectedGroups.length} กลุ่ม</span>
+        <span>${selectedSkuCount} SKU</span>
+      </div>
+      ${scanState.message ? `<div class="bulk-import-success-card" style="margin-top:10px">${esc(scanState.message)}</div>` : ""}
+      ${scanState.error ? `<ul class="bulk-error-list" style="margin-top:10px"><li>${esc(scanState.error)}</li></ul>` : ""}
+      <div class="sheet-action-footer" style="margin-top:12px">
+        <button class="btn btn-outline" type="button" onclick="selectAllVariantScanGroups()"
+          ${results.groups.length ? "" : "disabled"}>
+          เลือกทั้งหมด
+        </button>
+        <button class="btn btn-outline" type="button" onclick="clearVariantScanGroups()"
+          ${selectedGroups.length ? "" : "disabled"}>
+          ล้างที่เลือก
+        </button>
+      </div>
     </div>
 
     <div class="admin-detail-section">
@@ -11721,7 +11929,11 @@ function renderVariantScanSheet() {
     ${renderVariantScanSingles(results.singles)}
 
     <div class="sheet-action-footer">
-      <button class="btn btn-primary" type="button" onclick="backToAdminMenuFromVariantScan()">
+      <button class="btn btn-primary" type="button" onclick="applySelectedVariantScanGroups(this)"
+        ${selectedGroups.length && !state.admin.isSubmitting ? "" : "disabled"}>
+        ${state.admin.isSubmitting ? "กำลังบันทึก..." : "บันทึกข้อมูลกลุ่มไซส์ที่เลือก"}
+      </button>
+      <button class="btn btn-outline" type="button" onclick="backToAdminMenuFromVariantScan()">
         กลับเมนูแอดมิน
       </button>
       <button class="btn btn-outline" type="button" onclick="renderVariantScanSheet()">
