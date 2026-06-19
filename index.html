@@ -16477,6 +16477,47 @@ function setPartnerRequestConvertPoNumber(value) {
   state.admin.partnerRequests.convertError = "";
 }
 
+function normalizePoNumberForCompare(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function findDuplicatePoOrders(poNumber) {
+  const normalizedPo = normalizePoNumberForCompare(poNumber);
+  if (!normalizedPo || !Array.isArray(state.admin.orders)) return [];
+
+  return state.admin.orders.filter(order =>
+    normalizePoNumberForCompare(order?.poNumber) === normalizedPo
+  );
+}
+
+function confirmDuplicatePoBeforePartnerConvert(poNumber) {
+  const duplicates = findDuplicatePoOrders(poNumber);
+  if (!duplicates.length) return true;
+
+  const detailText = duplicates
+    .slice(0, 3)
+    .map(order => {
+      const parts = [
+        `Order ID: ${order?.orderId || "-"}`,
+        `Status: ${order?.status || "-"}`,
+        `Source: ${getAdminOrderSourceLabel(order)}`
+      ];
+      if (order?.partnerRequestId) {
+        parts.push(`Partner Request ID: ${order.partnerRequestId}`);
+      }
+      return parts.join(" | ");
+    })
+    .join("\n");
+
+  const moreText = duplicates.length > 3
+    ? `\n...และอีก ${duplicates.length - 3} ออเดอร์`
+    : "";
+
+  return window.confirm(
+    `พบเลข PO ซ้ำ: ${poNumber}\n\n${detailText}${moreText}\n\nต้องการสร้างออเดอร์ด้วย PO นี้ต่อหรือไม่?`
+  );
+}
+
 async function convertPartnerRequestToOrderFromAdmin(requestId) {
   if (!ensureAdminSessionForPartnerRequests()) return;
 
@@ -16491,6 +16532,13 @@ async function convertPartnerRequestToOrderFromAdmin(requestId) {
 
   if (!poNumber) {
     requestState.convertError = "กรุณาระบุเลข PO ก่อนสร้างออเดอร์";
+    requestState.convertResult = null;
+    renderPartnerRequestsSheet();
+    return;
+  }
+
+  if (!confirmDuplicatePoBeforePartnerConvert(poNumber)) {
+    requestState.convertError = "ยกเลิกการสร้างออเดอร์ เนื่องจากพบเลข PO ซ้ำ";
     requestState.convertResult = null;
     renderPartnerRequestsSheet();
     return;
