@@ -7915,6 +7915,9 @@ function buildAdminPoPrintHtml(order) {
   const partnerName = String(order?.partnerNameSnapshot || order?.partnerId || "").trim();
   const partnerRequestId = String(order?.partnerRequestId || "").trim();
   const total = Number(order?.total) || 0;
+  const shopName = "ร้านค้า Luopanich";
+  const printDateTime = new Date().toLocaleString("th-TH");
+  const orderNote = String(order?.note || order?.adminNote || order?.message || "").trim();
   const itemRows = items.length
     ? items.map((item, index) => {
       const productId = String(item?.productId || "").trim() || "-";
@@ -7946,35 +7949,71 @@ function buildAdminPoPrintHtml(order) {
     <html>
     <head>
       <meta charset="UTF-8">
-      <title>PO ${esc(order?.poNumber || "-")}</title>
+      <title>ใบสรุป PO ${esc(order?.poNumber || "-")}</title>
       <style>
-        @page { size: A4; margin: 16mm; }
+        @page { size: A4; margin: 14mm; }
+        * { box-sizing:border-box; }
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           color:#111827;
           font-size:13px;
           margin:0;
+          background:#fff;
         }
-        h1 { margin:0 0 4px; font-size:24px; color:#1E3A8A; }
-        .muted { color:#6B7280; }
-        .header {
+        h1 { margin:3px 0 4px; font-size:26px; line-height:1.15; color:#111827; }
+        .muted { color:#6B7280; font-size:12px; }
+        .document { width:100%; }
+        .doc-header {
           display:flex;
           justify-content:space-between;
-          gap:24px;
-          margin-bottom:18px;
+          align-items:flex-start;
+          gap:18px;
+          padding-bottom:14px;
+          border-bottom:2px solid #111827;
+          margin-bottom:14px;
         }
-        .meta {
+        .shop-name { font-size:15px; font-weight:800; letter-spacing:.01em; }
+        .doc-meta {
+          min-width:210px;
+          border:1px solid #D1D5DB;
+          border-radius:10px;
+          overflow:hidden;
+        }
+        .doc-meta div {
           display:grid;
-          grid-template-columns:140px 1fr;
-          gap:6px 12px;
-          margin:16px 0;
-          padding:12px;
-          border:1px solid #E5E7EB;
-          border-radius:12px;
+          grid-template-columns:72px 1fr;
+          gap:8px;
+          padding:7px 9px;
+          border-bottom:1px solid #E5E7EB;
         }
-        table { width:100%; border-collapse:collapse; margin-top:16px; }
-        th, td { border-bottom:1px solid #E5E7EB; padding:8px; text-align:left; vertical-align:top; }
-        th { background:#F9FAFB; color:#1E3A8A; font-weight:700; }
+        .doc-meta div:last-child { border-bottom:0; }
+        .doc-meta strong { font-size:12px; color:#374151; }
+        .meta-grid {
+          display:grid;
+          grid-template-columns:repeat(2, minmax(0, 1fr));
+          gap:8px 14px;
+          margin:14px 0;
+          padding:12px;
+          border:1px solid #D1D5DB;
+          border-radius:10px;
+        }
+        .meta-item { display:grid; grid-template-columns:120px 1fr; gap:8px; }
+        .meta-item strong { color:#374151; }
+        .section-title {
+          margin:16px 0 8px;
+          font-size:15px;
+          font-weight:800;
+        }
+        table { width:100%; border-collapse:collapse; table-layout:fixed; }
+        th, td { border:1px solid #D1D5DB; padding:7px; text-align:left; vertical-align:top; }
+        th { background:#F3F4F6; color:#111827; font-weight:800; }
+        th:nth-child(1) { width:30px; }
+        th:nth-child(2) { width:54px; }
+        th:nth-child(3) { width:88px; }
+        th:nth-child(5) { width:58px; }
+        th:nth-child(6),
+        th:nth-child(7) { width:82px; }
+        td { word-break:break-word; }
         .thumb-col { width:48px; text-align:center; }
         .po-print-thumb {
           width:40px;
@@ -7985,46 +8024,102 @@ function buildAdminPoPrintHtml(order) {
           background:#F9FAFB;
         }
         .num { text-align:right; white-space:nowrap; }
-        .total { margin-top:16px; text-align:right; font-size:16px; font-weight:700; }
+        .total {
+          margin-top:12px;
+          padding:10px 12px;
+          text-align:right;
+          font-size:17px;
+          font-weight:800;
+          border:1px solid #111827;
+          border-radius:10px;
+        }
         .empty { text-align:center; color:#6B7280; }
+        .note-box {
+          margin-top:14px;
+          padding:10px 12px;
+          border:1px solid #D1D5DB;
+          border-radius:10px;
+          white-space:pre-wrap;
+        }
+        .signature-grid {
+          display:grid;
+          grid-template-columns:repeat(3, 1fr);
+          gap:14px;
+          margin-top:34px;
+          break-inside:avoid;
+        }
+        .signature-box { text-align:center; color:#374151; }
+        .signature-line {
+          height:38px;
+          border-bottom:1px solid #111827;
+          margin-bottom:7px;
+        }
+        @media print {
+          body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+          .doc-header, .meta-grid, .note-box, .signature-grid { break-inside:avoid; }
+        }
+        @media screen and (max-width:640px) {
+          .doc-header { display:block; }
+          .doc-meta { min-width:0; margin-top:12px; }
+          .meta-grid, .signature-grid { grid-template-columns:1fr; }
+        }
       </style>
     </head>
     <body>
-      <div class="header">
-        <div>
-          <h1>พิมพ์ PO</h1>
-          <div class="muted">เอกสารสำหรับตรวจสอบคำสั่งซื้อ</div>
+      <div class="document">
+        <div class="doc-header">
+          <div>
+            <div class="shop-name">${esc(shopName)}</div>
+            <h1>ใบสรุป PO</h1>
+            <div class="muted">เอกสารสำหรับตรวจสอบรายการสินค้าและการแพ็กของ</div>
+          </div>
+          <div class="doc-meta">
+            <div><strong>PO</strong><span>${esc(order?.poNumber || "-")}</span></div>
+            <div><strong>Order ID</strong><span>${esc(order?.orderId || "-")}</span></div>
+            <div><strong>พิมพ์เมื่อ</strong><span>${esc(printDateTime)}</span></div>
+          </div>
         </div>
-        <div class="muted">${esc(new Date().toLocaleString("th-TH"))}</div>
+
+        <div class="meta-grid">
+          <div class="meta-item"><strong>PO</strong><span>${esc(order?.poNumber || "-")}</span></div>
+          <div class="meta-item"><strong>Order ID</strong><span>${esc(order?.orderId || "-")}</span></div>
+          <div class="meta-item"><strong>Status</strong><span>${esc(status || "-")}</span></div>
+          <div class="meta-item"><strong>Source</strong><span>${esc(getAdminOrderSourceLabel(order))}</span></div>
+          ${partnerName ? `<div class="meta-item"><strong>Partner</strong><span>${esc(partnerName)}</span></div>` : ""}
+          ${partnerRequestId ? `<div class="meta-item"><strong>Partner Request ID</strong><span>${esc(partnerRequestId)}</span></div>` : ""}
+          ${createdAt ? `<div class="meta-item"><strong>Created At</strong><span>${esc(formatThaiDate(createdAt))}</span></div>` : ""}
+          ${approvedAt ? `<div class="meta-item"><strong>Approved At</strong><span>${esc(formatThaiDate(approvedAt))}</span></div>` : ""}
+        </div>
+
+        <div class="section-title">รายการสินค้า</div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>รูป</th>
+              <th>SKU</th>
+              <th>สินค้า</th>
+              <th class="num">จำนวน</th>
+              <th class="num">ราคา</th>
+              <th class="num">รวม</th>
+            </tr>
+          </thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+
+        <div class="total">รวม: ฿${total.toLocaleString("th-TH")}</div>
+        ${orderNote ? `
+          <div class="note-box">
+            <strong>หมายเหตุ</strong><br>
+            ${esc(orderNote)}
+          </div>
+        ` : ""}
+        <div class="signature-grid">
+          <div class="signature-box"><div class="signature-line"></div>ผู้จัดทำ</div>
+          <div class="signature-box"><div class="signature-line"></div>ผู้ตรวจสอบ</div>
+          <div class="signature-box"><div class="signature-line"></div>ผู้รับสินค้า / ผู้แพ็กของ</div>
+        </div>
       </div>
-
-      <div class="meta">
-        <strong>PO</strong><span>${esc(order?.poNumber || "-")}</span>
-        <strong>Order ID</strong><span>${esc(order?.orderId || "-")}</span>
-        <strong>Status</strong><span>${esc(status || "-")}</span>
-        <strong>Source</strong><span>${esc(getAdminOrderSourceLabel(order))}</span>
-        ${partnerName ? `<strong>Partner</strong><span>${esc(partnerName)}</span>` : ""}
-        ${partnerRequestId ? `<strong>Partner Request ID</strong><span>${esc(partnerRequestId)}</span>` : ""}
-        ${createdAt ? `<strong>Created At</strong><span>${esc(formatThaiDate(createdAt))}</span>` : ""}
-        ${approvedAt ? `<strong>Approved At</strong><span>${esc(formatThaiDate(approvedAt))}</span>` : ""}
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>รูป</th>
-            <th>SKU</th>
-            <th>สินค้า</th>
-            <th class="num">จำนวน</th>
-            <th class="num">ราคา</th>
-            <th class="num">รวม</th>
-          </tr>
-        </thead>
-        <tbody>${itemRows}</tbody>
-      </table>
-
-      <div class="total">รวม: ฿${total.toLocaleString("th-TH")}</div>
       <script>
         window.onload = function() {
           window.print();
