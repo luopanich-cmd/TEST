@@ -7258,6 +7258,57 @@ function orderMatchesAdminPoQuery(order) {
     .includes(query);
 }
 
+function getDuplicatePoOrderMap() {
+  const map = new Map();
+  const orders = Array.isArray(state.admin.orders) ? state.admin.orders : [];
+
+  orders.forEach(order => {
+    const key = normalizePoNumberForCompare(order?.poNumber);
+    if (!key) return;
+
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key).push(order);
+  });
+
+  return map;
+}
+
+function getDuplicatePoInfo(order, duplicatePoMap = getDuplicatePoOrderMap()) {
+  const key = normalizePoNumberForCompare(order?.poNumber);
+  if (!key) return null;
+
+  const duplicates = duplicatePoMap.get(key) || [];
+  if (duplicates.length < 2) return null;
+
+  const currentOrderId = String(order?.orderId || "").trim();
+  const otherOrder = duplicates.find(item =>
+    String(item?.orderId || "").trim() !== currentOrderId
+  );
+
+  return {
+    count: duplicates.length,
+    otherOrderId: otherOrder?.orderId || ""
+  };
+}
+
+function renderDuplicatePoBadge(order, duplicatePoMap) {
+  const duplicateInfo = getDuplicatePoInfo(order, duplicatePoMap);
+  if (!duplicateInfo) return "";
+
+  return `
+    <div class="stock">
+      <span class="status-badge compact status-pending">⚠️ PO ซ้ำ</span>
+      ${
+        duplicateInfo.otherOrderId
+          ? `<span>ซ้ำกับ Order: ${esc(duplicateInfo.otherOrderId)}</span>`
+          : ""
+      }
+    </div>
+  `;
+}
+
 function renderAdminOrderPoSearch() {
   return `
     <div class="form-group">
@@ -7362,6 +7413,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
       : []
     ).filter(o => String(o.status || "").toUpperCase() === "PENDING").length;
 
+    const duplicatePoMap = getDuplicatePoOrderMap();
     const summary = calculateDashboardSummary(approvedOrders);
 
     if (mode === "PENDING") {
@@ -7386,6 +7438,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
                   onkeydown="handleKeyboardActivation(event, this)">
                   <div class="name">${esc(o.orderId)}</div>
                   <div class="stock">PO: ${esc(o.poNumber || "-")}</div>
+                  ${renderDuplicatePoBadge(o, duplicatePoMap)}
                   <div class="admin-card-meta">
                     <span class="status-badge compact status-pending">${esc(o.status)}</span>
                     <span>รวม ฿${Number(o.total || 0).toLocaleString("th-TH")}</span>
@@ -7483,6 +7536,7 @@ ${
               onkeydown="handleKeyboardActivation(event, this)">
               <div class="name">${esc(o.orderId)}</div>
               <div class="stock">PO: ${esc(o.poNumber || "-")}</div>
+              ${renderDuplicatePoBadge(o, duplicatePoMap)}
               <div class="admin-card-meta">
                 <span class="status-badge compact status-approved">${esc(o.status)}</span>
                 <span>รวม ฿${Number(o.total || 0).toLocaleString("th-TH")}</span>
