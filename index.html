@@ -10586,6 +10586,11 @@ async function submitOrder(){
       throw new Error("STOCK_CHECK_FAILED");
     }
 
+    if (!await confirmDuplicatePoBeforeCreateOrder(poNumber)) {
+      showToast("ยกเลิกการสร้างใบสั่งซื้อ เนื่องจากพบเลข PO ซ้ำ", "warning");
+      return;
+    }
+
     // ================= STEP 2: CREATE ORDER =================
     updateLoadingText('กำลังสร้างใบสั่งซื้อ...');
     const res = await createOrder();
@@ -16598,6 +16603,60 @@ function confirmDuplicatePoBeforePartnerConvert(poNumber) {
 
   return window.confirm(
     `พบเลข PO ซ้ำ: ${poNumber}\n\n${detailText}${moreText}\n\nต้องการสร้างออเดอร์ด้วย PO นี้ต่อหรือไม่?`
+  );
+}
+
+async function checkDuplicatePo(poNumber) {
+  const form = new URLSearchParams();
+  form.append("action", "checkDuplicatePo");
+  form.append("poNumber", String(poNumber || "").trim());
+
+  const res = await fetchWithTimeout(API_URL, {
+    method: "POST",
+    body: form
+  }, 8000);
+  const json = await res.json();
+
+  if (!json || json.success !== true) {
+    throw new Error(json?.message || json?.error || "Duplicate PO lookup failed");
+  }
+
+  return json.data || { duplicate: false, matches: [] };
+}
+
+async function confirmDuplicatePoBeforeCreateOrder(poNumber) {
+  let result;
+  try {
+    result = await checkDuplicatePo(poNumber);
+  } catch (err) {
+    console.warn("Duplicate PO lookup failed; continuing createOrder flow", err);
+    return true;
+  }
+
+  const matches = Array.isArray(result?.matches) ? result.matches : [];
+  if (!result?.duplicate || !matches.length) return true;
+
+  const detailText = matches
+    .slice(0, 3)
+    .map(order => {
+      const parts = [
+        `Order ID: ${order?.orderId || "-"}`,
+        `Status: ${order?.status || "-"}`,
+        `Source: ${order?.source || "-"}`
+      ];
+      if (order?.partnerRequestId) {
+        parts.push(`Partner Request ID: ${order.partnerRequestId}`);
+      }
+      return parts.join(" | ");
+    })
+    .join("\n");
+
+  const moreText = matches.length > 3
+    ? `\n...และอีก ${matches.length - 3} ออเดอร์`
+    : "";
+
+  return window.confirm(
+    `พบเลข PO ซ้ำ: ${poNumber}\n\n${detailText}${moreText}\n\nต้องการสร้างใบสั่งซื้อด้วย PO นี้ต่อหรือไม่?`
   );
 }
 
