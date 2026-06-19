@@ -9709,6 +9709,121 @@ function openPendingDeliverySheet() {
    }); 
 } 
 
+function buildPendingDeliveryPoSummary(entries) {
+  const safeEntries = Array.isArray(entries) ? entries : [];
+  const uniqueValues = (field) => Array.from(new Set(
+    safeEntries
+      .map(item => String(item?.[field] || "").trim())
+      .filter(Boolean)
+  ));
+  const openEntries = safeEntries.filter(item =>
+    String(item?.status || "").toUpperCase() === "OPEN"
+  );
+  const closedEntries = safeEntries.filter(item =>
+    String(item?.status || "").toUpperCase() === "CLOSED"
+  );
+  const sumQty = (items) => items.reduce(
+    (sum, item) => sum + Math.max(0, Number(item?.qty) || 0),
+    0
+  );
+  const latestDate = (field) => safeEntries
+    .map(item => new Date(item?.[field]))
+    .filter(date => !Number.isNaN(date.getTime()))
+    .sort((a, b) => b - a)[0] || null;
+
+  return {
+    entryCount: safeEntries.length,
+    openCount: openEntries.length,
+    closedCount: closedEntries.length,
+    totalPendingQty: sumQty(safeEntries),
+    openPendingQty: sumQty(openEntries),
+    closedPendingQty: sumQty(closedEntries),
+    skuList: uniqueValues("productId"),
+    orderIdList: uniqueValues("orderId"),
+    latestCreatedAt: latestDate("createdAt"),
+    latestClosedAt: latestDate("closedAt")
+  };
+}
+
+function getPendingDeliveryPoStatusText(summary) {
+  if (!summary || summary.entryCount === 0) return "-";
+  if (summary.openCount === summary.entryCount) return "ทั้งหมดยังค้างส่ง";
+  if (summary.openCount === 0) return "ปิดครบแล้ว";
+  return "บางรายการปิดแล้ว";
+}
+
+function renderPendingDeliveryPoSummary(poNumber, entries) {
+  const summary = buildPendingDeliveryPoSummary(entries);
+  const statusText = getPendingDeliveryPoStatusText(summary);
+  const hasMultipleOrders = summary.orderIdList.length > 1;
+
+  return `
+    <div class="cart-summary" style="margin-top:12px">
+      <div class="summary-row">
+        <span>PO</span>
+        <strong>${esc(poNumber || "-")}</strong>
+      </div>
+      <div class="summary-row">
+        <span>สถานะรวม</span>
+        <strong>${esc(statusText)}</strong>
+      </div>
+      <div class="summary-row">
+        <span>รายการทั้งหมด</span>
+        <strong>${summary.entryCount}</strong>
+      </div>
+      <div class="summary-row">
+        <span>OPEN / CLOSED</span>
+        <strong>${summary.openCount} / ${summary.closedCount}</strong>
+      </div>
+      <div class="summary-row">
+        <span>จำนวนค้างส่งรวม</span>
+        <strong>${summary.totalPendingQty}</strong>
+      </div>
+      <div class="summary-row">
+        <span>OPEN / CLOSED Qty</span>
+        <strong>${summary.openPendingQty} / ${summary.closedPendingQty}</strong>
+      </div>
+      <div class="summary-row">
+        <span>SKU</span>
+        <strong>${esc(summary.skuList.join(", ") || "-")}</strong>
+      </div>
+      <div class="summary-row">
+        <span>Order ID</span>
+        <strong>${esc(summary.orderIdList.join(", ") || "-")}</strong>
+      </div>
+      ${
+        summary.latestCreatedAt
+          ? `
+            <div class="summary-row">
+              <span>สร้างล่าสุด</span>
+              <strong>${esc(formatThaiDate(summary.latestCreatedAt))}</strong>
+            </div>
+          `
+          : ""
+      }
+      ${
+        summary.latestClosedAt
+          ? `
+            <div class="summary-row">
+              <span>ปิดล่าสุด</span>
+              <strong>${esc(formatThaiDate(summary.latestClosedAt))}</strong>
+            </div>
+          `
+          : ""
+      }
+      ${
+        hasMultipleOrders
+          ? `
+            <div class="status-badge status-pending" style="margin-top:10px">
+              ⚠️ PO นี้มีหลาย Order
+            </div>
+          `
+          : ""
+      }
+    </div>
+  `;
+}
+
 function renderPendingDeliveries(list) {
 
   const container =
@@ -9830,6 +9945,7 @@ container.innerHTML =
  </span>
 
   </div>
+${renderPendingDeliveryPoSummary(po, items)}
 ${
   state.admin
     .pendingDeliveryExpanded[
