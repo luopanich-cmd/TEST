@@ -7738,6 +7738,75 @@ function getAdminOrderSourceLabel(order) {
   return source;
 }
 
+function formatAdminPoSummaryMoney(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "-";
+  return `฿${amount.toLocaleString("th-TH")}`;
+}
+
+function buildAdminPoSummaryText(order) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const lines = [
+    `PO: ${order?.poNumber || "-"}`,
+    `Order ID: ${order?.orderId || "-"}`,
+    `Status: ${order?.status || "-"}`,
+    `Source: ${getAdminOrderSourceLabel(order)}`
+  ];
+
+  const partnerName = String(order?.partnerNameSnapshot || order?.partnerId || "").trim();
+  const partnerRequestId = String(order?.partnerRequestId || "").trim();
+
+  if (partnerName) {
+    lines.push(`Partner: ${partnerName}`);
+  }
+  if (partnerRequestId) {
+    lines.push(`Partner Request ID: ${partnerRequestId}`);
+  }
+
+  lines.push("", "รายการสินค้า:");
+
+  if (items.length) {
+    items.forEach((item, index) => {
+      const productId = String(item?.productId || "").trim() || "-";
+      const name = String(item?.name || "").trim();
+      const qty = Number(item?.qty) || 0;
+      const price = Number(item?.price);
+      const lineTotal = Number.isFinite(price)
+        ? formatAdminPoSummaryMoney(price * qty)
+        : "-";
+      const itemName = name ? ` - ${name}` : "";
+
+      lines.push(`${index + 1}. [${productId}]${itemName} x ${qty} = ${lineTotal}`);
+    });
+  } else {
+    lines.push("-");
+  }
+
+  lines.push("", `รวม: ${formatAdminPoSummaryMoney(order?.total)}`);
+  return lines.join("\n");
+}
+
+function copyAdminPoSummary(orderId) {
+  const cleanOrderId = String(orderId || "").trim();
+  const orders = Array.isArray(state.admin.orders) ? state.admin.orders : [];
+  const order = orders.find(item => String(item?.orderId || "").trim() === cleanOrderId) ||
+    (
+      String(state.admin.selectedOrder?.orderId || "").trim() === cleanOrderId
+        ? state.admin.selectedOrder
+        : null
+    );
+
+  if (!order) {
+    showToast("ไม่พบข้อมูลออเดอร์สำหรับคัดลอก", "warning");
+    return;
+  }
+
+  copyTextToClipboard(
+    buildAdminPoSummaryText(order),
+    "คัดลอกสรุป PO แล้ว"
+  );
+}
+
 function renderAdminOrderSummary(order) {
   const partnerRequestId = String(order?.partnerRequestId || "").trim();
   const partnerName = String(order?.partnerNameSnapshot || order?.partnerId || "").trim();
@@ -7808,6 +7877,13 @@ function renderAdminOrderSummary(order) {
             : ""
         }
       </div>
+      <button
+        class="btn btn-outline"
+        type="button"
+        style="margin-top:12px;width:100%"
+        onclick="copyAdminPoSummary(${toInlineJsStringLiteral(order?.orderId || "")})">
+        คัดลอกสรุป PO
+      </button>
     </div>
   `;
 }
