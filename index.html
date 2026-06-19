@@ -7890,6 +7890,144 @@ function copyAdminPoSummary(orderId) {
   );
 }
 
+function buildAdminPoPrintHtml(order) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const status = String(order?.status || "-").trim();
+  const createdAt = getOrderDateValue(order);
+  const approvedAt = order?.approvedAt || "";
+  const partnerName = String(order?.partnerNameSnapshot || order?.partnerId || "").trim();
+  const partnerRequestId = String(order?.partnerRequestId || "").trim();
+  const total = Number(order?.total) || 0;
+  const itemRows = items.length
+    ? items.map((item, index) => {
+      const productId = String(item?.productId || "").trim() || "-";
+      const name = String(item?.name || "").trim();
+      const qty = Number(item?.qty) || 0;
+      const price = Number(item?.price) || 0;
+      const lineTotal = price * qty;
+
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${esc(productId)}</td>
+          <td>${esc(name || "-")}</td>
+          <td class="num">${qty}</td>
+          <td class="num">฿${price.toLocaleString("th-TH")}</td>
+          <td class="num">฿${lineTotal.toLocaleString("th-TH")}</td>
+        </tr>
+      `;
+    }).join("")
+    : `<tr><td colspan="6" class="empty">ไม่มีรายการสินค้า</td></tr>`;
+
+  return `
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>PO ${esc(order?.poNumber || "-")}</title>
+      <style>
+        @page { size: A4; margin: 16mm; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          color:#111827;
+          font-size:13px;
+          margin:0;
+        }
+        h1 { margin:0 0 4px; font-size:24px; color:#1E3A8A; }
+        .muted { color:#6B7280; }
+        .header {
+          display:flex;
+          justify-content:space-between;
+          gap:24px;
+          margin-bottom:18px;
+        }
+        .meta {
+          display:grid;
+          grid-template-columns:140px 1fr;
+          gap:6px 12px;
+          margin:16px 0;
+          padding:12px;
+          border:1px solid #E5E7EB;
+          border-radius:12px;
+        }
+        table { width:100%; border-collapse:collapse; margin-top:16px; }
+        th, td { border-bottom:1px solid #E5E7EB; padding:8px; text-align:left; vertical-align:top; }
+        th { background:#F9FAFB; color:#1E3A8A; font-weight:700; }
+        .num { text-align:right; white-space:nowrap; }
+        .total { margin-top:16px; text-align:right; font-size:16px; font-weight:700; }
+        .empty { text-align:center; color:#6B7280; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <h1>พิมพ์ PO</h1>
+          <div class="muted">เอกสารสำหรับตรวจสอบคำสั่งซื้อ</div>
+        </div>
+        <div class="muted">${esc(new Date().toLocaleString("th-TH"))}</div>
+      </div>
+
+      <div class="meta">
+        <strong>PO</strong><span>${esc(order?.poNumber || "-")}</span>
+        <strong>Order ID</strong><span>${esc(order?.orderId || "-")}</span>
+        <strong>Status</strong><span>${esc(status || "-")}</span>
+        <strong>Source</strong><span>${esc(getAdminOrderSourceLabel(order))}</span>
+        ${partnerName ? `<strong>Partner</strong><span>${esc(partnerName)}</span>` : ""}
+        ${partnerRequestId ? `<strong>Partner Request ID</strong><span>${esc(partnerRequestId)}</span>` : ""}
+        ${createdAt ? `<strong>Created At</strong><span>${esc(formatThaiDate(createdAt))}</span>` : ""}
+        ${approvedAt ? `<strong>Approved At</strong><span>${esc(formatThaiDate(approvedAt))}</span>` : ""}
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>SKU</th>
+            <th>สินค้า</th>
+            <th class="num">จำนวน</th>
+            <th class="num">ราคา</th>
+            <th class="num">รวม</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+
+      <div class="total">รวม: ฿${total.toLocaleString("th-TH")}</div>
+      <script>
+        window.onload = function() {
+          window.print();
+        };
+      <\/script>
+    </body>
+    </html>
+  `;
+}
+
+function printAdminPoOrder(orderId) {
+  const cleanOrderId = String(orderId || "").trim();
+  const orders = Array.isArray(state.admin.orders) ? state.admin.orders : [];
+  const order = orders.find(item => String(item?.orderId || "").trim() === cleanOrderId) ||
+    (
+      String(state.admin.selectedOrder?.orderId || "").trim() === cleanOrderId
+        ? state.admin.selectedOrder
+        : null
+    );
+
+  if (!order) {
+    showToast("ไม่พบข้อมูลออเดอร์สำหรับพิมพ์", "warning");
+    return;
+  }
+
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    showToast("ไม่สามารถเปิดหน้าพิมพ์ได้", "warning");
+    return;
+  }
+
+  printWindow.document.write(buildAdminPoPrintHtml(order));
+  printWindow.document.close();
+}
+
 function renderAdminOrderSummary(order) {
   const partnerRequestId = String(order?.partnerRequestId || "").trim();
   const partnerName = String(order?.partnerNameSnapshot || order?.partnerId || "").trim();
@@ -7966,6 +8104,13 @@ function renderAdminOrderSummary(order) {
         style="margin-top:12px;width:100%"
         onclick="copyAdminPoSummary(${toInlineJsStringLiteral(order?.orderId || "")})">
         คัดลอกสรุป PO
+      </button>
+      <button
+        class="btn btn-primary"
+        type="button"
+        style="margin-top:8px;width:100%"
+        onclick="printAdminPoOrder(${toInlineJsStringLiteral(order?.orderId || "")})">
+        พิมพ์ PO
       </button>
     </div>
   `;
