@@ -1053,6 +1053,13 @@ button:disabled {
   box-sizing:border-box;
 } 
 
+.admin-po-search-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:10px;
+}
+
 @media (max-width: 480px){
   .admin-sheet-topbar{
     display:grid;
@@ -3919,7 +3926,8 @@ const state = {
       status: "all",
       dashboardFrom: "",
       dashboardTo: "",
-      poQuery: ""
+      poQuery: "",
+      poQueryDraft: ""
     },
     bulkProductImport: {
       rawText: "",
@@ -7310,30 +7318,51 @@ function renderDuplicatePoBadge(order, duplicatePoMap) {
 }
 
 function renderAdminOrderPoSearch() {
+  const value = state.admin.filters?.poQueryDraft ?? state.admin.filters?.poQuery ?? "";
   return `
     <div class="form-group">
       <label>ค้นหาเลข PO</label>
       <input
         id="adminOrderPoSearch"
         type="search"
-        value="${escAttr(state.admin.filters?.poQuery || "")}"
+        value="${escAttr(value)}"
         placeholder="ค้นหาเลข PO"
-        oninput="setAdminOrderPoQuery(this.value)">
+        oninput="setAdminOrderPoQueryDraft(this.value)"
+        onkeydown="handleAdminOrderPoSearchKey(event)">
+      <div class="admin-po-search-actions">
+        <button class="btn btn-primary" type="button" onclick="applyAdminOrderPoQuery()">ค้นหา</button>
+        <button class="btn btn-outline" type="button" onclick="clearAdminOrderPoQuery()">ล้าง</button>
+      </div>
     </div>
   `;
 }
 
-let adminOrderPoSearchTimer = null;
+function setAdminOrderPoQueryDraft(value) {
+  state.admin.filters.poQueryDraft = value || "";
+}
 
-function setAdminOrderPoQuery(value) {
-  state.admin.filters.poQuery = value || "";
-  if (adminOrderPoSearchTimer) {
-    clearTimeout(adminOrderPoSearchTimer);
-  }
-  adminOrderPoSearchTimer = setTimeout(() => {
-    allowOpenOrders = true;
-    openAdminDashboard(state.admin.dashboardMode || "SUMMARY", true);
-  }, 250);
+function handleAdminOrderPoSearchKey(event) {
+  if (event.key !== "Enter") return;
+
+  event.preventDefault();
+  applyAdminOrderPoQuery();
+}
+
+function applyAdminOrderPoQuery() {
+  const input = document.getElementById("adminOrderPoSearch");
+  const value = input ? input.value : state.admin.filters.poQueryDraft || "";
+
+  state.admin.filters.poQuery = String(value || "").trim();
+  state.admin.filters.poQueryDraft = state.admin.filters.poQuery;
+  allowOpenOrders = true;
+  openAdminDashboard(state.admin.dashboardMode || "SUMMARY", true);
+}
+
+function clearAdminOrderPoQuery() {
+  state.admin.filters.poQuery = "";
+  state.admin.filters.poQueryDraft = "";
+  allowOpenOrders = true;
+  openAdminDashboard(state.admin.dashboardMode || "SUMMARY", true);
 }
 
 async function openAdminDashboard(mode = "SUMMARY", force = false) {
