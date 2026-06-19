@@ -9824,6 +9824,60 @@ function renderPendingDeliveryPoSummary(poNumber, entries) {
   `;
 }
 
+function buildPendingDeliveryPoSummaryText(poNumber, entries) {
+  const safeEntries = Array.isArray(entries) ? entries : [];
+  const summary = buildPendingDeliveryPoSummary(safeEntries);
+  const statusText = getPendingDeliveryPoStatusText(summary);
+  const lines = [
+    `PO: ${poNumber || "-"}`,
+    `สถานะรวม: ${statusText}`,
+    `รายการทั้งหมด: ${summary.entryCount}`,
+    `OPEN / CLOSED: ${summary.openCount} / ${summary.closedCount}`,
+    `จำนวนค้างส่งรวม: ${summary.totalPendingQty}`,
+    `OPEN / CLOSED Qty: ${summary.openPendingQty} / ${summary.closedPendingQty}`,
+    `SKU: ${summary.skuList.join(", ") || "-"}`,
+    `Order ID: ${summary.orderIdList.join(", ") || "-"}`
+  ];
+
+  if (summary.latestCreatedAt) {
+    lines.push(`สร้างล่าสุด: ${formatThaiDate(summary.latestCreatedAt)}`);
+  }
+  if (summary.latestClosedAt) {
+    lines.push(`ปิดล่าสุด: ${formatThaiDate(summary.latestClosedAt)}`);
+  }
+  if (summary.orderIdList.length > 1) {
+    lines.push("⚠️ PO นี้มีหลาย Order");
+  }
+
+  lines.push("", "รายละเอียดสินค้า:");
+  safeEntries.forEach(item => {
+    const detail = [
+      `- ${String(item?.productId || "-").trim() || "-"}`,
+      `ใน PO: ${Number(item?.orderedQty || 0)}`,
+      `ค้างส่ง: ${Number(item?.qty || 0)}`,
+      String(item?.status || "-").trim() || "-"
+    ];
+    lines.push(detail.join(" | "));
+    const note = String(item?.note || "").trim();
+    if (note) {
+      lines.push(`  หมายเหตุ: ${note}`);
+    }
+  });
+
+  return lines.join("\n");
+}
+
+function copyPendingDeliveryPoSummary(poNumber) {
+  const pendingDeliveries = Array.isArray(state.admin.pendingDeliveries)
+    ? state.admin.pendingDeliveries
+    : [];
+  const entries = pendingDeliveries.filter(item =>
+    String(item?.poNumber || "-") === String(poNumber || "-")
+  );
+  const text = buildPendingDeliveryPoSummaryText(poNumber || "-", entries);
+  copyTextToClipboard(text, "คัดลอกสรุปค้างส่งแล้ว");
+}
+
 function renderPendingDeliveries(list) {
 
   const container =
@@ -9946,6 +10000,13 @@ container.innerHTML =
 
   </div>
 ${renderPendingDeliveryPoSummary(po, items)}
+<button
+  class="btn btn-outline"
+  type="button"
+  style="margin-top:12px"
+  onclick="copyPendingDeliveryPoSummary(${toInlineJsStringLiteral(po)})">
+  คัดลอกสรุปค้างส่ง
+</button>
 ${
   state.admin
     .pendingDeliveryExpanded[
