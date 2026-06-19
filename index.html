@@ -7902,13 +7902,18 @@ function buildAdminPoPrintHtml(order) {
     ? items.map((item, index) => {
       const productId = String(item?.productId || "").trim() || "-";
       const name = String(item?.name || "").trim();
+      const imageUrl = String(item?.imageSnapshot || item?.image || "").trim();
       const qty = Number(item?.qty) || 0;
       const price = Number(item?.price) || 0;
       const lineTotal = price * qty;
+      const imageCell = imageUrl
+        ? `<img class="po-print-thumb" src="${escAttr(imageUrl)}" alt="${escAttr(name || productId)}" onerror="this.replaceWith(document.createTextNode('-'));">`
+        : "-";
 
       return `
         <tr>
           <td>${index + 1}</td>
+          <td class="thumb-col">${imageCell}</td>
           <td>${esc(productId)}</td>
           <td>${esc(name || "-")}</td>
           <td class="num">${qty}</td>
@@ -7917,7 +7922,7 @@ function buildAdminPoPrintHtml(order) {
         </tr>
       `;
     }).join("")
-    : `<tr><td colspan="6" class="empty">ไม่มีรายการสินค้า</td></tr>`;
+    : `<tr><td colspan="7" class="empty">ไม่มีรายการสินค้า</td></tr>`;
 
   return `
     <!doctype html>
@@ -7953,6 +7958,15 @@ function buildAdminPoPrintHtml(order) {
         table { width:100%; border-collapse:collapse; margin-top:16px; }
         th, td { border-bottom:1px solid #E5E7EB; padding:8px; text-align:left; vertical-align:top; }
         th { background:#F9FAFB; color:#1E3A8A; font-weight:700; }
+        .thumb-col { width:48px; text-align:center; }
+        .po-print-thumb {
+          width:40px;
+          height:40px;
+          object-fit:cover;
+          border:1px solid #E5E7EB;
+          border-radius:8px;
+          background:#F9FAFB;
+        }
         .num { text-align:right; white-space:nowrap; }
         .total { margin-top:16px; text-align:right; font-size:16px; font-weight:700; }
         .empty { text-align:center; color:#6B7280; }
@@ -7982,6 +7996,7 @@ function buildAdminPoPrintHtml(order) {
         <thead>
           <tr>
             <th>#</th>
+            <th>รูป</th>
             <th>SKU</th>
             <th>สินค้า</th>
             <th class="num">จำนวน</th>
