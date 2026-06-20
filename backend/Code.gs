@@ -6131,3 +6131,10 @@ function generateOrderPDF(token, orderId) {
   };
 }
 
+function authorizeUrlFetchForImageProxy_() {
+  const res = UrlFetchApp.fetch("https://www.google.com", {
+    muteHttpExceptions: true
+  });
+  Logger.log("UrlFetch authorization OK: " + res.getResponseCode());
+}
+
