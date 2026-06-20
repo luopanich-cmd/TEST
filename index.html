@@ -12852,11 +12852,65 @@ function isDeliveryNoteImageExportCorsRisk(src) {
   }
 }
 
+function collectDeliveryNoteExportImageUrls(doc) {
+  const seen = new Set();
+  const urls = [];
+
+  Array.from(doc?.querySelectorAll(".delivery-note-thumb") || []).forEach(img => {
+    const src = String(img?.currentSrc || img?.src || img?.getAttribute("src") || "").trim();
+    if (!src || /^(data:|blob:)/i.test(src) || seen.has(src)) return;
+    seen.add(src);
+    urls.push(src);
+  });
+
+  return urls;
+}
+
+async function fetchDeliveryNoteImageDataUrls(urls) {
+  if (!Array.isArray(urls) || !urls.length) return [];
+  if (!state.admin?.token) {
+    throw new Error("Missing admin token");
+  }
+
+  const form = new URLSearchParams();
+  form.append("action", "deliveryNoteImageDataUrls");
+  form.append("token", state.admin.token);
+  form.append("urls", JSON.stringify(urls));
+
+  const json = await postFormAction(form);
+  return Array.isArray(json?.results) ? json.results : [];
+}
+
+function applyDeliveryNoteImageDataUrls(doc, results) {
+  const dataUrlsByUrl = new Map();
+
+  (Array.isArray(results) ? results : []).forEach(result => {
+    const url = String(result?.url || "").trim();
+    const dataUrl = String(result?.dataUrl || "").trim();
+    if (result?.ok && url && /^data:image\//i.test(dataUrl)) {
+      dataUrlsByUrl.set(url, dataUrl);
+    }
+  });
+
+  let applied = 0;
+  Array.from(doc?.querySelectorAll(".delivery-note-thumb") || []).forEach(img => {
+    const src = String(img?.currentSrc || img?.src || img?.getAttribute("src") || "").trim();
+    const dataUrl = dataUrlsByUrl.get(src);
+    if (!dataUrl) return;
+    img.removeAttribute("crossorigin");
+    img.crossOrigin = "";
+    img.src = dataUrl;
+    applied += 1;
+  });
+
+  return applied;
+}
+
 function prepareDeliveryNoteExportImageNodes(doc) {
   const images = Array.from(doc?.querySelectorAll(".delivery-note-thumb") || []);
   images.forEach(img => {
     const src = img.getAttribute("src");
-    if (!src || img.getAttribute("crossorigin")) return;
+    if (!src || /^(data:|blob:)/i.test(src) || img.getAttribute("crossorigin")) return;
     img.setAttribute("crossorigin", "anonymous");
     img.crossOrigin = "anonymous";
     img.src = src;
@@ -12936,9 +12990,23 @@ function prepareDeliveryNoteImageExport() {
           throw new Error(t("deliveryNoteImageExportFailed", "ไม่สามารถส่งออกเป็นรูปภาพได้"));
         }
 
+        let imageWarning = false;
+        const imageUrls = collectDeliveryNoteExportImageUrls(doc);
+        if (imageUrls.length) {
+          try {
+            const proxyResults = await fetchDeliveryNoteImageDataUrls(imageUrls);
+            const appliedCount = applyDeliveryNoteImageDataUrls(doc, proxyResults);
+            imageWarning = proxyResults.some(result => !result?.ok) ||
+              appliedCount < imageUrls.length;
+          } catch (err) {
+            console.warn("delivery note image proxy unavailable:", err);
+            imageWarning = true;
+          }
+        }
+
         prepareDeliveryNoteExportImageNodes(doc);
         await waitForDeliveryNoteExportImages(doc);
-        const imageWarning = hasDeliveryNoteExportImageWarning(doc);
+        imageWarning = imageWarning || hasDeliveryNoteExportImageWarning(doc);
 
         const baseName = getDeliveryNoteImageExportBaseName(data);
         const exportedPages = [];
