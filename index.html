@@ -12842,6 +12842,16 @@ function waitForDeliveryNoteExportImages(doc) {
   }));
 }
 
+function isDeliveryNoteImageExportCorsRisk(src) {
+  const value = String(src || "").trim();
+  if (!value || /^(data:|blob:)/i.test(value)) return false;
+  try {
+    return new URL(value, window.location.href).origin !== window.location.origin;
+  } catch (err) {
+    return true;
+  }
+}
+
 function prepareDeliveryNoteExportImageNodes(doc) {
   const images = Array.from(doc?.querySelectorAll(".delivery-note-thumb") || []);
   images.forEach(img => {
@@ -12855,7 +12865,28 @@ function prepareDeliveryNoteExportImageNodes(doc) {
 
 function hasDeliveryNoteExportImageWarning(doc) {
   return Array.from(doc?.querySelectorAll(".delivery-note-thumb") || [])
-    .some(img => !img.complete || !img.naturalWidth || !img.naturalHeight);
+    .some(img => {
+      const src = img.getAttribute("src") || "";
+      return !img.complete ||
+        !img.naturalWidth ||
+        !img.naturalHeight ||
+        isDeliveryNoteImageExportCorsRisk(src);
+    });
+}
+
+function getDeliveryNoteExportPageSize(pageNode) {
+  const rect = pageNode.getBoundingClientRect();
+  const width = Math.ceil(Math.max(
+    pageNode.scrollWidth,
+    pageNode.offsetWidth,
+    rect.width
+  ));
+  const height = Math.ceil(Math.max(
+    pageNode.scrollHeight,
+    pageNode.offsetHeight,
+    rect.height
+  ));
+  return { width, height };
 }
 
 function prepareDeliveryNoteImageExport() {
@@ -12913,20 +12944,24 @@ function prepareDeliveryNoteImageExport() {
         const exportedPages = [];
 
         for (const [index, pageNode] of pages.entries()) {
-          const pageRect = pageNode.getBoundingClientRect();
-          const pageWidth = Math.ceil(Math.max(pageNode.scrollWidth, pageRect.width));
-          const pageHeight = Math.ceil(Math.max(pageNode.scrollHeight, pageRect.height));
+          pageNode.style.overflow = "visible";
+          pageNode.style.maxWidth = "none";
+          pageNode.style.background = "#ffffff";
+          const pageBody = pageNode.querySelector(".delivery-note-page-body");
+          if (pageBody) pageBody.style.overflow = "visible";
+          const pageSize = getDeliveryNoteExportPageSize(pageNode);
           const blob = await window.htmlToImage.toBlob(pageNode, {
             backgroundColor: "#ffffff",
             pixelRatio: 2,
             cacheBust: true,
-            width: pageWidth,
-            height: pageHeight,
+            width: pageSize.width,
+            height: pageSize.height,
             style: {
-              width: `${pageWidth}px`,
-              height: `${pageHeight}px`,
+              width: `${pageSize.width}px`,
+              height: `${pageSize.height}px`,
               maxWidth: "none",
-              overflow: "hidden"
+              overflow: "visible",
+              background: "#ffffff"
             }
           });
 
@@ -13004,6 +13039,7 @@ function openDeliveryNoteExportImage(pageNumber) {
         html, body {
           margin: 0;
           min-height: 100%;
+          overflow-x: hidden;
           background: #fff;
           color: #111827;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -13023,10 +13059,12 @@ function openDeliveryNoteExportImage(pageNumber) {
         }
         img {
           display: block;
-          width: auto;
-          max-width: 100%;
+          width: 100%;
+          max-width: 100vw;
           height: auto;
           margin: 0 auto;
+          object-fit: contain;
+          box-sizing: border-box;
           background: #fff;
           box-shadow: 0 8px 24px rgba(15, 23, 42, .14);
         }
