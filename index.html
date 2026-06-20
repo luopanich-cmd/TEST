@@ -4581,6 +4581,7 @@ const UI_TEXT = {
     deliveryNoteImageExportFailed: "ไม่สามารถส่งออกเป็นรูปภาพได้",
     deliveryNoteImageExportCorsHint: "อาจเกิดจากรูปสินค้าบางรูปไม่รองรับการแปลงเป็นภาพ",
     deliveryNoteImageExportImageWarning: "รูปสินค้าบางรูปอาจไม่แสดงในไฟล์ภาพ",
+    deliveryNoteImageExportDataUrlNotRenderedWarning: "แปลงรูปสินค้าได้แล้ว แต่เบราว์เซอร์ยังไม่แสดงรูปก่อนจับภาพ",
     deliveryNoteImageSaveInstruction: "กดค้างที่รูป หรือใช้ปุ่มแชร์ เพื่อบันทึกรูปภาพ",
     deliveryNoteImageProxyDebugTitle: "รายละเอียดการแปลงรูปสินค้า",
     deliveryNoteImageProxyFound: "พบรูปสินค้า",
@@ -4589,7 +4590,11 @@ const UI_TEXT = {
     deliveryNoteImageProxySucceeded: "สำเร็จ",
     deliveryNoteImageProxyFailed: "ล้มเหลว",
     deliveryNoteImageProxyApplied: "แทนรูปด้วย data URL",
+    deliveryNoteImageProxyRendered: "รูป data URL ที่แสดงผลแล้ว",
+    deliveryNoteImageNaturalSizeFailed: "รูป data URL ที่ไม่มีขนาดจริง",
+    deliveryNoteImageRepaintWaited: "รอ repaint ก่อนจับภาพ",
     deliveryNoteImageWaitFailed: "รูปที่โหลดไม่สำเร็จหลังรอ",
+    deliveryNoteImageRenderReason: "สาเหตุการแสดงผล",
     deliveryNoteImageFirstReason: "สาเหตุแรก",
     yes: "ใช่",
     no: "ไม่",
@@ -5288,6 +5293,7 @@ const UI_TEXT = {
     deliveryNoteImageExportFailed: "Unable to export images",
     deliveryNoteImageExportCorsHint: "Some product images may not support image export",
     deliveryNoteImageExportImageWarning: "Some product images may not appear in exported images",
+    deliveryNoteImageExportDataUrlNotRenderedWarning: "Product images were converted, but the browser did not render them before capture",
     deliveryNoteImageSaveInstruction: "Long-press the image or use Share to save it",
     deliveryNoteImageProxyDebugTitle: "Product image proxy details",
     deliveryNoteImageProxyFound: "Product images found",
@@ -5296,7 +5302,11 @@ const UI_TEXT = {
     deliveryNoteImageProxySucceeded: "Succeeded",
     deliveryNoteImageProxyFailed: "Failed",
     deliveryNoteImageProxyApplied: "Data URLs applied",
+    deliveryNoteImageProxyRendered: "Data URL images rendered",
+    deliveryNoteImageNaturalSizeFailed: "Data URL natural size failures",
+    deliveryNoteImageRepaintWaited: "Pre-capture repaint waited",
     deliveryNoteImageWaitFailed: "Image wait failed",
+    deliveryNoteImageRenderReason: "Render reason",
     deliveryNoteImageFirstReason: "First reason",
     yes: "yes",
     no: "no",
@@ -12848,22 +12858,96 @@ function getDeliveryNoteImageExportBaseName(data) {
   return `delivery-note-${new Date().toISOString().slice(0, 10)}`;
 }
 
-function waitForDeliveryNoteExportImages(doc) {
-  const images = Array.from(doc?.querySelectorAll("img") || []);
-  if (!images.length) return Promise.resolve();
+function waitForAnimationFrames(count = 2) {
+  return new Promise(resolve => {
+    const next = remaining => {
+      if (remaining <= 0) {
+        resolve();
+        return;
+      }
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => next(remaining - 1));
+      } else {
+        setTimeout(() => next(remaining - 1), 16);
+      }
+    };
+    next(Math.max(1, Number(count) || 1));
+  });
+}
 
-  return Promise.all(images.map(img => {
-    if (img.complete) return Promise.resolve();
-    if (typeof img.decode === "function") {
-      return img.decode().catch(() => {});
+async function waitForDeliveryNotePreCaptureRepaint() {
+  await waitForAnimationFrames(2);
+  await new Promise(resolve => setTimeout(resolve, 80));
+}
+
+function isDeliveryNoteImageRendered(img) {
+  return !!(
+    img &&
+    img.complete === true &&
+    Number(img.naturalWidth || 0) > 0 &&
+    Number(img.naturalHeight || 0) > 0
+  );
+}
+
+function getDeliveryNoteImageRenderFailureReason(img, index) {
+  const label = `image ${index + 1}`;
+  if (!img) return `${label}: missing image node`;
+  if (img.complete !== true) return `${label}: not complete`;
+  if (!Number(img.naturalWidth || 0) || !Number(img.naturalHeight || 0)) {
+    return `${label}: natural size is 0`;
+  }
+  return "";
+}
+
+async function waitForDeliveryNoteImageRender(img, index) {
+  const waitForLoad = () => new Promise(resolve => {
+    if (!img || img.complete) {
+      resolve();
+      return;
     }
+    const done = () => {
+      img.removeEventListener("load", done);
+      img.removeEventListener("error", done);
+      resolve();
+    };
+    img.addEventListener("load", done, { once: true });
+    img.addEventListener("error", done, { once: true });
+    setTimeout(done, 2500);
+  });
 
-    return new Promise(resolve => {
-      img.onload = resolve;
-      img.onerror = resolve;
-      setTimeout(resolve, 1500);
-    });
-  }));
+  await waitForLoad();
+
+  if (img && typeof img.decode === "function") {
+    try {
+      await img.decode();
+    } catch (err) {
+      // A decode rejection can happen for failed images; natural size below decides success.
+    }
+  }
+
+  await waitForAnimationFrames(1);
+
+  const ok = isDeliveryNoteImageRendered(img);
+  return {
+    ok,
+    reason: ok ? "" : getDeliveryNoteImageRenderFailureReason(img, index),
+    isDataUrl: /^data:image\//i.test(String(img?.getAttribute("src") || img?.src || ""))
+  };
+}
+
+async function waitForDeliveryNoteExportImages(doc) {
+  const images = Array.from(doc?.querySelectorAll("img") || []);
+  const results = await Promise.all(images.map(waitForDeliveryNoteImageRender));
+  const dataUrlResults = results.filter(result => result.isDataUrl);
+  return {
+    failedCount: results.filter(result => !result.ok).length,
+    renderedDataUrlCount: dataUrlResults.filter(result => result.ok).length,
+    dataUrlNaturalSizeFailCount: dataUrlResults.filter(result => !result.ok).length,
+    failureReasons: results
+      .filter(result => !result.ok && result.reason)
+      .map(result => result.reason)
+      .slice(0, 3)
+  };
 }
 
 function isDeliveryNoteImageExportCorsRisk(src) {
@@ -12898,8 +12982,12 @@ function createDeliveryNoteImageExportDebug() {
     proxySuccessCount: 0,
     proxyFailureCount: 0,
     dataUrlAppliedCount: 0,
+    dataUrlRenderedCount: 0,
+    dataUrlNaturalSizeFailCount: 0,
+    preCaptureRepaintWaited: false,
     imageWaitFailedCount: 0,
     failureReasons: [],
+    renderFailureReasons: [],
     backendError: "",
     actionUnavailable: false
   };
@@ -12953,7 +13041,14 @@ function applyDeliveryNoteImageDataUrls(doc, results) {
     const dataUrl = dataUrlsByUrl.get(src);
     if (!dataUrl) return;
     img.removeAttribute("crossorigin");
-    img.crossOrigin = "";
+    img.removeAttribute("onerror");
+    try { img.crossOrigin = null; } catch (err) {}
+    img.onerror = null;
+    img.loading = "eager";
+    img.decoding = "sync";
+    img.style.display = img.style.display || "block";
+    img.style.visibility = "visible";
+    img.style.opacity = "1";
     img.src = dataUrl;
     applied += 1;
   });
@@ -13084,8 +13179,15 @@ function prepareDeliveryNoteImageExport() {
         }
 
         prepareDeliveryNoteExportImageNodes(doc);
-        await waitForDeliveryNoteExportImages(doc);
-        debug.imageWaitFailedCount = getDeliveryNoteImageWaitFailedCount(doc);
+        const imageWaitSummary = await waitForDeliveryNoteExportImages(doc);
+        debug.imageWaitFailedCount = Number(imageWaitSummary.failedCount || 0);
+        debug.dataUrlRenderedCount = Number(imageWaitSummary.renderedDataUrlCount || 0);
+        debug.dataUrlNaturalSizeFailCount = Number(imageWaitSummary.dataUrlNaturalSizeFailCount || 0);
+        debug.renderFailureReasons = Array.isArray(imageWaitSummary.failureReasons)
+          ? imageWaitSummary.failureReasons.slice(0, 3)
+          : [];
+        await waitForDeliveryNotePreCaptureRepaint();
+        debug.preCaptureRepaintWaited = true;
         imageWarning = imageWarning || hasDeliveryNoteExportImageWarning(doc);
 
         const baseName = getDeliveryNoteImageExportBaseName(data);
@@ -13129,9 +13231,16 @@ function prepareDeliveryNoteImageExport() {
         noteState.imageExportReady = exportedPages.length > 0;
         noteState.imageExportError = "";
         noteState.imageExportDebug = debug;
-        noteState.imageExportWarning = imageWarning
-          ? t("deliveryNoteImageExportImageWarning", "รูปสินค้าบางรูปอาจไม่แสดงในไฟล์ภาพ")
-          : "";
+        if (debug.dataUrlAppliedCount > 0 && debug.dataUrlRenderedCount === 0) {
+          noteState.imageExportWarning = t(
+            "deliveryNoteImageExportDataUrlNotRenderedWarning",
+            "แปลงรูปสินค้าได้แล้ว แต่เบราว์เซอร์ยังไม่แสดงรูปก่อนจับภาพ"
+          );
+        } else {
+          noteState.imageExportWarning = imageWarning
+            ? t("deliveryNoteImageExportImageWarning", "รูปสินค้าบางรูปอาจไม่แสดงในไฟล์ภาพ")
+            : "";
+        }
       } catch (err) {
         console.error("delivery note image export prepare failed:", err);
         revokeDeliveryNoteImageExportUrls(noteState);
@@ -13262,11 +13371,21 @@ function renderDeliveryNoteImageExportDebug() {
       `${Number(debug.proxySuccessCount || 0)} / ${Number(debug.proxyFailureCount || 0)}`
     ],
     [t("deliveryNoteImageProxyApplied", "แทนรูปด้วย data URL"), Number(debug.dataUrlAppliedCount || 0)],
+    [t("deliveryNoteImageProxyRendered", "รูป data URL ที่แสดงผลแล้ว"), Number(debug.dataUrlRenderedCount || 0)],
+    [t("deliveryNoteImageNaturalSizeFailed", "รูป data URL ที่ไม่มีขนาดจริง"), Number(debug.dataUrlNaturalSizeFailCount || 0)],
+    [t("deliveryNoteImageRepaintWaited", "รอ repaint ก่อนจับภาพ"), debug.preCaptureRepaintWaited ? yesText : noText],
     [t("deliveryNoteImageWaitFailed", "รูปที่โหลดไม่สำเร็จหลังรอ"), Number(debug.imageWaitFailedCount || 0)]
   ];
 
   const reasonRows = reasons.map(reason => [
     t("deliveryNoteImageFirstReason", "สาเหตุแรก"),
+    reason
+  ]);
+  const renderReasons = Array.isArray(debug.renderFailureReasons)
+    ? debug.renderFailureReasons.filter(Boolean).slice(0, 3)
+    : [];
+  const renderReasonRows = renderReasons.map(reason => [
+    t("deliveryNoteImageRenderReason", "สาเหตุการแสดงผล"),
     reason
   ]);
   const backendRows = backendError ? [[
@@ -13278,7 +13397,7 @@ function renderDeliveryNoteImageExportDebug() {
     <details class="helper-text" style="margin-top:10px">
       <summary><strong>${t("deliveryNoteImageProxyDebugTitle", "รายละเอียดการแปลงรูปสินค้า")}</strong></summary>
       <div style="display:grid;grid-template-columns:minmax(120px,1fr) 1fr;gap:4px 10px;margin-top:8px">
-        ${detailRows.concat(reasonRows, backendRows).map(([label, value]) => `
+        ${detailRows.concat(reasonRows, renderReasonRows, backendRows).map(([label, value]) => `
           <span>${esc(label)}</span>
           <span>${esc(value)}</span>
         `).join("")}
