@@ -4597,6 +4597,24 @@ const UI_TEXT = {
     deliveryNoteImageWaitFailed: "รูปที่โหลดไม่สำเร็จหลังรอ",
     deliveryNoteImageRenderReason: "สาเหตุการแสดงผล",
     deliveryNoteImageFirstReason: "สาเหตุแรก",
+    deliveryNotePaperMeasureTitle: "รายละเอียดตำแหน่งกระดาษ",
+    deliveryNotePaperMeasureInterpretation: "การวิเคราะห์",
+    deliveryNotePaperMeasurePaper: "กระดาษ",
+    deliveryNotePaperMeasureFrame: "กรอบเนื้อหา",
+    deliveryNotePaperMeasureHead: "ส่วนหัว",
+    deliveryNotePaperMeasureBody: "เนื้อหา",
+    deliveryNotePaperMeasureFooter: "ท้ายหน้า",
+    deliveryNotePaperMeasureDocHeader: "หัวเอกสาร",
+    deliveryNotePaperMeasureDocMeta: "กล่องวันที่",
+    deliveryNotePaperMeasureTableHeader: "หัวตาราง",
+    deliveryNotePaperMeasureFirstRow: "แถวแรก",
+    deliveryNotePaperMeasureTableWrapper: "กรอบตาราง",
+    deliveryNotePaperMeasureTableLeftGap: "ช่องว่างซ้ายตาราง",
+    deliveryNotePaperMeasureTableRightGap: "ช่องว่างขวาตาราง",
+    deliveryNotePaperMeasureFrameLeftGap: "ช่องว่างซ้ายกรอบ",
+    deliveryNotePaperMeasureFrameRightGap: "ช่องว่างขวากรอบ",
+    deliveryNotePaperMeasureTableExceeds: "ตารางกว้างเกินกรอบ/กระดาษ",
+    deliveryNotePaperMeasureCapture: "ขนาดจับภาพ",
     yes: "ใช่",
     no: "ไม่",
     deliveryNoteImagePage: "รูปหน้า {page}",
@@ -5310,6 +5328,24 @@ const UI_TEXT = {
     deliveryNoteImageWaitFailed: "Image wait failed",
     deliveryNoteImageRenderReason: "Render reason",
     deliveryNoteImageFirstReason: "First reason",
+    deliveryNotePaperMeasureTitle: "Paper layout measurements",
+    deliveryNotePaperMeasureInterpretation: "Interpretation",
+    deliveryNotePaperMeasurePaper: "Paper",
+    deliveryNotePaperMeasureFrame: "Content frame",
+    deliveryNotePaperMeasureHead: "Head",
+    deliveryNotePaperMeasureBody: "Body",
+    deliveryNotePaperMeasureFooter: "Footer",
+    deliveryNotePaperMeasureDocHeader: "Doc header",
+    deliveryNotePaperMeasureDocMeta: "Date box",
+    deliveryNotePaperMeasureTableHeader: "Table header",
+    deliveryNotePaperMeasureFirstRow: "First row",
+    deliveryNotePaperMeasureTableWrapper: "Table wrapper",
+    deliveryNotePaperMeasureTableLeftGap: "Table left gap",
+    deliveryNotePaperMeasureTableRightGap: "Table right gap",
+    deliveryNotePaperMeasureFrameLeftGap: "Frame left gap",
+    deliveryNotePaperMeasureFrameRightGap: "Frame right gap",
+    deliveryNotePaperMeasureTableExceeds: "Table exceeds frame/paper",
+    deliveryNotePaperMeasureCapture: "Capture sizing",
     yes: "yes",
     no: "no",
     deliveryNoteImagePage: "Image page {page}",
@@ -13028,8 +13064,93 @@ function createDeliveryNoteImageExportDebug() {
     failureReasons: [],
     renderFailureReasons: [],
     backendError: "",
-    actionUnavailable: false
+    actionUnavailable: false,
+    paperLayout: null
   };
+}
+
+function roundDeliveryNoteLayoutValue(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.round(number * 10) / 10;
+}
+
+function getDeliveryNoteLayoutMetrics(node) {
+  if (!node) return null;
+  const rect = node.getBoundingClientRect();
+  return {
+    left: roundDeliveryNoteLayoutValue(rect.left),
+    right: roundDeliveryNoteLayoutValue(rect.right),
+    width: roundDeliveryNoteLayoutValue(rect.width),
+    scrollWidth: roundDeliveryNoteLayoutValue(node.scrollWidth || 0),
+    offsetWidth: roundDeliveryNoteLayoutValue(node.offsetWidth || 0),
+    rectWidth: roundDeliveryNoteLayoutValue(rect.width)
+  };
+}
+
+function interpretDeliveryNotePaperLayout(layout) {
+  if (!layout?.paper) return "UNKNOWN";
+  if (layout.tableExceedsFrame || layout.tableExceedsPaper) return "TABLE_OVERFLOWS_FRAME";
+  if (layout.captureWidthExpanded) return "CAPTURE_WIDTH_EXPANDED";
+  if (Math.abs(Number(layout.frameLeftGap || 0) - Number(layout.frameRightGap || 0)) > 8) return "FRAME_OFFSET";
+  if (Number(layout.tableLeftGap || 0) > Number(layout.tableRightGap || 0) + 12) return "LEFT_GAP_LARGER";
+  if (Number(layout.tableRightGap || 0) < 8) return "RIGHT_GAP_SMALL";
+  return "UNKNOWN";
+}
+
+function measureDeliveryNotePaperLayout(doc) {
+  const page = doc?.querySelector(".delivery-note-print-page");
+  if (!page) return { interpretation: "UNKNOWN" };
+
+  const contentFrame = page.querySelector(".delivery-note-content-frame");
+  const head = page.querySelector(".delivery-note-page-head");
+  const body = page.querySelector(".delivery-note-page-body");
+  const footer = page.querySelector(".delivery-note-page-footer");
+  const docHeader = page.querySelector(".doc-header");
+  const docMeta = page.querySelector(".doc-meta");
+  const tableHeader = page.querySelector(".delivery-note-column-header");
+  const firstRow = page.querySelector(".delivery-note-print-row");
+  const tableWrapper = tableHeader?.closest(".po-section") ||
+    tableHeader?.parentElement ||
+    body;
+
+  const paper = getDeliveryNoteLayoutMetrics(page);
+  const frame = getDeliveryNoteLayoutMetrics(contentFrame);
+  const table = getDeliveryNoteLayoutMetrics(tableHeader);
+  const fixedPaperWidth = Math.max(Number(page.offsetWidth || 0), Number(paper?.rectWidth || 0));
+  const layout = {
+    paper,
+    contentFrame: frame,
+    head: getDeliveryNoteLayoutMetrics(head),
+    body: getDeliveryNoteLayoutMetrics(body),
+    footer: getDeliveryNoteLayoutMetrics(footer),
+    docHeader: getDeliveryNoteLayoutMetrics(docHeader),
+    docMeta: getDeliveryNoteLayoutMetrics(docMeta),
+    tableHeader: table,
+    firstRow: getDeliveryNoteLayoutMetrics(firstRow),
+    tableWrapper: getDeliveryNoteLayoutMetrics(tableWrapper),
+    tableLeftGap: paper && table ? roundDeliveryNoteLayoutValue(table.left - paper.left) : 0,
+    tableRightGap: paper && table ? roundDeliveryNoteLayoutValue(paper.right - table.right) : 0,
+    frameLeftGap: paper && frame ? roundDeliveryNoteLayoutValue(frame.left - paper.left) : 0,
+    frameRightGap: paper && frame ? roundDeliveryNoteLayoutValue(paper.right - frame.right) : 0,
+    tableExceedsFrame: !!(table && frame && (
+      table.width > frame.width + 1 ||
+      table.scrollWidth > frame.width + 1
+    )),
+    tableExceedsPaper: !!(table && paper && (
+      table.width > paper.width + 1 ||
+      table.scrollWidth > paper.width + 1
+    )),
+    pageScrollWidth: roundDeliveryNoteLayoutValue(page.scrollWidth || 0),
+    pageOffsetWidth: roundDeliveryNoteLayoutValue(page.offsetWidth || 0),
+    pageRectWidth: roundDeliveryNoteLayoutValue(paper?.rectWidth || 0),
+    captureWidthExpanded: !!(
+      fixedPaperWidth &&
+      Number(page.scrollWidth || 0) > fixedPaperWidth + 1
+    )
+  };
+  layout.interpretation = interpretDeliveryNotePaperLayout(layout);
+  return layout;
 }
 
 function getDeliveryNoteProxyFailureReason(result) {
@@ -13225,6 +13346,7 @@ function prepareDeliveryNoteImageExport() {
         await waitForDeliveryNotePreCaptureRepaint();
         debug.preCaptureRepaintWaited = true;
         imageWarning = imageWarning || hasDeliveryNoteExportImageWarning(doc);
+        debug.paperLayout = measureDeliveryNotePaperLayout(doc);
 
         const baseName = getDeliveryNoteImageExportBaseName(data);
         const exportedPages = [];
@@ -13488,6 +13610,53 @@ function downloadDeliveryNoteExportImage(pageNumber) {
   document.body.removeChild(link);
 }
 
+function formatDeliveryNoteLayoutMetric(metric) {
+  if (!metric) return "-";
+  return `L ${metric.left}px / R ${metric.right}px / W ${metric.width}px / scroll ${metric.scrollWidth}px / offset ${metric.offsetWidth}px / rect ${metric.rectWidth}px`;
+}
+
+function renderDeliveryNotePaperLayoutDebug(debug) {
+  const layout = debug?.paperLayout;
+  if (!layout) return "";
+
+  const yesText = t("yes", "ใช่");
+  const noText = t("no", "ไม่");
+  const rows = [
+    [t("deliveryNotePaperMeasureInterpretation", "การวิเคราะห์"), layout.interpretation || "UNKNOWN"],
+    [t("deliveryNotePaperMeasurePaper", "กระดาษ"), formatDeliveryNoteLayoutMetric(layout.paper)],
+    [t("deliveryNotePaperMeasureFrame", "กรอบเนื้อหา"), formatDeliveryNoteLayoutMetric(layout.contentFrame)],
+    [t("deliveryNotePaperMeasureHead", "ส่วนหัว"), formatDeliveryNoteLayoutMetric(layout.head)],
+    [t("deliveryNotePaperMeasureBody", "เนื้อหา"), formatDeliveryNoteLayoutMetric(layout.body)],
+    [t("deliveryNotePaperMeasureFooter", "ท้ายหน้า"), formatDeliveryNoteLayoutMetric(layout.footer)],
+    [t("deliveryNotePaperMeasureDocHeader", "หัวเอกสาร"), formatDeliveryNoteLayoutMetric(layout.docHeader)],
+    [t("deliveryNotePaperMeasureDocMeta", "กล่องวันที่"), formatDeliveryNoteLayoutMetric(layout.docMeta)],
+    [t("deliveryNotePaperMeasureTableHeader", "หัวตาราง"), formatDeliveryNoteLayoutMetric(layout.tableHeader)],
+    [t("deliveryNotePaperMeasureFirstRow", "แถวแรก"), formatDeliveryNoteLayoutMetric(layout.firstRow)],
+    [t("deliveryNotePaperMeasureTableWrapper", "กรอบตาราง"), formatDeliveryNoteLayoutMetric(layout.tableWrapper)],
+    [t("deliveryNotePaperMeasureTableLeftGap", "ช่องว่างซ้ายตาราง"), `${layout.tableLeftGap}px`],
+    [t("deliveryNotePaperMeasureTableRightGap", "ช่องว่างขวาตาราง"), `${layout.tableRightGap}px`],
+    [t("deliveryNotePaperMeasureFrameLeftGap", "ช่องว่างซ้ายกรอบ"), `${layout.frameLeftGap}px`],
+    [t("deliveryNotePaperMeasureFrameRightGap", "ช่องว่างขวากรอบ"), `${layout.frameRightGap}px`],
+    [t("deliveryNotePaperMeasureTableExceeds", "ตารางกว้างเกินกรอบ/กระดาษ"), `${layout.tableExceedsFrame || layout.tableExceedsPaper ? yesText : noText}`],
+    [
+      t("deliveryNotePaperMeasureCapture", "ขนาดจับภาพ"),
+      `scroll ${layout.pageScrollWidth}px / offset ${layout.pageOffsetWidth}px / rect ${layout.pageRectWidth}px / expanded ${layout.captureWidthExpanded ? yesText : noText}`
+    ]
+  ];
+
+  return `
+    <div style="margin-top:12px">
+      <strong>${t("deliveryNotePaperMeasureTitle", "รายละเอียดตำแหน่งกระดาษ")}</strong>
+      <div style="display:grid;grid-template-columns:minmax(120px,1fr) 1fr;gap:4px 10px;margin-top:8px">
+        ${rows.map(([label, value]) => `
+          <span>${esc(label)}</span>
+          <span>${esc(value)}</span>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderDeliveryNoteImageExportDebug() {
   const debug = getDeliveryNoteState().imageExportDebug;
   if (!debug) return "";
@@ -13538,6 +13707,7 @@ function renderDeliveryNoteImageExportDebug() {
           <span>${esc(value)}</span>
         `).join("")}
       </div>
+      ${renderDeliveryNotePaperLayoutDebug(debug)}
     </details>
   `;
 }
