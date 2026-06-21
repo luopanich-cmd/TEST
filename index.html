@@ -13302,8 +13302,8 @@ function openDeliveryNoteExportImage(pageNumber) {
           margin: 0;
           min-height: 100%;
           overflow-x: hidden;
-          background: #fff;
-          color: #111827;
+          background: #111827;
+          color: #F9FAFB;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         body {
@@ -13319,15 +13319,15 @@ function openDeliveryNoteExportImage(pageNumber) {
           justify-content: space-between;
           gap: 10px;
           padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
-          border-bottom: 1px solid #E5E7EB;
-          background: rgba(255, 255, 255, .96);
+          border-bottom: 1px solid rgba(255, 255, 255, .14);
+          background: rgba(17, 24, 39, .94);
           backdrop-filter: blur(8px);
         }
         .back-btn {
           appearance: none;
-          border: 1px solid #D1D5DB;
+          border: 1px solid rgba(255, 255, 255, .25);
           border-radius: 999px;
-          background: #fff;
+          background: rgba(255, 255, 255, .96);
           color: #111827;
           min-height: 38px;
           padding: 7px 12px;
@@ -13337,7 +13337,7 @@ function openDeliveryNoteExportImage(pageNumber) {
         .title {
           min-width: 0;
           flex: 1;
-          color: #6B7280;
+          color: #D1D5DB;
           font-size: 12px;
           text-align: right;
           overflow: hidden;
@@ -13347,40 +13347,65 @@ function openDeliveryNoteExportImage(pageNumber) {
         .viewer {
           width: 100%;
           max-width: 100vw;
-          padding: 10px 8px calc(18px + env(safe-area-inset-bottom, 0px));
-          background: #fff;
+          min-height: calc(100vh - 59px);
+          padding: 12px 10px calc(22px + env(safe-area-inset-bottom, 0px));
+          background:
+            radial-gradient(circle at top, rgba(75, 85, 99, .42), transparent 38%),
+            #111827;
         }
         .hint {
-          margin: 0 auto 10px;
+          margin: 0 auto 12px;
           max-width: 900px;
-          color: #374151;
+          color: #E5E7EB;
           font-size: 14px;
           line-height: 1.4;
           text-align: center;
         }
+        .preview-stage {
+          width: 100%;
+          max-width: min(100vw, 960px);
+          margin: 0 auto;
+          padding: 10px;
+          border-radius: 18px;
+          background: rgba(255, 255, 255, .08);
+          border: 1px solid rgba(255, 255, 255, .12);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+          overflow: visible;
+        }
         .paper-wrap {
           width: 100%;
-          max-width: min(100vw, 900px);
+          max-width: min(calc(100vw - 40px), 820px);
           margin: 0 auto;
           overflow: visible;
           background: #fff;
+          border: 1px solid rgba(17, 24, 39, .18);
+          border-radius: 10px;
+          box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
+          padding: 0;
         }
         img {
           display: block;
           width: 100%;
-          max-width: min(100vw, 900px);
+          max-width: 100%;
           height: auto;
           margin: 0 auto;
           object-fit: contain;
           box-sizing: border-box;
           background: #fff;
-          border: 1px solid #E5E7EB;
-          border-radius: 8px;
-          box-shadow: 0 4px 14px rgba(15, 23, 42, .12);
+          border: 0;
+          border-radius: 10px;
         }
         @media (max-width: 480px) {
-          .viewer { padding-left: 4px; padding-right: 4px; }
-          img { border-radius: 6px; }
+          .viewer { padding-left: 6px; padding-right: 6px; }
+          .preview-stage {
+            padding: 7px;
+            border-radius: 14px;
+          }
+          .paper-wrap {
+            max-width: calc(100vw - 26px);
+            border-radius: 8px;
+          }
+          img { border-radius: 8px; }
         }
       </style>
       <script>
@@ -13405,8 +13430,10 @@ function openDeliveryNoteExportImage(pageNumber) {
       </header>
       <main class="viewer">
         <p class="hint">${esc(instruction)}</p>
-        <div class="paper-wrap">
-          <img src="${escAttr(page.objectUrl)}" alt="${escAttr(title)}">
+        <div class="preview-stage">
+          <div class="paper-wrap">
+            <img src="${escAttr(page.objectUrl)}" alt="${escAttr(title)}">
+          </div>
         </div>
       </main>
     </body>
