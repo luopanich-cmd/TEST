@@ -12405,7 +12405,6 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
   const orderNumberLabel = t("orderNumber", "เลขออเดอร์");
   const columnHeaderHtml = `
     <div class="delivery-note-column-header">
-      <div>#</div>
       <div>${t("imageLabel", "รูป")}</div>
       <div>SKU</div>
       <div>${t("productLabel", "สินค้า")}</div>
@@ -12417,8 +12416,7 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
     const displayRows = buildDeliveryNoteDisplayRows(order.items);
     const itemRows = displayRows.map((item, index) => `
       <div class="delivery-note-source-row delivery-note-print-row">
-        <div>${index + 1}</div>
-        <div class="thumb-col">${renderDeliveryNotePrintImage(item.imageUrl, item.name || item.productId)}</div>
+        <div class="thumb-col"><span class="delivery-note-row-badge">${index + 1}</span>${renderDeliveryNotePrintImage(item.imageUrl, item.name || item.productId)}</div>
         <div>${esc(item.displayText || "-")}</div>
         <div>${esc(item.name || "-")}</div>
         <div class="num">${esc(item.deliveryQty)}</div>
@@ -12495,7 +12493,7 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           min-height:244mm;
           height:244mm;
           margin:0 auto;
-          padding:10mm 10mm 7mm 4mm;
+          padding:10mm 10mm 7mm;
           display:flex;
           flex-direction:column;
           page-break-after:always;
@@ -12566,7 +12564,7 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
         .delivery-note-column-header,
         .delivery-note-print-row {
           display:grid;
-          grid-template-columns:32px 50px minmax(74px, 1fr) minmax(94px, 1.2fr) 64px minmax(76px, 1fr);
+          grid-template-columns:50px minmax(74px, 1fr) minmax(94px, 1.2fr) 64px minmax(76px, 1fr);
           align-items:stretch;
           width:100%;
           max-width:100%;
@@ -12609,7 +12607,27 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
         .delivery-note-column-header + .delivery-note-print-row > div {
           border-top:0;
         }
-        .thumb-col { width:52px; text-align:center; }
+        .thumb-col {
+          position:relative;
+          width:50px;
+          text-align:center;
+        }
+        .delivery-note-row-badge {
+          position:absolute;
+          top:3px;
+          left:3px;
+          min-width:15px;
+          height:15px;
+          padding:0 3px;
+          border-radius:999px;
+          background:rgba(17,24,39,.88);
+          color:#fff;
+          font-size:9px;
+          line-height:15px;
+          font-weight:800;
+          text-align:center;
+          z-index:1;
+        }
         .delivery-note-thumb {
           width:42px;
           max-width:42px;
