@@ -13206,8 +13206,12 @@ function createDeliveryNoteImageExportDebug(sessionId = 0) {
     captureRetryCount: 0,
     captureUnstableBeforeRetry: false,
     imageWaitFailedCount: 0,
+    finalProductImageCount: 0,
+    finalProductImageReadyCount: 0,
+    finalProductImageFailedCount: 0,
     failureReasons: [],
     renderFailureReasons: [],
+    finalProductImageFailureReasons: [],
     backendError: "",
     actionUnavailable: false,
     paperLayout: null
@@ -13397,6 +13401,35 @@ function hasDeliveryNoteExportImageWarning(doc) {
         !img.naturalHeight ||
         isDeliveryNoteImageExportCorsRisk(src);
     });
+}
+
+function getDeliveryNoteFinalProductImageStatus(doc) {
+  const images = Array.from(doc?.querySelectorAll(".delivery-note-thumb") || []);
+  const failures = images
+    .map((img, index) => ({
+      img,
+      reason: isDeliveryNoteImageRendered(img)
+        ? ""
+        : getDeliveryNoteImageRenderFailureReason(img, index)
+    }))
+    .filter(item => item.reason);
+  return {
+    total: images.length,
+    ready: images.length - failures.length,
+    failed: failures.length,
+    failureReasons: failures.map(item => item.reason).slice(0, 3)
+  };
+}
+
+function applyDeliveryNoteFinalProductImageStatus(debug, doc) {
+  const status = getDeliveryNoteFinalProductImageStatus(doc);
+  if (debug) {
+    debug.finalProductImageCount = status.total;
+    debug.finalProductImageReadyCount = status.ready;
+    debug.finalProductImageFailedCount = status.failed;
+    debug.finalProductImageFailureReasons = status.failureReasons;
+  }
+  return status;
 }
 
 function isDeliveryNoteExportPageStable(pageNode) {
@@ -13626,29 +13659,37 @@ function prepareDeliveryNoteImageExport() {
           });
           return;
         }
+        const finalProductImageStatus = applyDeliveryNoteFinalProductImageStatus(debug, doc);
         noteState.imageExportPages = exportedPages;
         noteState.imageExportReady = exportedPages.length > 0;
         setDeliveryNoteImageExportPhase(noteState, noteState.imageExportReady ? "ready" : "failed");
         updateDeliveryNoteImageExportProgress(noteState, {
           step: noteState.imageExportReady ? "ready" : "failed",
           capturePage: exportedPages.length,
-          captureTotal: pages.length
+          captureTotal: pages.length,
+          imageTotal: finalProductImageStatus.total || imageUrls.length,
+          imageConverted: finalProductImageStatus.ready || debug.dataUrlRenderedCount || debug.proxySuccessCount,
+          imageFailed: finalProductImageStatus.failed
         });
         noteState.imageExportError = "";
         noteState.imageExportDebug = debug;
         const latestIncompleteWarning = getDeliveryNoteImageIncompleteWarning(debug, sessionId);
+        const finalProductImagesReady = finalProductImageStatus.total > 0 &&
+          finalProductImageStatus.failed === 0;
         if (!noteState.imageExportReady) {
           noteState.imageExportWarning = "";
+        } else if (latestIncompleteWarning) {
+          noteState.imageExportWarning = latestIncompleteWarning;
+        } else if (finalProductImagesReady) {
+          noteState.imageExportWarning = "";
         } else if (debug.dataUrlAppliedCount > 0 && debug.dataUrlRenderedCount === 0) {
-          noteState.imageExportWarning = latestIncompleteWarning ||
-            t(
-              "deliveryNoteImageExportDataUrlNotRenderedWarning",
-              "แปลงรูปสินค้าได้แล้ว แต่เบราว์เซอร์ยังไม่แสดงรูปก่อนจับภาพ"
-            );
+          noteState.imageExportWarning = t(
+            "deliveryNoteImageExportDataUrlNotRenderedWarning",
+            "แปลงรูปสินค้าได้แล้ว แต่เบราว์เซอร์ยังไม่แสดงรูปก่อนจับภาพ"
+          );
         } else {
           noteState.imageExportWarning = imageWarning
-            ? (latestIncompleteWarning ||
-              t("deliveryNoteImageExportImageWarning", "รูปสินค้าบางรูปอาจไม่แสดงในไฟล์ภาพ"))
+            ? t("deliveryNoteImageExportImageWarning", "รูปสินค้าบางรูปอาจไม่แสดงในไฟล์ภาพ")
             : "";
         }
       } catch (err) {
@@ -14032,6 +14073,13 @@ function getDeliveryNoteImageIncompleteCounts(debug, sessionId = 0) {
   const debugSessionId = Number(debug.sessionId || 0);
   if (expectedSessionId && debugSessionId && expectedSessionId !== debugSessionId) {
     return { failed: 0, total: 0 };
+  }
+  const finalTotal = Number(debug?.finalProductImageCount || 0);
+  if (finalTotal) {
+    return {
+      failed: Math.max(0, Number(debug?.finalProductImageFailedCount || 0)),
+      total: finalTotal
+    };
   }
   const total = Number(debug?.imageUrlCount || 0);
   const converted = Number(debug?.proxySuccessCount || 0);
