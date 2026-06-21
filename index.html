@@ -12467,6 +12467,14 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           min-width:0;
         }
         .shop-name { font-size:15px; font-weight:800; }
+        .delivery-note-logo {
+          display:block;
+          width:150px;
+          max-width:42vw;
+          height:auto;
+          margin-bottom:5px;
+          object-fit:contain;
+        }
         .doc-meta {
           min-width:210px;
           max-width:100%;
@@ -12786,6 +12794,7 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
             '<div class="delivery-note-page-head">' +
               '<div class="doc-header">' +
                 '<div>' +
+                  '<img class="delivery-note-logo" src="assets/logo-luopanich-horizontal.png" alt="Luopanich" onerror="this.remove();">' +
                   '<div class="shop-name">' + escapePrintHtml(cfg.shopName) + '</div>' +
                   '<h1>' + escapePrintHtml(cfg.title) + '</h1>' +
                 '</div>' +
