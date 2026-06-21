@@ -4132,6 +4132,7 @@ Object.assign(window, {
   toggleDeliveryNotePoSelection,
   buildDeliveryNoteFromPicker,
   resetDeliveryNoteBuilderState,
+  dismissDeliveryNoteImageWarningPopup,
   printDeliveryNote,
   copyDeliveryNote,
   prepareDeliveryNoteImageExport,
@@ -4224,6 +4225,7 @@ const state = {
       imageExportPhase: "",
       imageExportProgress: null,
       imageExportSessionId: 0,
+      imageExportWarningPopupDismissedSessionId: 0,
       imageExportPages: [],
       imageExportReady: false,
       error: "",
@@ -4592,6 +4594,10 @@ const UI_TEXT = {
     deliveryNoteImageProgressConverting: "กำลังแปลงรูปสินค้า {done}/{total} รูป",
     deliveryNoteImageProgressCapturing: "กำลังสร้างไฟล์ภาพ หน้า {page}/{total}",
     deliveryNoteImageIncompleteWarning: "รูปสินค้าบางรูปโหลดไม่สำเร็จ {failed} รูป จาก {total} รูป กรุณาลองส่งออกใหม่",
+    deliveryNoteImageWarningPopupTitle: "รูปสินค้ายังโหลดไม่ครบ",
+    deliveryNoteImageWarningPopupBody: "ระบบพบว่ารูปสินค้าบางรูปยังโหลดไม่สำเร็จ ไฟล์ภาพที่ส่งออกอาจแสดงรูปไม่ครบ กรุณากดปุ่ม “ลองส่งออกใหม่” ก่อนเปิดหรือดาวน์โหลดรูปภาพ",
+    deliveryNoteImageWarningPopupCount: "โหลดไม่สำเร็จ {failed} รูป จาก {total} รูป",
+    deliveryNoteImageWarningPopupClose: "เข้าใจแล้ว",
     retryDeliveryNoteImageExport: "ลองส่งออกใหม่",
     deliveryNoteImageSaveInstruction: "กดค้างที่รูป หรือใช้ปุ่มแชร์ เพื่อบันทึกรูปภาพ",
     deliveryNoteImageBackToDeliveryNote: "← กลับไปใบส่งของ",
@@ -5330,6 +5336,10 @@ const UI_TEXT = {
     deliveryNoteImageProgressConverting: "Converting product images {done}/{total}",
     deliveryNoteImageProgressCapturing: "Creating image page {page}/{total}",
     deliveryNoteImageIncompleteWarning: "{failed} of {total} product images did not load. Please try exporting again.",
+    deliveryNoteImageWarningPopupTitle: "Product images are not fully loaded",
+    deliveryNoteImageWarningPopupBody: "Some product images did not load successfully. The exported image may be incomplete. Please press “Try export again” before opening or downloading images.",
+    deliveryNoteImageWarningPopupCount: "{failed} of {total} images failed to load",
+    deliveryNoteImageWarningPopupClose: "Got it",
     retryDeliveryNoteImageExport: "Try export again",
     deliveryNoteImageSaveInstruction: "Long-press the image or use Share to save it",
     deliveryNoteImageBackToDeliveryNote: "← Back to Delivery Note",
@@ -11983,6 +11993,7 @@ function getDeliveryNoteState() {
   if (noteState.imageExportPhase === undefined) noteState.imageExportPhase = "";
   if (noteState.imageExportProgress === undefined) noteState.imageExportProgress = null;
   if (noteState.imageExportSessionId === undefined) noteState.imageExportSessionId = 0;
+  if (noteState.imageExportWarningPopupDismissedSessionId === undefined) noteState.imageExportWarningPopupDismissedSessionId = 0;
   if (!Array.isArray(noteState.imageExportPages)) noteState.imageExportPages = [];
   if (noteState.imageExportReady === undefined) noteState.imageExportReady = false;
   return state.admin.deliveryNote;
@@ -12151,10 +12162,17 @@ function resetDeliveryNoteBuilderState() {
     imageExportPhase: "",
     imageExportProgress: null,
     imageExportSessionId: Number(noteState.imageExportSessionId || 0) + 1,
+    imageExportWarningPopupDismissedSessionId: Number(noteState.imageExportSessionId || 0) + 1,
     imageExportReady: false,
     error: "",
     isBuilding: false
   });
+  renderDeliveryNoteSheet();
+}
+
+function dismissDeliveryNoteImageWarningPopup() {
+  const noteState = getDeliveryNoteState();
+  noteState.imageExportWarningPopupDismissedSessionId = Number(noteState.imageExportSessionId || 0);
   renderDeliveryNoteSheet();
 }
 
@@ -13976,22 +13994,66 @@ function getDeliveryNoteImageExportProgressText(noteState) {
 }
 
 function getDeliveryNoteImageIncompleteWarning(debug) {
-  const total = Number(debug?.imageUrlCount || 0);
+  const counts = getDeliveryNoteImageIncompleteCounts(debug);
+  const total = counts.total;
   if (!total) return "";
+  if (!counts.failed) return "";
+  return formatUiText(
+    "deliveryNoteImageIncompleteWarning",
+    { failed: counts.failed, total },
+    "รูปสินค้าบางรูปโหลดไม่สำเร็จ {failed} รูป จาก {total} รูป กรุณาลองส่งออกใหม่"
+  );
+}
+
+function getDeliveryNoteImageIncompleteCounts(debug) {
+  const total = Number(debug?.imageUrlCount || 0);
   const converted = Number(debug?.proxySuccessCount || 0);
   const rendered = Number(debug?.dataUrlRenderedCount || 0);
-  const explicitFailures = Math.max(
+  const failed = total ? Math.max(
     Number(debug?.proxyFailureCount || 0),
     Number(debug?.dataUrlNaturalSizeFailCount || 0),
     Number(debug?.imageWaitFailedCount || 0),
     Math.max(0, total - Math.max(converted, rendered))
-  );
-  if (!explicitFailures) return "";
-  return formatUiText(
-    "deliveryNoteImageIncompleteWarning",
-    { failed: explicitFailures, total },
-    "รูปสินค้าบางรูปโหลดไม่สำเร็จ {failed} รูป จาก {total} รูป กรุณาลองส่งออกใหม่"
-  );
+  ) : 0;
+  return { failed, total };
+}
+
+function shouldShowDeliveryNoteImageWarningPopup(noteState) {
+  if (!noteState || noteState.imageExportLoading) return false;
+  if (noteState.imageExportPhase !== "ready") return false;
+  if (!noteState.imageExportWarning) return false;
+  if (Number(noteState.imageExportWarningPopupDismissedSessionId || 0) === Number(noteState.imageExportSessionId || 0)) return false;
+  const counts = getDeliveryNoteImageIncompleteCounts(noteState.imageExportDebug);
+  return counts.failed > 0 || !!getDeliveryNoteImageIncompleteWarning(noteState.imageExportDebug);
+}
+
+function renderDeliveryNoteImageWarningPopup() {
+  const noteState = getDeliveryNoteState();
+  if (!shouldShowDeliveryNoteImageWarningPopup(noteState)) return "";
+  const counts = getDeliveryNoteImageIncompleteCounts(noteState.imageExportDebug);
+  const countText = counts.failed && counts.total
+    ? formatUiText(
+        "deliveryNoteImageWarningPopupCount",
+        { failed: counts.failed, total: counts.total },
+        "โหลดไม่สำเร็จ {failed} รูป จาก {total} รูป"
+      )
+    : "";
+
+  return `
+    <div class="delivery-note-warning-popup" role="dialog" aria-modal="true" aria-labelledby="deliveryNoteImageWarningTitle"
+      style="position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:18px">
+      <div class="card" style="width:min(420px,100%);box-shadow:0 20px 45px rgba(15,23,42,.22);border:1px solid rgba(245,158,11,.35)">
+        <div id="deliveryNoteImageWarningTitle" class="admin-detail-title">${t("deliveryNoteImageWarningPopupTitle", "รูปสินค้ายังโหลดไม่ครบ")}</div>
+        <div class="helper-text" style="margin-top:8px">${t("deliveryNoteImageWarningPopupBody", "ระบบพบว่ารูปสินค้าบางรูปยังโหลดไม่สำเร็จ ไฟล์ภาพที่ส่งออกอาจแสดงรูปไม่ครบ กรุณากดปุ่ม “ลองส่งออกใหม่” ก่อนเปิดหรือดาวน์โหลดรูปภาพ")}</div>
+        ${countText ? `<div class="error-text" style="margin-top:10px">${esc(countText)}</div>` : ""}
+        <div class="action-row" style="justify-content:flex-end;margin-top:14px">
+          <button class="btn btn-primary" type="button" onclick="dismissDeliveryNoteImageWarningPopup()">
+            ${t("deliveryNoteImageWarningPopupClose", "เข้าใจแล้ว")}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderDeliveryNoteImageExportStatus() {
@@ -14248,6 +14310,7 @@ function renderDeliveryNoteSheet() {
     </div>
 
     <div id="deliveryNoteResults">${renderDeliveryNoteMatchedOrders()}</div>
+    ${renderDeliveryNoteImageWarningPopup()}
   `;
 }
 
