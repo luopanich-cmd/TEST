@@ -12471,6 +12471,17 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           page-break-after:auto;
           break-after:auto;
         }
+        .delivery-note-content-frame {
+          width:100%;
+          max-width:100%;
+          margin:0 auto;
+          overflow:visible;
+          box-sizing:border-box;
+          display:flex;
+          flex:1 1 auto;
+          min-height:0;
+          flex-direction:column;
+        }
         .delivery-note-page-head {
           break-inside:avoid-page;
           page-break-inside:avoid;
@@ -12495,6 +12506,8 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           text-align:right;
           break-inside:avoid-page;
           page-break-inside:avoid;
+          width:100%;
+          max-width:100%;
         }
         .delivery-note-source-order {
           display:none;
@@ -12707,6 +12720,7 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           var page = document.createElement("section");
           page.className = "delivery-note-print-page";
           page.innerHTML =
+            '<div class="delivery-note-content-frame">' +
             '<div class="delivery-note-page-head">' +
               '<div class="doc-header">' +
                 '<div>' +
@@ -12730,7 +12744,8 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
               cfg.columnHeaderHtml +
             '</div>' +
             '<div class="delivery-note-page-body"></div>' +
-            '<div class="delivery-note-page-footer">' + escapePrintHtml(cfg.pageLabel) + ' <span class="page-current">' + pageNumber + '</span> ' + escapePrintHtml(cfg.ofLabel) + ' <span class="page-total">?</span></div>';
+            '<div class="delivery-note-page-footer">' + escapePrintHtml(cfg.pageLabel) + ' <span class="page-current">' + pageNumber + '</span> ' + escapePrintHtml(cfg.ofLabel) + ' <span class="page-total">?</span></div>' +
+            '</div>';
           return {
             page: page,
             body: page.querySelector(".delivery-note-page-body")
@@ -13110,11 +13125,8 @@ function hasDeliveryNoteExportImageWarning(doc) {
 
 function getDeliveryNoteExportPageSize(pageNode) {
   const rect = pageNode.getBoundingClientRect();
-  const width = Math.ceil(Math.max(
-    pageNode.scrollWidth,
-    pageNode.offsetWidth,
-    rect.width
-  ));
+  const fixedWidth = Math.max(pageNode.offsetWidth, rect.width);
+  const width = Math.ceil(fixedWidth || pageNode.scrollWidth);
   const height = Math.ceil(Math.max(
     pageNode.scrollHeight,
     pageNode.offsetHeight,
