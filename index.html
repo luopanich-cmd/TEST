@@ -13191,8 +13191,9 @@ function collectDeliveryNoteExportImageUrls(doc) {
   return urls;
 }
 
-function createDeliveryNoteImageExportDebug() {
+function createDeliveryNoteImageExportDebug(sessionId = 0) {
   return {
+    sessionId: Number(sessionId || 0),
     imageUrlCount: 0,
     proxyAttempted: false,
     backendOk: false,
@@ -13211,6 +13212,16 @@ function createDeliveryNoteImageExportDebug() {
     actionUnavailable: false,
     paperLayout: null
   };
+}
+
+function getDeliveryNoteCurrentImageExportDebug(noteState = getDeliveryNoteState()) {
+  const debug = noteState?.imageExportDebug || null;
+  if (!debug) return null;
+  const debugSessionId = Number(debug.sessionId || 0);
+  if (debugSessionId && debugSessionId !== Number(noteState?.imageExportSessionId || 0)) {
+    return null;
+  }
+  return debug;
 }
 
 function roundDeliveryNoteLayoutValue(value) {
@@ -13457,7 +13468,7 @@ function prepareDeliveryNoteImageExport() {
   noteState.imageExportLoading = true;
   resetDeliveryNoteImageExportState(noteState, "preparing");
   updateDeliveryNoteImageExportProgress(noteState, { step: "preparing" });
-  noteState.imageExportDebug = createDeliveryNoteImageExportDebug();
+  noteState.imageExportDebug = createDeliveryNoteImageExportDebug(sessionId);
   renderDeliveryNoteSheet();
 
   if (!window.htmlToImage || typeof window.htmlToImage.toBlob !== "function") {
@@ -13499,7 +13510,7 @@ function prepareDeliveryNoteImageExport() {
         }
 
         let imageWarning = false;
-        const debug = createDeliveryNoteImageExportDebug();
+        const debug = createDeliveryNoteImageExportDebug(sessionId);
         noteState.imageExportDebug = debug;
         const imageUrls = collectDeliveryNoteExportImageUrls(doc);
         debug.imageUrlCount = imageUrls.length;
@@ -13625,15 +13636,18 @@ function prepareDeliveryNoteImageExport() {
         });
         noteState.imageExportError = "";
         noteState.imageExportDebug = debug;
-        if (debug.dataUrlAppliedCount > 0 && debug.dataUrlRenderedCount === 0) {
-          noteState.imageExportWarning = getDeliveryNoteImageIncompleteWarning(debug) ||
+        const latestIncompleteWarning = getDeliveryNoteImageIncompleteWarning(debug, sessionId);
+        if (!noteState.imageExportReady) {
+          noteState.imageExportWarning = "";
+        } else if (debug.dataUrlAppliedCount > 0 && debug.dataUrlRenderedCount === 0) {
+          noteState.imageExportWarning = latestIncompleteWarning ||
             t(
               "deliveryNoteImageExportDataUrlNotRenderedWarning",
               "แปลงรูปสินค้าได้แล้ว แต่เบราว์เซอร์ยังไม่แสดงรูปก่อนจับภาพ"
             );
         } else {
           noteState.imageExportWarning = imageWarning
-            ? (getDeliveryNoteImageIncompleteWarning(debug) ||
+            ? (latestIncompleteWarning ||
               t("deliveryNoteImageExportImageWarning", "รูปสินค้าบางรูปอาจไม่แสดงในไฟล์ภาพ"))
             : "";
         }
@@ -13649,7 +13663,8 @@ function prepareDeliveryNoteImageExport() {
         setDeliveryNoteImageExportPhase(noteState, "failed");
         updateDeliveryNoteImageExportProgress(noteState, { step: "failed" });
         noteState.imageExportWarning = "";
-        noteState.imageExportDebug = noteState.imageExportDebug || createDeliveryNoteImageExportDebug();
+        noteState.imageExportDebug = getDeliveryNoteCurrentImageExportDebug(noteState) ||
+          createDeliveryNoteImageExportDebug(sessionId);
       } finally {
         if (isDeliveryNoteImageExportSessionActive(noteState, sessionId)) {
           noteState.imageExportLoading = false;
@@ -13901,7 +13916,7 @@ function renderDeliveryNotePaperLayoutDebug(debug) {
 }
 
 function renderDeliveryNoteImageExportDebug() {
-  const debug = getDeliveryNoteState().imageExportDebug;
+  const debug = getDeliveryNoteCurrentImageExportDebug();
   if (!debug) return "";
 
   const yesText = t("yes", "ใช่");
@@ -13999,8 +14014,8 @@ function getDeliveryNoteImageExportProgressText(noteState) {
   return t("deliveryNoteImageProgressPreparing", "กำลังเตรียมใบส่งของ...");
 }
 
-function getDeliveryNoteImageIncompleteWarning(debug) {
-  const counts = getDeliveryNoteImageIncompleteCounts(debug);
+function getDeliveryNoteImageIncompleteWarning(debug, sessionId = 0) {
+  const counts = getDeliveryNoteImageIncompleteCounts(debug, sessionId);
   const total = counts.total;
   if (!total) return "";
   if (!counts.failed) return "";
@@ -14011,7 +14026,13 @@ function getDeliveryNoteImageIncompleteWarning(debug) {
   );
 }
 
-function getDeliveryNoteImageIncompleteCounts(debug) {
+function getDeliveryNoteImageIncompleteCounts(debug, sessionId = 0) {
+  if (!debug) return { failed: 0, total: 0 };
+  const expectedSessionId = Number(sessionId || 0);
+  const debugSessionId = Number(debug.sessionId || 0);
+  if (expectedSessionId && debugSessionId && expectedSessionId !== debugSessionId) {
+    return { failed: 0, total: 0 };
+  }
   const total = Number(debug?.imageUrlCount || 0);
   const converted = Number(debug?.proxySuccessCount || 0);
   const rendered = Number(debug?.dataUrlRenderedCount || 0);
@@ -14035,7 +14056,10 @@ function shouldShowDeliveryNoteImageWarningPopup(noteState) {
 function renderDeliveryNoteImageWarningPopup() {
   const noteState = getDeliveryNoteState();
   if (!shouldShowDeliveryNoteImageWarningPopup(noteState)) return "";
-  const counts = getDeliveryNoteImageIncompleteCounts(noteState.imageExportDebug);
+  const counts = getDeliveryNoteImageIncompleteCounts(
+    getDeliveryNoteCurrentImageExportDebug(noteState),
+    noteState.imageExportSessionId
+  );
   const countText = counts.failed && counts.total
     ? formatUiText(
         "deliveryNoteImageWarningPopupCount",
