@@ -12752,6 +12752,7 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           shopName: ${toInlineJsStringLiteral(shopName)},
           printedAt: ${toInlineJsStringLiteral(t("printedAt", "พิมพ์เมื่อ"))},
           printDateTime: ${toInlineJsStringLiteral(printDateTime)},
+          logoUrl: ${toInlineJsStringLiteral(logoUrl)},
           orderNumber: ${toInlineJsStringLiteral(orderNumberLabel)},
           note: ${toInlineJsStringLiteral(noteLabel)},
           columnHeaderHtml: ${toInlineJsStringLiteral(columnHeaderHtml)},
@@ -12799,7 +12800,7 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
             '<div class="delivery-note-page-head">' +
               '<div class="doc-header">' +
                 '<div>' +
-                  '<img class="delivery-note-logo" src="' + escapePrintHtml(logoUrl) + '" alt="Luopanich" loading="eager" decoding="sync" onerror="this.remove();">' +
+                  '<img class="delivery-note-logo" src="' + escapePrintHtml(cfg.logoUrl) + '" alt="Luopanich" loading="eager" decoding="sync" onerror="this.remove();">' +
                   '<div class="shop-name">' + escapePrintHtml(cfg.shopName) + '</div>' +
                   '<h1>' + escapePrintHtml(cfg.title) + '</h1>' +
                 '</div>' +
