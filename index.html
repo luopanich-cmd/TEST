@@ -12398,6 +12398,7 @@ function renderDeliveryNotePrintImage(imageUrl, altText) {
 
 function buildDeliveryNotePrintHtml(data, options = {}) {
   const autoPrint = options.autoPrint !== false;
+  const imageExportMode = options.imageExport === true;
   const printDateTime = new Date().toLocaleString("th-TH");
   const title = t("deliveryNote", "ใบส่งของ");
   const shopName = t("shopTitle", "ร้านค้า Luopanich");
@@ -12504,6 +12505,13 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
         .delivery-note-print-page:last-child {
           page-break-after:auto;
           break-after:auto;
+        }
+        body.delivery-note-image-export-mode .delivery-note-print-page {
+          width:210mm;
+          max-width:210mm;
+          min-height:297mm;
+          height:297mm;
+          padding:10mm 12mm 10mm 10mm;
         }
         .delivery-note-content-frame {
           width:100%;
@@ -12716,7 +12724,7 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
         }
       </style>
     </head>
-    <body>
+    <body${imageExportMode ? ' class="delivery-note-image-export-mode"' : ""}>
       <div class="print-screen-toolbar">
         <button type="button" onclick="closePrintPage()">${t("returnToSystem", "กลับระบบ")}</button>
         <button type="button" class="secondary" onclick="window.print()">${t("printAgain", "พิมพ์อีกครั้ง")}</button>
@@ -13435,7 +13443,7 @@ function prepareDeliveryNoteImageExport() {
     }, 250);
   };
 
-  frame.srcdoc = buildDeliveryNotePrintHtml(data, { autoPrint: false });
+  frame.srcdoc = buildDeliveryNotePrintHtml(data, { autoPrint: false, imageExport: true });
   document.body.appendChild(frame);
 }
 
