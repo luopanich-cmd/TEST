@@ -12474,15 +12474,21 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
         .delivery-note-page-head {
           break-inside:avoid-page;
           page-break-inside:avoid;
+          width:100%;
+          max-width:100%;
+          padding-right:2mm;
         }
         .delivery-note-page-body {
           flex:1 1 auto;
           min-height:0;
           overflow:visible;
+          width:100%;
           max-width:100%;
+          padding-right:2mm;
         }
         .delivery-note-page-footer {
           margin-top:8px;
+          padding-right:2mm;
           padding-top:6px;
           border-top:1px solid #E5E7EB;
           color:#6B7280;
@@ -12504,6 +12510,8 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           justify-content:space-between;
           gap:12px;
           margin-bottom:8px;
+          max-width:100%;
+          min-width:0;
           break-after:avoid;
           page-break-after:avoid;
         }
