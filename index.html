@@ -12428,10 +12428,14 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           padding-bottom:14px;
           border-bottom:2px solid #111827;
           margin-bottom:14px;
+          max-width:100%;
+          min-width:0;
         }
         .shop-name { font-size:15px; font-weight:800; }
         .doc-meta {
           min-width:210px;
+          max-width:100%;
+          flex:0 0 auto;
           border:1px solid #D1D5DB;
           border-radius:10px;
           overflow:hidden;
@@ -12442,6 +12446,11 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           gap:8px;
           padding:7px 9px;
           border-bottom:1px solid #E5E7EB;
+          min-width:0;
+        }
+        .doc-meta span {
+          min-width:0;
+          overflow-wrap:anywhere;
         }
         .doc-meta div:last-child { border-bottom:0; }
         .delivery-note-print-page {
@@ -12450,11 +12459,13 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           min-height:244mm;
           height:244mm;
           margin:0 auto;
+          padding:8mm 8mm 7mm;
           display:flex;
           flex-direction:column;
           page-break-after:always;
           break-after:page;
-          overflow:hidden;
+          overflow:visible;
+          background:#fff;
         }
         .delivery-note-print-page:last-child {
           page-break-after:auto;
@@ -12467,7 +12478,8 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
         .delivery-note-page-body {
           flex:1 1 auto;
           min-height:0;
-          overflow:hidden;
+          overflow:visible;
+          max-width:100%;
         }
         .delivery-note-page-footer {
           margin-top:8px;
@@ -12485,6 +12497,7 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
         .po-section {
           break-inside:avoid-page;
           page-break-inside:avoid;
+          max-width:100%;
         }
         .po-heading {
           display:flex;
@@ -12500,6 +12513,8 @@ function buildDeliveryNotePrintHtml(data, options = {}) {
           grid-template-columns:42px 56px minmax(74px, 1fr) minmax(94px, 1.2fr) 64px minmax(76px, 1fr);
           align-items:stretch;
           width:100%;
+          max-width:100%;
+          min-width:0;
           break-inside:avoid-page;
           page-break-inside:avoid;
         }
