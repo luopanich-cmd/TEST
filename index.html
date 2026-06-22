@@ -385,6 +385,12 @@ header.scrolled{
   z-index: 1;
 }
 
+.admin-badge-lottie{
+  flex-basis: 26px;
+  width: 26px;
+  height: 26px;
+}
+
 /* ✅ Glass highlight (top-left glare) */
 .shop-title::before,
 .admin-title::before{
@@ -8515,8 +8521,15 @@ function renderHeader(){
     <div class="header-left">
       <div class="header-stack">
         <div class="admin-title">
-          ${t("adminTitle", "การจัดการสินค้า")}
+          <span class="brand-title-text">${t("adminTitle", "การจัดการสินค้า")}</span>
           <span class="badge" style="margin-left:8px;">${t("adminBadge", "แอดมิน")}</span>
+          <dotlottie-player class="brand-lottie admin-badge-lottie"
+            src="assets/dog-wagging-tail.lottie"
+            background="transparent"
+            speed="1"
+            loop
+            autoplay
+            aria-hidden="true"></dotlottie-player>
           <!-- 🔴 CHANGED: เพิ่ม Mode Indicator (badge) ให้ชัด -->
         </div>
         <div class="shop-subtitle">${t("adminSubtitle", "แอดมิน · แก้ไข · ปรับสต๊อก · ตรวจออเดอร์")}</div>
