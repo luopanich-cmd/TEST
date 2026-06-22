@@ -13485,11 +13485,12 @@ function isDeliveryNoteProductImagesSafeForPng(debug, sessionId = 0) {
   const validExportPages = Number(debug.validExportPageCount || 0);
   if (!finalTotal) return true;
   if (!validExportPages || Number(debug.finalProductImageFailedCount || 0) !== 0) return false;
-  const finalImagesReady = Number(debug.finalProductImageReadyCount || 0) === finalTotal;
   const finalDataUrlsReady =
     Number(debug.finalProductImageDataUrlCount || 0) === finalTotal &&
     Number(debug.finalProductImageDataUrlReadyCount || 0) === finalTotal;
-  return finalDataUrlsReady || finalImagesReady;
+  return Number(debug.imageUrlCount || 0) > 0 &&
+    Number(debug.proxyFailureCount || 0) === 0 &&
+    finalDataUrlsReady;
 }
 
 function isDeliveryNoteExportPageStable(pageNode) {
