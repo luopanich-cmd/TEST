@@ -119,6 +119,15 @@
    --ease-chrome:var(--motion-ease-standard);
  }
 
+.lottie-loading-preload{
+  position:absolute;
+  width:1px;
+  height:1px;
+  overflow:hidden;
+  opacity:0;
+  pointer-events:none;
+}
+
 body[data-theme="dark"] {
   --bg: #0f0f12;
   --bg-soft: #161618;
@@ -2675,6 +2684,11 @@ textarea:focus-visible {
   animation: dots 1.4s infinite;
 }
 
+.loading.has-lottie::after {
+  content: "";
+  animation: none;
+}
+
 @keyframes dots {
   0%   { content: ""; }
   33%  { content: "."; }
@@ -3958,6 +3972,13 @@ textarea.input{
 
 
 <div id="app" class="container"></div>
+<dotlottie-player class="lottie-loading-preload"
+  src="assets/cat-playing-animation.lottie"
+  background="transparent"
+  speed="1"
+  loop
+  autoplay
+  aria-hidden="true"></dotlottie-player>
 
 <!-- ✅ GLOBAL BACKDROP (มีตัวเดียวพอ) -->
  <div
@@ -6189,7 +6210,7 @@ function renderLottieLoading(message, options = {}) {
 
   return `
     <div class="lottie-loading-ui${className}">
-      <dotlottie-player class="lottie-loading-player"
+      <dotlottie-player class="lottie-loading-player delivery-note-export-lottie"
         src="assets/cat-playing-animation.lottie"
         background="transparent"
         speed="1"
@@ -9460,7 +9481,7 @@ async function openAdminDashboard(mode = "SUMMARY", force = false) {
 
   adminDashboardSheet.innerHTML = `
     <h3 id="adminDashboardSheetTitle">${t("dashboard", "แดชบอร์ดแอดมิน")}</h3>
-    <div class="loading">${renderLottieLoading(t("loadingData", "กำลังโหลดข้อมูล"))}</div>
+    <div class="loading has-lottie">${renderLottieLoading(t("loadingData", "กำลังโหลดข้อมูล"))}</div>
   `;
 
   openOverlay(adminDashboardSheet);
