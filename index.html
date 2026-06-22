@@ -13241,6 +13241,8 @@ function createDeliveryNoteImageExportDebug(sessionId = 0) {
     finalProductImageFailedCount: 0,
     finalProductImageDataUrlCount: 0,
     finalProductImageDataUrlReadyCount: 0,
+    exportPageCount: 0,
+    validExportPageCount: 0,
     pngImageSafe: false,
     failureReasons: [],
     renderFailureReasons: [],
@@ -13480,12 +13482,14 @@ function isDeliveryNoteProductImagesSafeForPng(debug, sessionId = 0) {
   const debugSessionId = Number(debug.sessionId || 0);
   if (expectedSessionId && debugSessionId && expectedSessionId !== debugSessionId) return false;
   const finalTotal = Number(debug.finalProductImageCount || 0);
+  const validExportPages = Number(debug.validExportPageCount || 0);
   if (!finalTotal) return true;
-  return Number(debug.imageUrlCount || 0) > 0 &&
-    Number(debug.proxyFailureCount || 0) === 0 &&
-    Number(debug.finalProductImageFailedCount || 0) === 0 &&
+  if (!validExportPages || Number(debug.finalProductImageFailedCount || 0) !== 0) return false;
+  const finalImagesReady = Number(debug.finalProductImageReadyCount || 0) === finalTotal;
+  const finalDataUrlsReady =
     Number(debug.finalProductImageDataUrlCount || 0) === finalTotal &&
     Number(debug.finalProductImageDataUrlReadyCount || 0) === finalTotal;
+  return finalDataUrlsReady || finalImagesReady;
 }
 
 function isDeliveryNoteExportPageStable(pageNode) {
@@ -13716,6 +13720,10 @@ function prepareDeliveryNoteImageExport() {
           return;
         }
         const finalProductImageStatus = applyDeliveryNoteFinalProductImageStatus(debug, doc);
+        debug.exportPageCount = exportedPages.length;
+        debug.validExportPageCount = exportedPages
+          .filter(page => page?.blob && page?.objectUrl)
+          .length;
         debug.pngImageSafe = isDeliveryNoteProductImagesSafeForPng(debug, sessionId);
         noteState.imageExportPages = exportedPages;
         noteState.imageExportReady = exportedPages.length > 0;
