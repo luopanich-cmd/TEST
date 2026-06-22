@@ -10459,7 +10459,7 @@ async function openStockTimeline(force = false, options = {}) {
 
   targetSheet.innerHTML = `
     <h3 id="${stockTimelineTitleId}">${stockTimelineTitle}</h3>
-    <div class="loading">${t("loading", "กำลังโหลด...")}</div>
+    <div class="loading has-lottie">${renderLottieLoading(t("loading", "กำลังโหลด..."))}</div>
   `;
 
   openOverlay(targetSheet);
@@ -14435,7 +14435,7 @@ function renderDeliveryNotePoPicker() {
   const selectedCount = selectedKeys.size;
 
   const orderCards = noteState.poPickerLoading
-    ? `<div class="loading">${t("deliveryNotePickerLoading", "กำลังโหลดออเดอร์...")}</div>`
+    ? `<div class="loading has-lottie">${renderLottieLoading(t("deliveryNotePickerLoading", "กำลังโหลดออเดอร์..."))}</div>`
     : noteState.poPickerError
       ? `<div class="error-text">${esc(noteState.poPickerError)}</div>`
       : orders.length
@@ -14507,7 +14507,7 @@ function renderDeliveryNoteMatchedOrders() {
   const orders = Array.isArray(noteState.matchedOrders) ? noteState.matchedOrders : [];
 
   if (noteState.isBuilding) {
-    return `<div class="card"><div class="loading">${t("deliveryNoteSearching", "กำลังค้นหา PO...")}</div></div>`;
+    return `<div class="card"><div class="loading has-lottie">${renderLottieLoading(t("deliveryNoteSearching", "กำลังค้นหา PO..."))}</div></div>`;
   }
 
   if (noteState.error && !orders.length) {
