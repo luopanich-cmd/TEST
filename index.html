@@ -4229,6 +4229,8 @@ const state = {
       imageExportProgress: null,
       imageExportSessionId: 0,
       imageExportWarningPopupDismissedSessionId: 0,
+      imageExportWarningPopupShown: false,
+      imageExportWarningPopupActiveSessionId: 0,
       imageExportPages: [],
       imageExportReady: false,
       error: "",
@@ -11997,6 +11999,8 @@ function getDeliveryNoteState() {
   if (noteState.imageExportProgress === undefined) noteState.imageExportProgress = null;
   if (noteState.imageExportSessionId === undefined) noteState.imageExportSessionId = 0;
   if (noteState.imageExportWarningPopupDismissedSessionId === undefined) noteState.imageExportWarningPopupDismissedSessionId = 0;
+  if (noteState.imageExportWarningPopupShown === undefined) noteState.imageExportWarningPopupShown = false;
+  if (noteState.imageExportWarningPopupActiveSessionId === undefined) noteState.imageExportWarningPopupActiveSessionId = 0;
   if (!Array.isArray(noteState.imageExportPages)) noteState.imageExportPages = [];
   if (noteState.imageExportReady === undefined) noteState.imageExportReady = false;
   return state.admin.deliveryNote;
@@ -12169,6 +12173,8 @@ function resetDeliveryNoteBuilderState() {
     imageExportProgress: null,
     imageExportSessionId: Number(noteState.imageExportSessionId || 0) + 1,
     imageExportWarningPopupDismissedSessionId: Number(noteState.imageExportSessionId || 0) + 1,
+    imageExportWarningPopupShown: false,
+    imageExportWarningPopupActiveSessionId: 0,
     imageExportReady: false,
     error: "",
     isBuilding: false
@@ -12179,6 +12185,8 @@ function resetDeliveryNoteBuilderState() {
 function dismissDeliveryNoteImageWarningPopup() {
   const noteState = getDeliveryNoteState();
   noteState.imageExportWarningPopupDismissedSessionId = Number(noteState.imageExportSessionId || 0);
+  noteState.imageExportWarningPopupShown = true;
+  noteState.imageExportWarningPopupActiveSessionId = 0;
   renderDeliveryNoteSheet();
 }
 
@@ -14137,13 +14145,20 @@ function shouldShowDeliveryNoteImageWarningPopup(noteState) {
   if (!noteState || noteState.imageExportLoading) return false;
   if (noteState.imageExportPhase !== "ready" && !noteState.imageExportReady) return false;
   if (!noteState.imageExportWarning) return false;
-  if (Number(noteState.imageExportWarningPopupDismissedSessionId || 0) === Number(noteState.imageExportSessionId || 0)) return false;
+  const sessionId = Number(noteState.imageExportSessionId || 0);
+  if (Number(noteState.imageExportWarningPopupDismissedSessionId || 0) === sessionId) return false;
+  if (
+    noteState.imageExportWarningPopupShown &&
+    Number(noteState.imageExportWarningPopupActiveSessionId || 0) !== sessionId
+  ) return false;
   return true;
 }
 
 function renderDeliveryNoteImageWarningPopup() {
   const noteState = getDeliveryNoteState();
   if (!shouldShowDeliveryNoteImageWarningPopup(noteState)) return "";
+  noteState.imageExportWarningPopupShown = true;
+  noteState.imageExportWarningPopupActiveSessionId = Number(noteState.imageExportSessionId || 0);
   const counts = getDeliveryNoteImageIncompleteCounts(
     getDeliveryNoteCurrentImageExportDebug(noteState),
     noteState.imageExportSessionId
