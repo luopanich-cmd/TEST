@@ -6202,6 +6202,18 @@ function escapeHtml(value = "") {
     .replace(/'/g, "&#39;");
 } 
 
+function blurActiveElementForMobileKeyboard() {
+  try {
+    document.activeElement?.blur?.();
+  } catch (_) {}
+}
+
+function waitForMobileViewportSettle() {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => setTimeout(resolve, 50));
+  });
+}
+
 function renderLottieLoading(message, options = {}) {
   const safeMessage = escapeHtml(message || t("loading", "กำลังโหลด..."));
   const detail = options.detail ? `<div class="helper-text">${escapeHtml(options.detail)}</div>` : "";
@@ -9143,6 +9155,9 @@ async function handleAdminLogin(btn){
     btn.textContent = "กำลังเข้าสู่ระบบ...";
   }
   if (cancelBtn) cancelBtn.disabled = true;
+
+  blurActiveElementForMobileKeyboard();
+  await waitForMobileViewportSettle();
 
   showLoading("กำลังเข้าสู่ระบบแอดมิน...");
   // ================= UX END ===================
