@@ -6316,6 +6316,38 @@ async function repairMobileViewportAfterAdminLogin() {
   }
 }
 
+let adminSheetViewportRepairTimer = 0;
+
+async function repairMobileViewportAfterAdminSheetClose() {
+  blurActiveElementForMobileKeyboard();
+  await waitForAnimationFrames(2);
+  window.dispatchEvent(new Event("resize"));
+  await new Promise(resolve => setTimeout(resolve, 120));
+  await waitForAnimationFrames(1);
+
+  if (window.visualViewport || window.innerWidth <= 768) {
+    const currentY = Math.max(0, Number(window.scrollY || window.pageYOffset || 0));
+    try {
+      window.scrollTo({ top: currentY, left: 0, behavior: "auto" });
+    } catch (_) {
+      window.scrollTo(0, currentY);
+    }
+  }
+}
+
+function scheduleAdminSheetViewportRepair() {
+  if (state.mode !== "admin") return;
+  if (adminSheetViewportRepairTimer) {
+    clearTimeout(adminSheetViewportRepairTimer);
+  }
+  adminSheetViewportRepairTimer = setTimeout(() => {
+    adminSheetViewportRepairTimer = 0;
+    repairMobileViewportAfterAdminSheetClose().catch(err => {
+      console.warn("admin sheet viewport repair failed", err);
+    });
+  }, 0);
+}
+
 function renderLottieLoading(message, options = {}) {
   const safeMessage = escapeHtml(message || t("loading", "กำลังโหลด..."));
   const detail = options.detail ? `<div class="helper-text">${escapeHtml(options.detail)}</div>` : "";
@@ -9897,6 +9929,7 @@ function getPendingOrdersCount() {
 function backToAdminMainMenu() {
   closeOverlay(adminDashboardSheet);
   openMainMenu(document.querySelector(".menu-btn"));
+  scheduleAdminSheetViewportRepair();
 } 
 
 function ensureAdminUiContext() {
@@ -10044,12 +10077,14 @@ function renderAdminMenuInStockSheet() {
 function closeStockTimelineSheet() {
   if (state.admin.ui.activeSheet === "stockTimelineReturnToMenu") {
     renderAdminMenuInStockSheet();
+    scheduleAdminSheetViewportRepair();
     return;
   }
 
   state.admin.ui.activeSheet = null;
   closeOverlay(adminStockSheet);
   adminStockSheet.classList.remove("stock-menu-return-side");
+  scheduleAdminSheetViewportRepair();
 }
  
 function handleOpenDashboard() {
@@ -11162,6 +11197,7 @@ function closeAdminOrderSheet() {
     state.admin.dashboardMode || "SUMMARY",
     true
   );
+  scheduleAdminSheetViewportRepair();
 } 
 
  function openBulkPendingDeliverySheet() {
@@ -12339,6 +12375,7 @@ function closeDeliveryNoteSheet() {
     deliveryNoteImageWarningPopupRoot.innerHTML = "";
   }
   closeOverlay(adminDeliveryNoteSheet);
+  scheduleAdminSheetViewportRepair();
 }
 
 function parseDeliveryNotePoInput(value) {
@@ -15388,6 +15425,7 @@ async function markPendingDelivered(
  
 function closePendingDeliverySheet() {
   closeOverlay(pendingDeliverySheet);
+  scheduleAdminSheetViewportRepair();
 } 
  
 function openMainMenu(triggerEl){
