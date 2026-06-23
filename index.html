@@ -6330,6 +6330,7 @@ let adminSheetViewportRepairTimer = 0;
 async function repairMobileViewportAfterAdminSheetClose() {
   blurActiveElementForMobileKeyboard();
   await waitForAnimationFrames(2);
+  resetAdminRootAfterSheetClose();
   syncOverlayBackdropState();
 
   const activeOverlayCount = document.querySelectorAll(".sheet.show, .side-menu.show").length;
@@ -9977,6 +9978,25 @@ function ensureAdminUiContext() {
   state.search = "";
   renderHeader();
   renderProducts();
+  return true;
+}
+
+function resetAdminRootAfterSheetClose() {
+  if (
+    !state.admin.loggedIn ||
+    !state.admin.token ||
+    isAdminSessionExpired()
+  ) {
+    exitAdmin();
+    return false;
+  }
+
+  state.mode = "admin";
+  renderHeader();
+  renderProducts();
+  syncOverlayBackdropState();
+  void document.getElementById("app")?.getBoundingClientRect?.();
+  void document.getElementById("appHeader")?.getBoundingClientRect?.();
   return true;
 }
 
