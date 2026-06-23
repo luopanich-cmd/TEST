@@ -1047,6 +1047,15 @@ body:has(.side-menu.show){
   overflow: hidden;
 }
 
+body.admin-sheet-viewport-repairing{
+  overflow: auto !important;
+}
+
+body.admin-sheet-viewport-repairing #app,
+body.admin-sheet-viewport-repairing #appHeader{
+  transform: translateZ(0);
+}
+
  #confirmSheet.show{
    z-index:9999;
  }
@@ -6321,6 +6330,21 @@ let adminSheetViewportRepairTimer = 0;
 async function repairMobileViewportAfterAdminSheetClose() {
   blurActiveElementForMobileKeyboard();
   await waitForAnimationFrames(2);
+  syncOverlayBackdropState();
+
+  const activeOverlayCount = document.querySelectorAll(".sheet.show, .side-menu.show").length;
+  const shouldForceRootReflow = !activeOverlayCount && (window.visualViewport || window.innerWidth <= 768);
+  if (shouldForceRootReflow) {
+    document.body.classList.add("admin-sheet-viewport-repairing");
+  }
+
+  const appRoot = document.getElementById("app");
+  const header = document.getElementById("appHeader");
+  void document.documentElement.clientHeight;
+  void document.body.offsetHeight;
+  void appRoot?.getBoundingClientRect?.();
+  void header?.getBoundingClientRect?.();
+
   window.dispatchEvent(new Event("resize"));
   await new Promise(resolve => setTimeout(resolve, 120));
   await waitForAnimationFrames(1);
@@ -6332,6 +6356,13 @@ async function repairMobileViewportAfterAdminSheetClose() {
     } catch (_) {
       window.scrollTo(0, currentY);
     }
+  }
+
+  if (shouldForceRootReflow) {
+    await waitForAnimationFrames(1);
+    document.body.classList.remove("admin-sheet-viewport-repairing");
+    void document.body.offsetHeight;
+    window.dispatchEvent(new Event("resize"));
   }
 }
 
