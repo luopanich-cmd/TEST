@@ -13059,6 +13059,25 @@ function getBillingNoteCompanyInfo() {
   };
 }
 
+function getBillingNoteCustomerInfo() {
+  return {
+    label: "ลูกค้า",
+    name: "บริษัท ออร์เดอร์ พลัส 88 จำกัด (สำนักงานใหญ่)",
+    address: "99 หมู่5 ตำบลท้วยทราย อำเภอหนองแค สระบุรี 18230",
+    taxId: "เลขประจำตัวผู้เสียภาษี 01955566000907"
+  };
+}
+
+function getBillingNotePaymentInfo() {
+  return {
+    title: "หมายเหตุ",
+    subtitle: "ช่องทางการชำระเงิน",
+    accountName: "ชื่อบัญชี : นายสุนิลทร สีแก้วน้ำใส",
+    bankName: "ชื่อธนาคาร : ธนาคารกรุงไทย",
+    accountNumber: "เลขที่บัญชี : 264-0-56085-9"
+  };
+}
+
 function renderBillingNotePrintImage(imageUrl, altText) {
   const cleanImageUrl = String(imageUrl || "").trim();
   if (!cleanImageUrl) return "-";
@@ -13085,7 +13104,7 @@ function getBillingNotePrintRows(data) {
 function paginateBillingNoteRows(data) {
   const rows = getBillingNotePrintRows(data);
   const regularPageRows = 10;
-  const finalPageRows = 8;
+  const finalPageRows = 6;
   const singlePageRows = 10;
   const pages = [];
 
@@ -13145,6 +13164,29 @@ function buildBillingNotePrintTableRows(rows) {
   `).join("");
 }
 
+function renderBillingNoteCustomerBlock(customer) {
+  return `
+    <section class="billing-note-customer-card">
+      <div class="billing-note-section-label">${esc(customer.label)}</div>
+      <div class="billing-note-customer-name">${esc(customer.name)}</div>
+      <div>${esc(customer.address)}</div>
+      <div>${esc(customer.taxId)}</div>
+    </section>
+  `;
+}
+
+function renderBillingNotePaymentBlock(payment) {
+  return `
+    <section class="billing-note-payment-card">
+      <div class="billing-note-section-label">${esc(payment.title)}</div>
+      <div class="billing-note-payment-title">${esc(payment.subtitle)}</div>
+      <div>${esc(payment.accountName)}</div>
+      <div>${esc(payment.bankName)}</div>
+      <div>${esc(payment.accountNumber)}</div>
+    </section>
+  `;
+}
+
 function buildBillingNotePrintPageHtml(page, pageIndex, pageCount, context) {
   const finalBlock = page.isFinal ? `
     <section class="billing-note-final-block">
@@ -13155,6 +13197,7 @@ function buildBillingNotePrintPageHtml(page, pageIndex, pageCount, context) {
         </div>
         <div class="baht-text">(${esc(context.data.bahtText)})</div>
       </div>
+      ${renderBillingNotePaymentBlock(context.payment)}
       <section class="signatures">
         <div class="signature-box">ผู้วางบิล / ผู้ส่งเอกสาร</div>
         <div class="signature-box">ผู้รับเอกสาร / ผู้รับวางบิล</div>
@@ -13183,6 +13226,7 @@ function buildBillingNotePrintPageHtml(page, pageIndex, pageCount, context) {
             <div class="page-count">หน้า ${pageIndex + 1}/${pageCount}</div>
           </div>
         </header>
+        ${pageIndex === 0 ? renderBillingNoteCustomerBlock(context.customer) : ""}
         <section class="billing-note-page-meta">
           ${buildBillingNotePageMeta(page.rows)}
         </section>
@@ -13252,6 +13296,8 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
     data,
     title: t("billingNote", "ใบวางบิล"),
     company: getBillingNoteCompanyInfo(),
+    customer: getBillingNoteCustomerInfo(),
+    payment: getBillingNotePaymentInfo(),
     logoUrl: getBillingNoteLogoUrl(),
     printDateTime: new Date().toLocaleString("th-TH")
   };
@@ -13347,6 +13393,35 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
           color:#6b7280;
           font-size:11px;
           margin-top:5px;
+        }
+        .billing-note-customer-card,
+        .billing-note-payment-card {
+          border:1px solid #d9dde5;
+          border-radius:10px;
+          background:#fbfdff;
+          padding:8px 10px;
+          color:#111827;
+          line-height:1.42;
+          break-inside:avoid;
+          page-break-inside:avoid;
+        }
+        .billing-note-customer-card {
+          margin:10px 0 9px;
+        }
+        .billing-note-payment-card {
+          margin:10px 0 0;
+          max-width:360px;
+        }
+        .billing-note-section-label {
+          color:#374151;
+          font-size:11px;
+          font-weight:900;
+          letter-spacing:.02em;
+          margin-bottom:3px;
+        }
+        .billing-note-customer-name,
+        .billing-note-payment-title {
+          font-weight:900;
         }
         .billing-note-page-meta {
           display:grid;
@@ -13485,6 +13560,8 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
         @media print {
           body { margin:0; }
           .doc-header,
+          .billing-note-customer-card,
+          .billing-note-payment-card,
           .billing-note-page-meta,
           .billing-note-meta-card,
           .billing-note-final-block,
@@ -13511,12 +13588,19 @@ function buildBillingNotePrintHtml(data, options = {}) {
 
 function buildBillingNoteCopyText(data) {
   const company = getBillingNoteCompanyInfo();
+  const customer = getBillingNoteCustomerInfo();
+  const payment = getBillingNotePaymentInfo();
   const lines = [
     t("billingNote", "ใบวางบิล"),
     company.nameTh,
     company.nameEn,
     company.taxId,
     company.address,
+    "",
+    `${customer.label}:`,
+    customer.name,
+    customer.address,
+    customer.taxId,
     ""
   ];
 
@@ -13534,6 +13618,12 @@ function buildBillingNoteCopyText(data) {
 
   lines.push(`${t("netTotal", "ยอดรวมสุทธิ")}: ${formatBillingNoteMoney(data.netTotal)}`);
   lines.push(`(${data.bahtText})`);
+  lines.push("");
+  lines.push(payment.title);
+  lines.push(payment.subtitle);
+  lines.push(payment.accountName);
+  lines.push(payment.bankName);
+  lines.push(payment.accountNumber);
   return lines.join("\n").trim();
 }
 
