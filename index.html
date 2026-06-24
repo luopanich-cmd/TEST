@@ -14892,22 +14892,6 @@ function renderDeliveryNoteMatchedOrders() {
     const key = normalizePoNumberForCompare(order?.poNumber);
     duplicateCounts.set(key, (duplicateCounts.get(key) || 0) + 1);
   });
-  const totalItemCount = orders.reduce((sum, order) => {
-    return sum + (Array.isArray(order?.items) ? order.items.length : 0);
-  }, 0);
-  const bulkSelectControls = totalItemCount
-    ? `
-      <div class="delivery-note-bulk-select-row">
-        <button class="btn btn-outline" type="button" onclick="selectAllDeliveryNoteItems()">
-          ${t("selectAllDeliveryNoteItems", "เลือกทั้งหมด")}
-        </button>
-        <button class="btn btn-outline" type="button" onclick="clearAllDeliveryNoteItems()">
-          ${t("clearAllDeliveryNoteItems", "ยกเลิกทั้งหมด")}
-        </button>
-      </div>
-    `
-    : "";
-
   return `
     ${noteState.error ? `<div class="card"><div class="error-text">${esc(noteState.error)}</div></div>` : ""}
     <div class="helper-text" style="margin:12px 0">
@@ -14928,7 +14912,6 @@ function renderDeliveryNoteMatchedOrders() {
       </button>
     </div>
     ${renderDeliveryNoteImageExportStatus()}
-    ${bulkSelectControls}
     ${orders.map(order => {
       const items = Array.isArray(order?.items) ? order.items : [];
       const orderId = String(order?.orderId || "").trim();
@@ -14953,7 +14936,17 @@ function renderDeliveryNoteMatchedOrders() {
           </div>
           ${
             items.length
-              ? `<div class="delivery-note-items">${items.map((item, index) => renderDeliveryNoteItemRow(order, item, index)).join("")}</div>`
+              ? `
+                <div class="delivery-note-bulk-select-row">
+                  <button class="btn btn-outline" type="button" onclick="selectAllDeliveryNoteItems()">
+                    ${t("selectAllDeliveryNoteItems", "เลือกทั้งหมด")}
+                  </button>
+                  <button class="btn btn-outline" type="button" onclick="clearAllDeliveryNoteItems()">
+                    ${t("clearAllDeliveryNoteItems", "ยกเลิกทั้งหมด")}
+                  </button>
+                </div>
+                <div class="delivery-note-items">${items.map((item, index) => renderDeliveryNoteItemRow(order, item, index)).join("")}</div>
+              `
               : `<div class="empty-state">${t("noItemsInOrder", "ออเดอร์นี้ไม่มีรายการสินค้า")}</div>`
           }
         </div>
