@@ -13065,70 +13065,203 @@ function renderBillingNotePrintImage(imageUrl, altText) {
   return `<img class="billing-note-thumb" src="${escAttr(cleanImageUrl)}" alt="${escAttr(altText || "")}" onerror="this.replaceWith(document.createTextNode('-'));">`;
 }
 
-function buildBillingNotePrintHtml(data, options = {}) {
-  const autoPrint = options.autoPrint !== false;
-  const title = t("billingNote", "ใบวางบิล");
-  const company = getBillingNoteCompanyInfo();
-  const logoUrl = getBillingNoteLogoUrl();
-  const printDateTime = new Date().toLocaleString("th-TH");
-  const orderSections = data.orders.map(order => {
-    const rows = order.items.map((item, index) => `
-      <tr>
-        <td class="center">${index + 1}</td>
-        <td class="center">${renderBillingNotePrintImage(item.imageUrl, item.name || item.productId)}</td>
-        <td>${esc(item.productId || "-")}</td>
-        <td>${esc(item.name || "-")}</td>
-        <td class="num">${Number(item.billingQty || 0).toLocaleString("th-TH")}</td>
-        <td class="num">${formatBillingNoteMoney(item.price)}</td>
-        <td class="num">${formatBillingNoteMoney(item.lineTotal)}</td>
-      </tr>
-    `).join("");
+function getBillingNotePrintRows(data) {
+  const rows = [];
+  (Array.isArray(data?.orders) ? data.orders : []).forEach(order => {
+    (Array.isArray(order?.items) ? order.items : []).forEach(item => {
+      rows.push({
+        ...item,
+        rowNumber: rows.length + 1,
+        poNumber: order.poNumber || "-",
+        orderId: order.orderId || "-",
+        orderDate: order.orderDate,
+        status: order.status || "-"
+      });
+    });
+  });
+  return rows;
+}
 
-    return `
-      <section class="billing-note-order-section">
-        <div class="billing-note-meta">
-          <div><strong>PO:</strong> ${esc(order.poNumber || "-")}</div>
-          <div><strong>${t("orderNumber", "เลขออเดอร์")}:</strong> ${esc(order.orderId || "-")}</div>
-          <div><strong>${t("date", "วันที่")}:</strong> ${esc(formatThaiDate(order.orderDate))}</div>
-          <div><strong>${t("status", "สถานะ")}:</strong> ${esc(getAdminOrderStatusLabel(order.status || "-"))}</div>
+function paginateBillingNoteRows(data) {
+  const rows = getBillingNotePrintRows(data);
+  const regularPageRows = 10;
+  const finalPageRows = 8;
+  const singlePageRows = 10;
+  const pages = [];
+
+  if (rows.length <= singlePageRows) {
+    return [{ rows, isFinal: true }];
+  }
+
+  const pageCount = Math.max(2, Math.ceil(rows.length / regularPageRows));
+  const finalRowCount = Math.min(finalPageRows, Math.max(1, Math.ceil(rows.length / pageCount)));
+  const nonFinalPageCount = pageCount - 1;
+  const nonFinalTotal = rows.length - finalRowCount;
+  let index = 0;
+
+  for (let pageIndex = 0; pageIndex < nonFinalPageCount; pageIndex += 1) {
+    const pagesLeft = nonFinalPageCount - pageIndex;
+    const take = Math.ceil((nonFinalTotal - index) / pagesLeft);
+    pages.push({ rows: rows.slice(index, index + take), isFinal: false });
+    index += take;
+  }
+
+  pages.push({ rows: rows.slice(index), isFinal: true });
+  return pages;
+}
+
+function buildBillingNotePageMeta(rows) {
+  const seen = new Set();
+  const cards = [];
+
+  (Array.isArray(rows) ? rows : []).forEach(row => {
+    const key = `${row.poNumber || "-"}|${row.orderId || "-"}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    cards.push(`
+      <div class="billing-note-meta-card">
+        <div><span>PO</span><strong>${esc(row.poNumber || "-")}</strong></div>
+        <div><span>${t("orderNumber", "เลขออเดอร์")}</span><strong>${esc(row.orderId || "-")}</strong></div>
+        <div><span>${t("date", "วันที่")}</span><strong>${esc(formatThaiDate(row.orderDate))}</strong></div>
+        <div><span>${t("status", "สถานะ")}</span><strong>${esc(getAdminOrderStatusLabel(row.status || "-"))}</strong></div>
+      </div>
+    `);
+  });
+
+  return cards.join("");
+}
+
+function buildBillingNotePrintTableRows(rows) {
+  return (Array.isArray(rows) ? rows : []).map(item => `
+    <tr>
+      <td class="center">${item.rowNumber}</td>
+      <td class="center">${renderBillingNotePrintImage(item.imageUrl, item.name || item.productId)}</td>
+      <td>${esc(item.productId || "-")}</td>
+      <td>${esc(item.name || "-")}</td>
+      <td class="num">${Number(item.billingQty || 0).toLocaleString("th-TH")}</td>
+      <td class="num">${formatBillingNoteMoney(item.price)}</td>
+      <td class="num">${formatBillingNoteMoney(item.lineTotal)}</td>
+    </tr>
+  `).join("");
+}
+
+function buildBillingNotePrintPageHtml(page, pageIndex, pageCount, context) {
+  const finalBlock = page.isFinal ? `
+    <section class="billing-note-final-block">
+      <div class="billing-note-grand-total">
+        <div class="billing-note-grand-total-row">
+          <span>ยอดรวมสุทธิ</span>
+          <strong>${formatBillingNoteMoney(context.data.netTotal)}</strong>
         </div>
-        <table>
-          <colgroup>
-            <col class="col-index">
-            <col class="col-image">
-            <col class="col-sku">
-            <col class="col-name">
-            <col class="col-qty">
-            <col class="col-price">
-            <col class="col-total">
-          </colgroup>
-          <thead>
-            <tr>
-              <th class="center">ลำดับ</th>
-              <th class="center">รูป</th>
-              <th>รหัสสินค้า</th>
-              <th>รายการ</th>
-              <th class="num">จำนวน</th>
-              <th class="num">ราคาต่อหน่วย</th>
-              <th class="num">รวม</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-        <div class="billing-note-order-total">
-          <div><span>ยอดรวมสุทธิ</span><strong>${formatBillingNoteMoney(order.netTotal)}</strong></div>
-          <div class="baht-text">(${esc(order.bahtText)})</div>
-        </div>
+        <div class="baht-text">(${esc(context.data.bahtText)})</div>
+      </div>
+      <section class="signatures">
+        <div class="signature-box">ผู้วางบิล / ผู้ส่งเอกสาร</div>
+        <div class="signature-box">ผู้รับเอกสาร / ผู้รับวางบิล</div>
       </section>
-    `;
-  }).join("");
+    </section>
+  ` : `
+    <footer class="billing-note-page-footer">หน้า ${pageIndex + 1}/${pageCount}</footer>
+  `;
+
+  return `
+    <main class="billing-note-print-page${page.isFinal ? " is-final-page" : ""}">
+      <div class="billing-note-content-frame">
+        <header class="doc-header">
+          <div class="company">
+            <img class="billing-logo" src="${escAttr(context.logoUrl)}" alt="LUOPARICH" onerror="this.remove()">
+            <div>
+              <div class="company-name-th">${esc(context.company.nameTh)}</div>
+              <div class="company-name-en">${esc(context.company.nameEn)}</div>
+              <div class="company-small">${esc(context.company.taxId)}</div>
+              <div class="company-small">${esc(context.company.address)}</div>
+            </div>
+          </div>
+          <div class="doc-title-block">
+            <div class="doc-title">${esc(context.title)}</div>
+            <div class="print-time">${esc(context.printDateTime)}</div>
+            <div class="page-count">หน้า ${pageIndex + 1}/${pageCount}</div>
+          </div>
+        </header>
+        <section class="billing-note-page-meta">
+          ${buildBillingNotePageMeta(page.rows)}
+        </section>
+        <section class="billing-note-page-body">
+          <table class="billing-note-table">
+            <colgroup>
+              <col class="col-index">
+              <col class="col-image">
+              <col class="col-sku">
+              <col class="col-name">
+              <col class="col-qty">
+              <col class="col-price">
+              <col class="col-total">
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="center">ลำดับ</th>
+                <th class="center">รูป</th>
+                <th>รหัสสินค้า</th>
+                <th>รายการ</th>
+                <th class="num">จำนวน</th>
+                <th class="num">ราคาต่อหน่วย</th>
+                <th class="num">รวม</th>
+              </tr>
+            </thead>
+            <tbody>${buildBillingNotePrintTableRows(page.rows)}</tbody>
+          </table>
+        </section>
+        ${finalBlock}
+      </div>
+    </main>
+  `;
+}
+
+function buildBillingNotePrintPages(data, context) {
+  const pages = paginateBillingNoteRows(data);
+  return pages.map((page, index) => buildBillingNotePrintPageHtml(page, index, pages.length, context)).join("");
+}
+
+function buildBillingNoteAutoPrintScript(autoPrint) {
+  if (!autoPrint) return "";
+  return `<script>
+    window.onload=function(){
+      var images=Array.prototype.slice.call(document.images || []);
+      var waits=images.map(function(img){
+        return new Promise(function(resolve){
+          if (img.complete && img.naturalWidth) { resolve(); return; }
+          var done=function(){ resolve(); };
+          img.addEventListener("load", done, { once:true });
+          img.addEventListener("error", done, { once:true });
+          setTimeout(done, 1800);
+        }).then(function(){
+          if (img.decode) return img.decode().catch(function(){});
+        });
+      });
+      Promise.all(waits).then(function(){
+        setTimeout(function(){ window.print(); }, 180);
+      });
+    };
+  <\/script>`;
+}
+
+function buildPaginatedBillingNotePrintHtml(data, options = {}) {
+  const autoPrint = options.autoPrint !== false;
+  const imageExportMode = options.imageExport === true;
+  const context = {
+    data,
+    title: t("billingNote", "ใบวางบิล"),
+    company: getBillingNoteCompanyInfo(),
+    logoUrl: getBillingNoteLogoUrl(),
+    printDateTime: new Date().toLocaleString("th-TH")
+  };
 
   return `
     <!doctype html>
     <html>
     <head>
       <meta charset="UTF-8">
-      <title>${esc(title)}</title>
+      <title>${esc(context.title)}</title>
       <style>
         @page { size: A4; margin: 10mm; }
         * { box-sizing:border-box; }
@@ -13137,167 +13270,243 @@ function buildBillingNotePrintHtml(data, options = {}) {
           color:#111827;
           background:#fff;
           font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Tahoma,sans-serif;
-          font-size:13px;
+          font-size:12.5px;
+          -webkit-print-color-adjust:exact;
+          print-color-adjust:exact;
         }
         .billing-note-print-page {
-          width:100%;
-          max-width:794px;
-          min-height:auto;
-          padding:28px;
+          width:186mm;
+          max-width:186mm;
+          min-height:244mm;
           margin:0 auto;
+          padding:8mm;
           background:#fff;
+          display:flex;
+          flex-direction:column;
+          page-break-after:always;
+          break-after:page;
+          overflow:visible;
+        }
+        .billing-note-print-page:last-child {
+          page-break-after:auto;
+          break-after:auto;
+        }
+        body.billing-note-image-export-mode .billing-note-print-page {
+          width:210mm;
+          max-width:210mm;
+          min-height:0;
+          height:auto;
+          padding:10mm 12mm 12mm;
+          margin:0 auto 12px;
+        }
+        .billing-note-content-frame {
+          display:flex;
+          flex:1 1 auto;
+          flex-direction:column;
+          min-height:0;
+          width:100%;
+          max-width:100%;
           overflow:visible;
         }
         .doc-header {
-          display:flex;
-          align-items:flex-start;
-          justify-content:space-between;
-          gap:18px;
-          padding-bottom:16px;
+          display:grid;
+          grid-template-columns:minmax(0, 1fr) auto;
+          align-items:start;
+          gap:16px;
+          padding-bottom:12px;
           border-bottom:2px solid #111827;
+          break-inside:avoid;
+          page-break-inside:avoid;
         }
         .company {
           display:flex;
           align-items:flex-start;
-          gap:14px;
+          gap:12px;
           min-width:0;
         }
         .billing-logo {
-          width:58px;
-          height:58px;
+          width:54px;
+          height:54px;
           object-fit:contain;
-          flex:0 0 58px;
+          flex:0 0 54px;
+          display:block;
         }
-        .company-name-th { font-size:18px; font-weight:800; }
-        .company-name-en { font-size:13px; font-weight:700; margin-top:2px; }
-        .company-small { color:#374151; line-height:1.45; margin-top:3px; }
+        .company-name-th { font-size:17px; font-weight:900; line-height:1.2; }
+        .company-name-en { font-size:12.5px; font-weight:800; margin-top:2px; letter-spacing:.02em; }
+        .company-small { color:#374151; line-height:1.38; margin-top:3px; }
+        .doc-title-block { text-align:right; min-width:110px; }
         .doc-title {
-          text-align:right;
-          font-size:26px;
+          font-size:25px;
+          line-height:1.05;
           font-weight:900;
           white-space:nowrap;
+          letter-spacing:.01em;
         }
-        .print-time {
+        .print-time,
+        .page-count {
           color:#6b7280;
-          font-size:12px;
-          margin-top:6px;
+          font-size:11px;
+          margin-top:5px;
         }
-        .billing-note-order-section { margin-top:18px; page-break-inside:avoid; }
-        .billing-note-meta {
+        .billing-note-page-meta {
           display:grid;
           grid-template-columns:repeat(2, minmax(0, 1fr));
-          gap:6px 18px;
-          margin-bottom:10px;
+          gap:8px;
+          margin:11px 0 10px;
+          break-inside:avoid;
+          page-break-inside:avoid;
         }
-        table { width:100%; border-collapse:collapse; table-layout:fixed; }
-        .col-index { width:36px; }
-        .col-image { width:54px; }
-        .col-sku { width:92px; }
+        .billing-note-meta-card {
+          display:grid;
+          grid-template-columns:repeat(2, minmax(0, 1fr));
+          gap:5px 10px;
+          padding:8px 10px;
+          border:1px solid #e5e7eb;
+          border-radius:10px;
+          background:#f9fafb;
+        }
+        .billing-note-meta-card div {
+          min-width:0;
+          display:flex;
+          flex-direction:column;
+          gap:1px;
+        }
+        .billing-note-meta-card span {
+          color:#6b7280;
+          font-size:10.5px;
+          font-weight:700;
+        }
+        .billing-note-meta-card strong {
+          min-width:0;
+          font-size:12px;
+          overflow-wrap:anywhere;
+        }
+        .billing-note-page-body {
+          width:100%;
+          max-width:100%;
+          overflow:visible;
+        }
+        .billing-note-table {
+          width:100%;
+          border-collapse:collapse;
+          table-layout:fixed;
+        }
+        .col-index { width:30px; }
+        .col-image { width:50px; }
+        .col-sku { width:82px; }
         .col-name { width:auto; }
-        .col-qty { width:58px; }
-        .col-price { width:86px; }
-        .col-total { width:86px; }
+        .col-qty { width:50px; }
+        .col-price { width:78px; }
+        .col-total { width:82px; }
         th, td {
-          border:1px solid #d1d5db;
-          padding:6px 7px;
-          vertical-align:top;
+          border:1px solid #d9dde5;
+          padding:5px 6px;
+          vertical-align:middle;
           word-break:break-word;
+          overflow-wrap:anywhere;
         }
-        th { background:#f3f4f6; font-weight:800; }
+        th {
+          background:#f3f4f6;
+          font-size:11.5px;
+          font-weight:900;
+          color:#111827;
+        }
+        tr {
+          break-inside:avoid;
+          page-break-inside:avoid;
+        }
+        thead {
+          display:table-header-group;
+        }
         .center { text-align:center; }
         .num { text-align:right; white-space:nowrap; }
         .billing-note-thumb {
-          width:42px;
-          height:42px;
+          width:38px;
+          height:38px;
           object-fit:cover;
           display:block;
           margin:0 auto;
+          border:1px solid #e5e7eb;
+          border-radius:7px;
+          background:#f9fafb;
+          break-inside:avoid;
+          page-break-inside:avoid;
         }
-        .billing-note-order-total {
-          margin-top:10px;
+        .billing-note-final-block {
+          margin-top:auto;
+          padding-top:12px;
+          break-inside:avoid;
+          page-break-inside:avoid;
+        }
+        .billing-note-grand-total {
           margin-left:auto;
-          max-width:340px;
+          max-width:330px;
           text-align:right;
         }
-        .billing-note-order-total > div:first-child {
+        .billing-note-grand-total-row {
           display:flex;
           justify-content:space-between;
-          gap:20px;
+          align-items:baseline;
+          gap:24px;
           font-size:16px;
           border-top:2px solid #111827;
-          padding-top:8px;
+          border-bottom:1px solid #d1d5db;
+          padding:8px 0 6px;
         }
-        .baht-text { margin-top:4px; color:#374151; }
-        .note-box {
-          margin-top:10px;
-          padding:8px 10px;
-          border:1px solid #d1d5db;
-          background:#f9fafb;
+        .billing-note-grand-total-row strong {
+          font-size:18px;
+        }
+        .baht-text {
+          margin-top:5px;
+          color:#374151;
+          font-weight:700;
         }
         .signatures {
           display:grid;
           grid-template-columns:repeat(2, minmax(0, 1fr));
-          gap:36px;
-          margin-top:42px;
+          gap:34px;
+          margin-top:34px;
         }
         .signature-box {
-          min-height:76px;
+          min-height:62px;
           border-top:1px solid #111827;
           padding-top:8px;
           text-align:center;
           color:#374151;
         }
+        .billing-note-page-footer {
+          margin-top:auto;
+          padding-top:8px;
+          border-top:1px solid #e5e7eb;
+          color:#6b7280;
+          text-align:right;
+          font-size:11px;
+        }
         @media print {
           body { margin:0; }
-          .billing-note-print-page {
-            width:100%;
-            max-width:none;
-            min-height:auto;
-            padding:0;
-            overflow:visible;
-          }
           .doc-header,
-          .billing-note-order-total,
-          .signatures {
+          .billing-note-page-meta,
+          .billing-note-meta-card,
+          .billing-note-final-block,
+          .signatures,
+          .billing-note-print-page,
+          .billing-note-thumb {
             break-inside:avoid;
             page-break-inside:avoid;
           }
-          thead { display:table-header-group; }
-          tr { break-inside:avoid; page-break-inside:avoid; }
         }
       </style>
     </head>
-    <body>
-      <main class="billing-note-print-page">
-        <header class="doc-header">
-          <div class="company">
-            <img class="billing-logo" src="${escAttr(logoUrl)}" alt="LUOPARICH" onerror="this.remove()">
-            <div>
-              <div class="company-name-th">${esc(company.nameTh)}</div>
-              <div class="company-name-en">${esc(company.nameEn)}</div>
-              <div class="company-small">${esc(company.taxId)}</div>
-              <div class="company-small">${esc(company.address)}</div>
-            </div>
-          </div>
-          <div>
-            <div class="doc-title">${esc(title)}</div>
-            <div class="print-time">${esc(printDateTime)}</div>
-          </div>
-        </header>
-        ${orderSections}
-        <section class="billing-note-order-total">
-          <div><span>ยอดรวมสุทธิทั้งหมด</span><strong>${formatBillingNoteMoney(data.netTotal)}</strong></div>
-          <div class="baht-text">(${esc(data.bahtText)})</div>
-        </section>
-        <section class="signatures">
-          <div class="signature-box">ผู้วางบิล / ผู้ส่งเอกสาร</div>
-          <div class="signature-box">ผู้รับเอกสาร / ผู้รับวางบิล</div>
-        </section>
-      </main>
-      ${autoPrint ? `<script>window.onload=function(){setTimeout(function(){window.print();},100);};<\/script>` : ""}
+    <body${imageExportMode ? ' class="billing-note-image-export-mode"' : ""}>
+      ${buildBillingNotePrintPages(data, context)}
+      ${buildBillingNoteAutoPrintScript(autoPrint)}
     </body>
     </html>
   `;
+}
+
+function buildBillingNotePrintHtml(data, options = {}) {
+  return buildPaginatedBillingNotePrintHtml(data, options);
 }
 
 function buildBillingNoteCopyText(data) {
@@ -13389,6 +13598,46 @@ function collectBillingNoteExportImageUrls(doc) {
   return urls;
 }
 
+function readBillingNoteBlobAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to read Billing Note logo"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function fetchBillingNoteLogoDataUrl() {
+  const response = await fetch(getBillingNoteLogoUrl(), { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Billing Note logo load failed: ${response.status}`);
+  }
+  const blob = await response.blob();
+  const dataUrl = await readBillingNoteBlobAsDataUrl(blob);
+  if (!/^data:image\//i.test(dataUrl)) {
+    throw new Error("Billing Note logo is not an image");
+  }
+  return dataUrl;
+}
+
+async function applyBillingNoteLogoDataUrl(doc) {
+  const logos = Array.from(doc?.querySelectorAll(".billing-logo") || []);
+  if (!logos.length) return 0;
+
+  const dataUrl = await fetchBillingNoteLogoDataUrl();
+  logos.forEach(img => {
+    img.removeAttribute("crossorigin");
+    img.removeAttribute("onerror");
+    try { img.crossOrigin = null; } catch (err) {}
+    img.onerror = null;
+    img.loading = "eager";
+    img.decoding = "sync";
+    img.src = dataUrl;
+  });
+
+  return logos.length;
+}
+
 function applyBillingNoteImageDataUrls(doc, results) {
   const dataUrlsByUrl = new Map();
 
@@ -13411,6 +13660,9 @@ function applyBillingNoteImageDataUrls(doc, results) {
     img.onerror = null;
     img.loading = "eager";
     img.decoding = "sync";
+    img.style.display = img.style.display || "block";
+    img.style.visibility = "visible";
+    img.style.opacity = "1";
     img.src = dataUrl;
     applied += 1;
   });
@@ -13429,8 +13681,17 @@ function prepareBillingNoteExportImageNodes(doc) {
 }
 
 async function waitForBillingNoteExportImages(doc) {
-  await waitForDeliveryNoteExportImages(doc);
+  const images = Array.from(doc?.querySelectorAll(".billing-logo, .billing-note-thumb") || []);
+  const results = await Promise.all(images.map(waitForDeliveryNoteImageRender));
   await waitForAnimationFrames(2);
+  return {
+    failedCount: results.filter(result => !result.ok).length,
+    renderedDataUrlCount: results.filter(result => result.isDataUrl && result.ok).length,
+    failureReasons: results
+      .filter(result => !result.ok && result.reason)
+      .map(result => result.reason)
+      .slice(0, 3)
+  };
 }
 
 async function captureBillingNoteExportPage(pageNode) {
@@ -13491,6 +13752,12 @@ function prepareBillingNoteImageExport() {
         const doc = frame.contentDocument || frame.contentWindow?.document;
         const pages = doc ? Array.from(doc.querySelectorAll(".billing-note-print-page")) : [];
         if (!pages.length) throw new Error(t("billingNoteImageExportFailed", "ไม่สามารถส่งออกใบวางบิลเป็นรูปภาพได้"));
+
+        try {
+          await applyBillingNoteLogoDataUrl(doc);
+        } catch (err) {
+          console.warn("billing note logo data URL unavailable:", err);
+        }
 
         const imageUrls = collectBillingNoteExportImageUrls(doc);
         if (imageUrls.length) {
