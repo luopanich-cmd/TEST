@@ -719,13 +719,11 @@ body[data-theme="cute"] .shop-subtitle{
   flex:0 0 72px;
 }
 
-.delivery-note-note-control,
-.billing-note-note-control{
+.delivery-note-note-control{
   flex:1 1 220px;
 }
 
-.delivery-note-note-input,
-.billing-note-note-input{
+.delivery-note-note-input{
   width:100%;
   min-width:120px;
   flex:1 1 150px;
@@ -874,8 +872,7 @@ body[data-theme="cute"] .shop-subtitle{
     padding-left:0;
   }
 
-  .delivery-note-note-input,
-  .billing-note-note-input{
+  .delivery-note-note-input{
     flex-basis:140px;
   }
 
@@ -4409,8 +4406,6 @@ Object.assign(window, {
   clearAllBillingNoteItems,
   toggleBillingNoteItem,
   updateBillingNoteItemQty,
-  updateBillingNoteItemNote,
-  updateBillingNotePoNote,
   printBillingNote,
   copyBillingNote,
   prepareBillingNoteImageExport,
@@ -4534,8 +4529,6 @@ const state = {
       matchedOrders: [],
       selectedItems: {},
       itemQty: {},
-      itemNotes: {},
-      poNotes: {},
       imageExportLoading: false,
       imageExportPages: [],
       error: "",
@@ -12522,8 +12515,6 @@ function getBillingNoteState() {
   if (!Array.isArray(billingState.matchedOrders)) billingState.matchedOrders = [];
   if (!billingState.selectedItems || typeof billingState.selectedItems !== "object") billingState.selectedItems = {};
   if (!billingState.itemQty || typeof billingState.itemQty !== "object") billingState.itemQty = {};
-  if (!billingState.itemNotes || typeof billingState.itemNotes !== "object") billingState.itemNotes = {};
-  if (!billingState.poNotes || typeof billingState.poNotes !== "object") billingState.poNotes = {};
   if (billingState.imageExportLoading === undefined) billingState.imageExportLoading = false;
   if (billingState.imageExportError === undefined) billingState.imageExportError = "";
   if (!Array.isArray(billingState.imageExportPages)) billingState.imageExportPages = [];
@@ -12540,8 +12531,6 @@ function resetBillingNoteBuilderState() {
     matchedOrders: [],
     selectedItems: {},
     itemQty: {},
-    itemNotes: {},
-    poNotes: {},
     imageExportLoading: false,
     imageExportError: "",
     imageExportPages: [],
@@ -12732,17 +12721,6 @@ function updateBillingNoteItemQty(orderId, productId, index, value) {
   refreshBillingNoteOrderTotals(orderId);
 }
 
-function updateBillingNoteItemNote(orderId, productId, index, value) {
-  const billingState = getBillingNoteState();
-  const key = getBillingNoteItemKeyFromParts(orderId, productId, index);
-  billingState.itemNotes[key] = String(value || "");
-}
-
-function updateBillingNotePoNote(orderId, value) {
-  const billingState = getBillingNoteState();
-  billingState.poNotes[String(orderId || "")] = String(value || "");
-}
-
 function renderBillingNoteItemRow(order, item, index) {
   const billingState = getBillingNoteState();
   const key = getBillingNoteItemKey(order, item, index);
@@ -12787,11 +12765,6 @@ function renderBillingNoteItemRow(order, item, index) {
           ${t("billingNoteLineTotal", "รวม")}:
           <strong data-billing-note-line-total data-billing-note-item-key="${escAttr(key)}">${formatBillingNoteMoney(lineTotal)}</strong>
         </span>
-        <label class="billing-note-item-control billing-note-note-control">
-          ${t("itemNote", "หมายเหตุสินค้า")}:
-          <input class="billing-note-note-input" value="${escAttr(billingState.itemNotes[key] || "")}"
-            oninput="updateBillingNoteItemNote(${toInlineJsStringLiteral(orderId)}, ${toInlineJsStringLiteral(productId)}, ${Number(index) || 0}, this.value)">
-        </label>
       </div>
     </div>
   `;
@@ -12884,11 +12857,6 @@ function renderBillingNoteMatchedOrders() {
             ${t("status", "สถานะ")}: ${esc(getAdminOrderStatusLabel(order?.status || "-"))}<br>
             ${formatUiText("billingNoteItemCount", { count: items.length }, "{count} รายการ")}
           </div>
-          <div class="form-group" style="margin-top:10px">
-            <label>${t("poNote", "หมายเหตุ PO")}</label>
-            <input value="${escAttr(billingState.poNotes[orderId] || "")}"
-              oninput="updateBillingNotePoNote(${toInlineJsStringLiteral(orderId)}, this.value)">
-          </div>
           ${
             items.length
               ? `
@@ -12933,8 +12901,6 @@ async function searchBillingNotePo() {
   billingState.matchedOrders = [];
   billingState.selectedItems = {};
   billingState.itemQty = {};
-  billingState.itemNotes = {};
-  billingState.poNotes = {};
   billingState.error = "";
   billingState.isBuilding = true;
   renderBillingNoteSheet();
@@ -12969,16 +12935,10 @@ async function searchBillingNotePo() {
       : "";
 
     matchedOrders.forEach(order => {
-      const orderId = String(order?.orderId || "").trim();
-      if (orderId && billingState.poNotes[orderId] === undefined) {
-        billingState.poNotes[orderId] = "";
-      }
-
       (Array.isArray(order?.items) ? order.items : []).forEach((item, index) => {
         const key = getBillingNoteItemKey(order, item, index);
         billingState.selectedItems[key] = true;
         billingState.itemQty[key] = String(Number(item?.qty) || 0);
-        billingState.itemNotes[key] = "";
       });
     });
   } catch (err) {
@@ -13043,7 +13003,7 @@ function buildBillingNoteData() {
         billingQty,
         price,
         lineTotal,
-        itemNote: String(billingState.itemNotes?.[key] || "").trim()
+        imageUrl: getAdminPoPrintItemImage(item)
       });
     });
 
@@ -13053,7 +13013,6 @@ function buildBillingNoteData() {
         poNumber,
         orderDate: getOrderDateValue(order),
         status: String(order?.status || "").trim(),
-        poNote: String(billingState.poNotes?.[orderId] || "").trim(),
         items,
         netTotal,
         bahtText: billingNoteAmountToThaiText(netTotal)
@@ -13100,6 +13059,12 @@ function getBillingNoteCompanyInfo() {
   };
 }
 
+function renderBillingNotePrintImage(imageUrl, altText) {
+  const cleanImageUrl = String(imageUrl || "").trim();
+  if (!cleanImageUrl) return "-";
+  return `<img class="billing-note-thumb" src="${escAttr(cleanImageUrl)}" alt="${escAttr(altText || "")}" onerror="this.replaceWith(document.createTextNode('-'));">`;
+}
+
 function buildBillingNotePrintHtml(data, options = {}) {
   const autoPrint = options.autoPrint !== false;
   const title = t("billingNote", "ใบวางบิล");
@@ -13110,12 +13075,12 @@ function buildBillingNotePrintHtml(data, options = {}) {
     const rows = order.items.map((item, index) => `
       <tr>
         <td class="center">${index + 1}</td>
+        <td class="center">${renderBillingNotePrintImage(item.imageUrl, item.name || item.productId)}</td>
         <td>${esc(item.productId || "-")}</td>
         <td>${esc(item.name || "-")}</td>
         <td class="num">${Number(item.billingQty || 0).toLocaleString("th-TH")}</td>
         <td class="num">${formatBillingNoteMoney(item.price)}</td>
         <td class="num">${formatBillingNoteMoney(item.lineTotal)}</td>
-        <td>${item.itemNote ? esc(item.itemNote) : "-"}</td>
       </tr>
     `).join("");
 
@@ -13128,15 +13093,24 @@ function buildBillingNotePrintHtml(data, options = {}) {
           <div><strong>${t("status", "สถานะ")}:</strong> ${esc(getAdminOrderStatusLabel(order.status || "-"))}</div>
         </div>
         <table>
+          <colgroup>
+            <col class="col-index">
+            <col class="col-image">
+            <col class="col-sku">
+            <col class="col-name">
+            <col class="col-qty">
+            <col class="col-price">
+            <col class="col-total">
+          </colgroup>
           <thead>
             <tr>
               <th class="center">ลำดับ</th>
+              <th class="center">รูป</th>
               <th>รหัสสินค้า</th>
               <th>รายการ</th>
               <th class="num">จำนวน</th>
               <th class="num">ราคาต่อหน่วย</th>
               <th class="num">รวม</th>
-              <th>หมายเหตุ</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -13145,7 +13119,6 @@ function buildBillingNotePrintHtml(data, options = {}) {
           <div><span>ยอดรวมสุทธิ</span><strong>${formatBillingNoteMoney(order.netTotal)}</strong></div>
           <div class="baht-text">(${esc(order.bahtText)})</div>
         </div>
-        ${order.poNote ? `<div class="note-box"><strong>${t("poNote", "หมายเหตุ PO")}:</strong> ${esc(order.poNote)}</div>` : ""}
       </section>
     `;
   }).join("");
@@ -13157,7 +13130,7 @@ function buildBillingNotePrintHtml(data, options = {}) {
       <meta charset="UTF-8">
       <title>${esc(title)}</title>
       <style>
-        @page { size: A4; margin: 12mm; }
+        @page { size: A4; margin: 10mm; }
         * { box-sizing:border-box; }
         body {
           margin:0;
@@ -13167,10 +13140,13 @@ function buildBillingNotePrintHtml(data, options = {}) {
           font-size:13px;
         }
         .billing-note-print-page {
-          width:794px;
-          min-height:1123px;
-          padding:34px;
+          width:100%;
+          max-width:794px;
+          min-height:auto;
+          padding:28px;
+          margin:0 auto;
           background:#fff;
+          overflow:visible;
         }
         .doc-header {
           display:flex;
@@ -13187,10 +13163,10 @@ function buildBillingNotePrintHtml(data, options = {}) {
           min-width:0;
         }
         .billing-logo {
-          width:72px;
-          height:72px;
+          width:58px;
+          height:58px;
           object-fit:contain;
-          flex:0 0 72px;
+          flex:0 0 58px;
         }
         .company-name-th { font-size:18px; font-weight:800; }
         .company-name-en { font-size:13px; font-weight:700; margin-top:2px; }
@@ -13214,15 +13190,29 @@ function buildBillingNotePrintHtml(data, options = {}) {
           margin-bottom:10px;
         }
         table { width:100%; border-collapse:collapse; table-layout:fixed; }
+        .col-index { width:36px; }
+        .col-image { width:54px; }
+        .col-sku { width:92px; }
+        .col-name { width:auto; }
+        .col-qty { width:58px; }
+        .col-price { width:86px; }
+        .col-total { width:86px; }
         th, td {
           border:1px solid #d1d5db;
-          padding:7px 8px;
+          padding:6px 7px;
           vertical-align:top;
           word-break:break-word;
         }
         th { background:#f3f4f6; font-weight:800; }
         .center { text-align:center; }
         .num { text-align:right; white-space:nowrap; }
+        .billing-note-thumb {
+          width:42px;
+          height:42px;
+          object-fit:cover;
+          display:block;
+          margin:0 auto;
+        }
         .billing-note-order-total {
           margin-top:10px;
           margin-left:auto;
@@ -13258,7 +13248,22 @@ function buildBillingNotePrintHtml(data, options = {}) {
           color:#374151;
         }
         @media print {
-          .billing-note-print-page { width:auto; min-height:auto; padding:0; }
+          body { margin:0; }
+          .billing-note-print-page {
+            width:100%;
+            max-width:none;
+            min-height:auto;
+            padding:0;
+            overflow:visible;
+          }
+          .doc-header,
+          .billing-note-order-total,
+          .signatures {
+            break-inside:avoid;
+            page-break-inside:avoid;
+          }
+          thead { display:table-header-group; }
+          tr { break-inside:avoid; page-break-inside:avoid; }
         }
       </style>
     </head>
@@ -13310,10 +13315,8 @@ function buildBillingNoteCopyText(data) {
     lines.push(`PO: ${order.poNumber || "-"}`);
     lines.push(`${t("orderNumber", "เลขออเดอร์")}: ${order.orderId || "-"}`);
     lines.push(`${t("date", "วันที่")}: ${formatThaiDate(order.orderDate)}`);
-    if (order.poNote) lines.push(`${t("poNote", "หมายเหตุ PO")}: ${order.poNote}`);
     order.items.forEach((item, index) => {
-      const noteText = item.itemNote ? ` | ${t("itemNote", "หมายเหตุสินค้า")}: ${item.itemNote}` : "";
-      lines.push(`${index + 1}. ${item.productId || "-"} ${item.name || "-"} | ${t("billingQty", "จำนวนวางบิล")}: ${item.billingQty} | ${t("salePrice", "ราคาขาย")}: ${formatBillingNoteMoney(item.price)} | ${t("billingNoteLineTotal", "รวม")}: ${formatBillingNoteMoney(item.lineTotal)}${noteText}`);
+      lines.push(`${index + 1}. ${item.productId || "-"} ${item.name || "-"} | ${t("billingQty", "จำนวนวางบิล")}: ${item.billingQty} | ${t("salePrice", "ราคาขาย")}: ${formatBillingNoteMoney(item.price)} | ${t("billingNoteLineTotal", "รวม")}: ${formatBillingNoteMoney(item.lineTotal)}`);
     });
     lines.push(`${t("netTotal", "ยอดรวมสุทธิ")}: ${formatBillingNoteMoney(order.netTotal)}`);
     lines.push(`(${order.bahtText})`);
@@ -13370,6 +13373,64 @@ function getBillingNoteImageExportBaseName(data) {
   return poNumbers.length === 1
     ? `billing-note-${poNumbers[0]}`
     : `billing-note-${new Date().toISOString().slice(0, 10)}`;
+}
+
+function collectBillingNoteExportImageUrls(doc) {
+  const seen = new Set();
+  const urls = [];
+
+  Array.from(doc?.querySelectorAll(".billing-note-thumb") || []).forEach(img => {
+    const src = String(img?.currentSrc || img?.src || img?.getAttribute("src") || "").trim();
+    if (!src || /^(data:|blob:)/i.test(src) || seen.has(src)) return;
+    seen.add(src);
+    urls.push(src);
+  });
+
+  return urls;
+}
+
+function applyBillingNoteImageDataUrls(doc, results) {
+  const dataUrlsByUrl = new Map();
+
+  (Array.isArray(results) ? results : []).forEach(result => {
+    const url = String(result?.url || "").trim();
+    const dataUrl = String(result?.dataUrl || "").trim();
+    if (result?.ok && url && /^data:image\//i.test(dataUrl)) {
+      dataUrlsByUrl.set(url, dataUrl);
+    }
+  });
+
+  let applied = 0;
+  Array.from(doc?.querySelectorAll(".billing-note-thumb") || []).forEach(img => {
+    const src = String(img?.currentSrc || img?.src || img?.getAttribute("src") || "").trim();
+    const dataUrl = dataUrlsByUrl.get(src);
+    if (!dataUrl) return;
+    img.removeAttribute("crossorigin");
+    img.removeAttribute("onerror");
+    try { img.crossOrigin = null; } catch (err) {}
+    img.onerror = null;
+    img.loading = "eager";
+    img.decoding = "sync";
+    img.src = dataUrl;
+    applied += 1;
+  });
+
+  return applied;
+}
+
+function prepareBillingNoteExportImageNodes(doc) {
+  Array.from(doc?.querySelectorAll(".billing-note-thumb") || []).forEach(img => {
+    const src = img.getAttribute("src");
+    if (!src || /^(data:|blob:)/i.test(src) || img.getAttribute("crossorigin")) return;
+    img.setAttribute("crossorigin", "anonymous");
+    img.crossOrigin = "anonymous";
+    img.src = src;
+  });
+}
+
+async function waitForBillingNoteExportImages(doc) {
+  await waitForDeliveryNoteExportImages(doc);
+  await waitForAnimationFrames(2);
 }
 
 async function captureBillingNoteExportPage(pageNode) {
@@ -13431,7 +13492,18 @@ function prepareBillingNoteImageExport() {
         const pages = doc ? Array.from(doc.querySelectorAll(".billing-note-print-page")) : [];
         if (!pages.length) throw new Error(t("billingNoteImageExportFailed", "ไม่สามารถส่งออกใบวางบิลเป็นรูปภาพได้"));
 
-        await waitForAnimationFrames(2);
+        const imageUrls = collectBillingNoteExportImageUrls(doc);
+        if (imageUrls.length) {
+          try {
+            const proxyResponse = await fetchDeliveryNoteImageDataUrls(imageUrls);
+            applyBillingNoteImageDataUrls(doc, proxyResponse?.results || []);
+          } catch (err) {
+            console.warn("billing note image proxy unavailable:", err);
+            prepareBillingNoteExportImageNodes(doc);
+          }
+        }
+
+        await waitForBillingNoteExportImages(doc);
         const baseName = getBillingNoteImageExportBaseName(data);
         const exportPages = [];
         for (const [index, pageNode] of pages.entries()) {
@@ -13459,11 +13531,8 @@ function prepareBillingNoteImageExport() {
     }, 120);
   };
 
+  frame.srcdoc = buildBillingNotePrintHtml(data, { autoPrint: false, imageExport: true });
   document.body.appendChild(frame);
-  const doc = frame.contentDocument || frame.contentWindow?.document;
-  doc.open();
-  doc.write(buildBillingNotePrintHtml(data, { autoPrint: false, imageExport: true }));
-  doc.close();
 }
 
 function openBillingNoteExportImage(pageNumber) {
