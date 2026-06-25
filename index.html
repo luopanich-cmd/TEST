@@ -13350,9 +13350,9 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
         .billing-note-print-page {
           width:186mm;
           max-width:186mm;
-          min-height:244mm;
+          min-height:260mm;
           margin:0 auto;
-          padding:8mm;
+          padding:7mm 8mm 5mm;
           background:#fff;
           display:flex;
           flex-direction:column;
@@ -13369,7 +13369,7 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
           max-width:210mm;
           min-height:0;
           height:auto;
-          padding:10mm 12mm 12mm;
+          padding:8mm 12mm 8mm;
           margin:0 auto 12px;
         }
         .billing-note-content-frame {
@@ -13384,8 +13384,8 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
         .doc-header {
           display:flex;
           flex-direction:column;
-          gap:8px;
-          padding-bottom:10px;
+          gap:6px;
+          padding-bottom:8px;
           border-bottom:2px solid #111827;
           break-inside:avoid;
           page-break-inside:avoid;
@@ -13394,7 +13394,7 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
           display:flex;
           justify-content:center;
           align-items:center;
-          min-height:70px;
+          min-height:140px;
         }
         .billing-note-header-main {
           display:grid;
@@ -13408,8 +13408,8 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
           min-width:0;
         }
         .billing-logo {
-          width:68px;
-          height:68px;
+          width:136px;
+          height:136px;
           object-fit:contain;
           display:block;
         }
