@@ -13210,14 +13210,17 @@ function renderBillingNoteInfoRow(rows, context) {
 function buildBillingNotePrintPageHtml(page, pageIndex, pageCount, context) {
   const finalBlock = page.isFinal ? `
     <section class="billing-note-final-block">
-      <div class="billing-note-grand-total">
-        <div class="billing-note-grand-total-row">
-          <span>ยอดรวมสุทธิ</span>
-          <strong>${formatBillingNoteDocumentMoney(context.data.netTotal)}</strong>
+      <div class="billing-note-final-summary-row">
+        ${renderBillingNotePaymentBlock(context.payment)}
+        <div class="billing-note-grand-total">
+          <div class="billing-note-grand-total-row">
+            <span>ยอดรวมสุทธิ</span>
+            <strong>${formatBillingNoteDocumentMoney(context.data.netTotal)}</strong>
+          </div>
+          <div class="baht-text">(${esc(context.data.bahtText)})</div>
         </div>
-        <div class="baht-text">(${esc(context.data.bahtText)})</div>
       </div>
-      ${renderBillingNotePaymentBlock(context.payment)}
+      <div class="billing-note-signature-spacer" aria-hidden="true"></div>
       <section class="signatures">
         <div class="signature-box">ผู้วางบิล / ผู้ส่งเอกสาร</div>
         <div class="signature-box">ผู้รับเอกสาร / ผู้รับวางบิล</div>
@@ -13438,8 +13441,8 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
           min-height:100%;
         }
         .billing-note-payment-card {
-          margin:8px 0 0;
-          max-width:360px;
+          margin:0;
+          max-width:none;
         }
         .billing-note-section-label {
           color:#374151;
@@ -13541,13 +13544,20 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
           margin-top:auto;
           display:flex;
           flex-direction:column;
+          flex:1 1 auto;
           padding-top:12px;
           break-inside:avoid;
           page-break-inside:avoid;
         }
+        .billing-note-final-summary-row {
+          display:grid;
+          grid-template-columns:minmax(0, 1fr) minmax(260px, 330px);
+          gap:18px;
+          align-items:start;
+          break-inside:avoid;
+          page-break-inside:avoid;
+        }
         .billing-note-grand-total {
-          margin-left:auto;
-          max-width:330px;
           text-align:right;
         }
         .billing-note-grand-total-row {
@@ -13568,11 +13578,18 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
           color:#374151;
           font-weight:700;
         }
+        .billing-note-signature-spacer {
+          flex:1 1 auto;
+          min-height:32px;
+        }
         .signatures {
           display:grid;
           grid-template-columns:repeat(2, minmax(0, 1fr));
           gap:34px;
-          margin-top:28px;
+          margin-top:0;
+          padding-top:18px;
+          break-inside:avoid;
+          page-break-inside:avoid;
         }
         .signature-box {
           min-height:62px;
