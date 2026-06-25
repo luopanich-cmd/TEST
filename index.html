@@ -12613,6 +12613,15 @@ function formatBillingNoteMoney(value) {
   return `฿${sign}${whole.toLocaleString("th-TH")}${satang ? `.${String(satang).padStart(2, "0")}` : ".-"}`;
 }
 
+function formatBillingNoteDocumentMoney(value) {
+  const cents = Math.round((Number(value) || 0) * 100);
+  const sign = cents < 0 ? "-" : "";
+  const absCents = Math.abs(cents);
+  const whole = Math.floor(absCents / 100);
+  const satang = absCents % 100;
+  return `${sign}${whole.toLocaleString("th-TH")}${satang ? `.${String(satang).padStart(2, "0")}` : ".-"}`;
+}
+
 function billingNoteNumberToThaiText(value) {
   const digits = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
   const positions = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน"];
@@ -13112,7 +13121,7 @@ function paginateBillingNoteRows(data) {
     return [{ rows, isFinal: true }];
   }
 
-  const pageCount = Math.max(2, Math.ceil(rows.length / regularPageRows));
+  const pageCount = Math.max(2, Math.ceil((rows.length - finalPageRows) / regularPageRows) + 1);
   const finalRowCount = Math.min(finalPageRows, Math.max(1, Math.ceil(rows.length / pageCount)));
   const nonFinalPageCount = pageCount - 1;
   const nonFinalTotal = rows.length - finalRowCount;
@@ -13158,8 +13167,8 @@ function buildBillingNotePrintTableRows(rows) {
       <td>${esc(item.productId || "-")}</td>
       <td>${esc(item.name || "-")}</td>
       <td class="num">${Number(item.billingQty || 0).toLocaleString("th-TH")}</td>
-      <td class="num">${formatBillingNoteMoney(item.price)}</td>
-      <td class="num">${formatBillingNoteMoney(item.lineTotal)}</td>
+      <td class="num">${formatBillingNoteDocumentMoney(item.price)}</td>
+      <td class="num">${formatBillingNoteDocumentMoney(item.lineTotal)}</td>
     </tr>
   `).join("");
 }
@@ -13187,13 +13196,24 @@ function renderBillingNotePaymentBlock(payment) {
   `;
 }
 
+function renderBillingNoteInfoRow(rows, context) {
+  return `
+    <section class="billing-note-info-row">
+      ${renderBillingNoteCustomerBlock(context.customer)}
+      <div class="billing-note-page-meta">
+        ${buildBillingNotePageMeta(rows)}
+      </div>
+    </section>
+  `;
+}
+
 function buildBillingNotePrintPageHtml(page, pageIndex, pageCount, context) {
   const finalBlock = page.isFinal ? `
     <section class="billing-note-final-block">
       <div class="billing-note-grand-total">
         <div class="billing-note-grand-total-row">
           <span>ยอดรวมสุทธิ</span>
-          <strong>${formatBillingNoteMoney(context.data.netTotal)}</strong>
+          <strong>${formatBillingNoteDocumentMoney(context.data.netTotal)}</strong>
         </div>
         <div class="baht-text">(${esc(context.data.bahtText)})</div>
       </div>
@@ -13226,10 +13246,7 @@ function buildBillingNotePrintPageHtml(page, pageIndex, pageCount, context) {
             <div class="page-count">หน้า ${pageIndex + 1}/${pageCount}</div>
           </div>
         </header>
-        ${pageIndex === 0 ? renderBillingNoteCustomerBlock(context.customer) : ""}
-        <section class="billing-note-page-meta">
-          ${buildBillingNotePageMeta(page.rows)}
-        </section>
+        ${renderBillingNoteInfoRow(page.rows, context)}
         <section class="billing-note-page-body">
           <table class="billing-note-table">
             <colgroup>
@@ -13262,7 +13279,10 @@ function buildBillingNotePrintPageHtml(page, pageIndex, pageCount, context) {
 }
 
 function buildBillingNotePrintPages(data, context) {
-  const pages = paginateBillingNoteRows(data);
+  const hasRows = getBillingNotePrintRows(data).length > 0;
+  const pages = paginateBillingNoteRows(data)
+    .filter(page => page.rows.length || (page.isFinal && hasRows));
+  if (!pages.length) return "";
   return pages.map((page, index) => buildBillingNotePrintPageHtml(page, index, pages.length, context)).join("");
 }
 
@@ -13394,22 +13414,31 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
           font-size:11px;
           margin-top:5px;
         }
+        .billing-note-info-row {
+          display:grid;
+          grid-template-columns:minmax(0, 1.25fr) minmax(0, 1fr);
+          gap:8px;
+          margin:10px 0;
+          align-items:stretch;
+          break-inside:avoid;
+          page-break-inside:avoid;
+        }
         .billing-note-customer-card,
         .billing-note-payment-card {
           border:1px solid #d9dde5;
           border-radius:10px;
           background:#fbfdff;
-          padding:8px 10px;
+          padding:7px 9px;
           color:#111827;
-          line-height:1.42;
+          line-height:1.36;
           break-inside:avoid;
           page-break-inside:avoid;
         }
         .billing-note-customer-card {
-          margin:10px 0 9px;
+          min-height:100%;
         }
         .billing-note-payment-card {
-          margin:10px 0 0;
+          margin:8px 0 0;
           max-width:360px;
         }
         .billing-note-section-label {
@@ -13425,20 +13454,21 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
         }
         .billing-note-page-meta {
           display:grid;
-          grid-template-columns:repeat(2, minmax(0, 1fr));
-          gap:8px;
-          margin:11px 0 10px;
+          grid-template-columns:1fr;
+          gap:6px;
+          margin:0;
           break-inside:avoid;
           page-break-inside:avoid;
         }
         .billing-note-meta-card {
           display:grid;
           grid-template-columns:repeat(2, minmax(0, 1fr));
-          gap:5px 10px;
-          padding:8px 10px;
+          gap:4px 8px;
+          padding:7px 9px;
           border:1px solid #e5e7eb;
           border-radius:10px;
           background:#f9fafb;
+          min-height:100%;
         }
         .billing-note-meta-card div {
           min-width:0;
@@ -13509,6 +13539,8 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
         }
         .billing-note-final-block {
           margin-top:auto;
+          display:flex;
+          flex-direction:column;
           padding-top:12px;
           break-inside:avoid;
           page-break-inside:avoid;
@@ -13540,7 +13572,7 @@ function buildPaginatedBillingNotePrintHtml(data, options = {}) {
           display:grid;
           grid-template-columns:repeat(2, minmax(0, 1fr));
           gap:34px;
-          margin-top:34px;
+          margin-top:28px;
         }
         .signature-box {
           min-height:62px;
@@ -13609,14 +13641,14 @@ function buildBillingNoteCopyText(data) {
     lines.push(`${t("orderNumber", "เลขออเดอร์")}: ${order.orderId || "-"}`);
     lines.push(`${t("date", "วันที่")}: ${formatThaiDate(order.orderDate)}`);
     order.items.forEach((item, index) => {
-      lines.push(`${index + 1}. ${item.productId || "-"} ${item.name || "-"} | ${t("billingQty", "จำนวนวางบิล")}: ${item.billingQty} | ${t("salePrice", "ราคาขาย")}: ${formatBillingNoteMoney(item.price)} | ${t("billingNoteLineTotal", "รวม")}: ${formatBillingNoteMoney(item.lineTotal)}`);
+      lines.push(`${index + 1}. ${item.productId || "-"} ${item.name || "-"} | ${t("billingQty", "จำนวนวางบิล")}: ${item.billingQty} | ${t("salePrice", "ราคาขาย")}: ${formatBillingNoteDocumentMoney(item.price)} | ${t("billingNoteLineTotal", "รวม")}: ${formatBillingNoteDocumentMoney(item.lineTotal)}`);
     });
-    lines.push(`${t("netTotal", "ยอดรวมสุทธิ")}: ${formatBillingNoteMoney(order.netTotal)}`);
+    lines.push(`${t("netTotal", "ยอดรวมสุทธิ")}: ${formatBillingNoteDocumentMoney(order.netTotal)}`);
     lines.push(`(${order.bahtText})`);
     lines.push("");
   });
 
-  lines.push(`${t("netTotal", "ยอดรวมสุทธิ")}: ${formatBillingNoteMoney(data.netTotal)}`);
+  lines.push(`${t("netTotal", "ยอดรวมสุทธิ")}: ${formatBillingNoteDocumentMoney(data.netTotal)}`);
   lines.push(`(${data.bahtText})`);
   lines.push("");
   lines.push(payment.title);
